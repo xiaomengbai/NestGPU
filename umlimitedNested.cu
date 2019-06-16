@@ -15,8 +15,6 @@
 #include <cuda.h>
 #include <time.h>
 #include <algorithm> 
-#include <cub/cub.cuh>
-#include <cub/grid/grid_barrier.cuh>
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
 #include <thrust/system/cuda/execution_policy.h>
@@ -113,34 +111,6 @@ __global__ static void assign_index(vec_t *dim, long  inNum){
 
     for (int i = offset; i<inNum; i += stride)
         dim[i] = i;
-}
-
-template<typename vec_t>
-int get_partition(vec_t * data,int size,vec_t min,vec_t max,int * hist,int*psum,int hist_size,int myrank)
-{
-    void *d_temp_storage = NULL;
-    size_t temp_storage_bytes = 0, temp_storage_bytes1 = 0;
-    cub::DeviceHistogram::HistogramEven(d_temp_storage, temp_storage_bytes,
-        data, hist, hist_size+1, min, max, size);
-
-    cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes1, hist, psum, hist_size);
-    assert(temp_storage_bytes1 < temp_storage_bytes);
-// Allocate temporary storage
-    cudaMalloc(&d_temp_storage, temp_storage_bytes);
-// Compute histograms
-    cub::DeviceHistogram::HistogramEven(d_temp_storage, temp_storage_bytes,
-        data, hist, hist_size+1, min, max, size);
-    // cudaFree(d_temp_storage);
-    cudaMemset(d_temp_storage, 0, temp_storage_bytes1);
-    cub::DeviceScan::ExclusiveSum(d_temp_storage, temp_storage_bytes1, hist, psum, hist_size);
-    cudaFree(d_temp_storage);
-//printf("device %d CUB psum needs %d aux memory\n",myrank,temp_storage_bytes);
-    cudaError_t cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess) {
-        fprintf(stderr, "device %d get partition failed!\n",myrank);
-        return 0;
-    }
-    return 1;
 }
 
 __global__ static void count_hash_num(int *dim, long  inNum,int *num,int hsize){
@@ -807,7 +777,7 @@ int main(int argc, char* argv[])
 	int *a,*a_1;
 	int *b,*b_1;
 
-	fprintf(stderr,"R relation size %d Rows , S relation size %d Rows bit %d\n",a_size,b_size);
+	fprintf(stderr,"R relation size %d Rows , S relation size %d \n",a_size,b_size);
 
 	CUDACHECK(cudaHostAlloc((void **)&a, sizeof(int)*a_size, cudaHostAllocPortable | cudaHostAllocMapped));
 	CUDACHECK(cudaHostAlloc((void **)&b, sizeof(int)*b_size, cudaHostAllocPortable | cudaHostAllocMapped));
