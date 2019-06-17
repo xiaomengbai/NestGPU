@@ -494,7 +494,15 @@ __global__ static void recallScanUmlimited(//Guo's code, the recursive kernel
     int index = innerIndex - attrNum[0];
     int tableIndex, tableBegin;
 
-    if(currentLevel == loopLevel)
+    if(currentLevel < loopLevel)
+    {
+    	int inner1 = round[currentLevel * 2 + 1];
+    	int outer1 = round[currentLevel * 2];
+
+    	int outerValue1 = allCol[outer1 * attrSize[0] + outerIndex];
+    	recallScanUmlimited1<<<4096,256>>>(outerValue1, allCol, inner1, outerIndex, currentLevel + 1, loopLevel, attrSize, attrNum, round,innerOuterMatchingBitmap);
+    }		
+    if((innerOuterMatchingBitmap[outerIndex] == true && currentLevel < loopLevel)||currentLevel == loopLevel)
     {
 	    if(index >= 2)
 	    {
@@ -515,19 +523,12 @@ __global__ static void recallScanUmlimited(//Guo's code, the recursive kernel
 
 	        /* Store bool value (only threads that have a match) */
 	        if (outerValue == innerValue){
-            	innerOuterMatchingBitmap[outerIndex] = true;
+	        	innerOuterMatchingBitmap[outerIndex] = true;
 	            return;
 	        }	  
 	    }	
+	    innerOuterMatchingBitmap[outerIndex] = false;
 	}	
-	else
-    {
-    	int inner1 = round[currentLevel * 2 + 1];
-    	int outer1 = round[currentLevel * 2];
-
-    	int outerValue1 = allCol[outer1 * attrSize[0] + outerIndex];
-    	recallScanUmlimited<<<4096,256>>>(outerValue1, allCol, inner1, outerIndex, currentLevel + 1, loopLevel, attrSize, attrNum, round,innerOuterMatchingBitmap);
-    }	
 } 
 
 
