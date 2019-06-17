@@ -1,8 +1,8 @@
 # subquery
 #Compile with the following instructions
-nvcc -O3 -arch=sm_60 subquerynested.cu -w -rdc=true -lcudadevrt -o sj
+nvcc -O3 -arch=sm_60 umlimitedNested.cu -w -rdc=true -lcudadevrt -o un
 #To run it
-./sj
+./un
 #The function called
 main -> preparation -> subquery_proc
 
