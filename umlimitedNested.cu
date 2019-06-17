@@ -481,7 +481,7 @@ __global__ static void nestScanDynamic_deviceFunc(
 	}
 }
 
-__global__ static void recallScanUmlimited(
+__global__ static void recallScanUmlimited(//Guo's code, the recursive kernel
      int outerValue, int * allCol, int innerIndex, int outerIndex, int currentLevel, 
      int loopLevel, int * attrSize, int * attrNum, int * round, bool * innerOuterMatchingBitmap) //Output
 {
@@ -530,7 +530,7 @@ __global__ static void recallScanUmlimited(
 } 
 
 
-__global__ static void nestScanDynamicUnlimited_deviceFunc(
+__global__ static void nestScanDynamicUnlimited_deviceFunc(//Guo's code, entry for GPU processing
      int * allCol, int * nuknow, int loopLevel, int * attrSize, int * attrNum, int * round,
      int innerThreadGpuMapping, //Inner mapping
      bool * innerOuterMatchingBitmap) //Output
