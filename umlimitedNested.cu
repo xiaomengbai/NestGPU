@@ -561,6 +561,153 @@ __global__ static void nestScanDynamicUnlimited_deviceFunc(//Guo's code, entry f
 	}
 }
 
+
+__global__ static void nestScanIterative_deviceFunc(
+     int * allCol, int * nuknow, int loopLevel, int * attrSize, int * attrNum, int * round, int * prefix,
+     int innerThreadGpuMapping, //Inner mapping
+     bool * innerOuterMatchingBitmap,
+     int * aggAttr, int * intermedia) // aggAttr: -1 is no agg, 0 is MAX/MIN, 1 is SUM, 2 is AVG
+    {
+
+    //Need to think how we are going to compare the second predicate
+
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con, outerValue, outerValue2, innerValue, innerValue2;
+    int tableIndex, tableBegin;
+    int upperIndex, upperBegin;
+    assert(loopLevel > 1);
+
+    if(innerThreadGpuMapping == 0)
+    {
+    	for(int i = loopLevel; i > 0; i--)
+    	{
+    		if(i == loopLevel)
+    		{
+			    for (long j=0; j<attrSize[0];j++){
+			        
+			        int outerIndex = round[(i - 1) * 2];
+				    int innerIndex = round[(i - 1) * 2 + 1];
+
+				    if(i >= 2)
+				    	con = aggAttr[(i - 1) * 2 - 1];
+				    else
+				    	con = -1;
+
+				    if(innerIndex >= 2)
+				    {
+				    	innerIndex -= 2;
+				    	tableIndex = 2;
+				    	tableBegin = attrNum[0] * attrSize[0] + attrNum[1] * attrSize[1];
+				    }
+				    else
+				    {
+				    	tableIndex = 1;
+				    	tableBegin = attrNum[0] * attrSize[0];
+				    }
+				    int tupleNum = attrSize[tableIndex];
+				    outerValue = allCol[outerIndex * attrSize[0] + j];
+					for(int s = tid; s < tupleNum; s += stride)			    
+				    {
+				    	innerValue = allCol[tableBegin + innerIndex * tupleNum + j];
+				    	if(outerValue == innerValue)
+				    	{
+				    		//将对应列的与外表对应的inner属性取出来
+				    		int upperIndex = round[(i - 1) * 2 - 1];
+				    		if(upperIndex >= 2)
+						    {
+						    	upperIndex -= 2;
+						    	upperIndex = 2;
+						    	upperBegin = attrNum[0] * attrSize[0] + attrNum[1] * attrSize[1];
+						    }
+						    else
+						    {
+						    	upperIndex = 1;
+						    	upperBegin = attrNum[0] * attrSize[0];
+						    }
+						    int upperNum = attrSize[upperIndex];
+						    int upperValue = allCol[upperBegin + upperIndex * upperNum + j];
+				    		if(con == -1 )
+				    		{
+				    			//正常的join 返回属性值
+				    			intermedia[j] = upperValue;
+				    			break;
+				    		}
+				    		else if(con == 0)
+				    		{
+				    			//有agg的 进行agg操作 这个是MAX
+				    			atomicMax(&intermedia[j],upperValue);
+				    		}
+				    		else if(con == 1)
+				    		{
+				    			//有agg的 进行agg操作 这个是MAX
+				    			atomicAdd(&intermedia[j],upperValue);
+				    		}
+				    		else if(con == 2)
+				    		{
+				    			//有agg的 进行agg操作 这个是AVG, TBD
+				    		}
+				    	}
+				    }
+				}
+			}
+			else
+			{
+				int outerIndex = round[(i - 1) * 2];
+				
+				for (long j=tid; j<attrSize[0];j+=stride){
+					outerValue = allCol[outerIndex * attrSize[0] + j];
+					if(outerValue == intermedia[j])
+					{
+						if(i == 1){
+							innerOuterMatchingBitmap[j] = true;
+							return;
+						}
+						else
+						{
+							assert(i > 1);
+							int upperIndex = round[(i - 1) * 2 - 1];
+				    		if(upperIndex >= 2)
+						    {
+						    	upperIndex -= 2;
+						    	upperIndex = 2;
+						    	upperBegin = attrNum[0] * attrSize[0] + attrNum[1] * attrSize[1];
+						    }
+						    else
+						    {
+						    	upperIndex = 1;
+						    	upperBegin = attrNum[0] * attrSize[0];
+						    }
+						    int upperNum = attrSize[upperIndex];
+						    int upperValue = allCol[upperBegin + upperIndex * upperNum + j];
+				    		if(con == -1 )
+				    		{
+				    			//正常的join 返回属性值
+				    			intermedia[j] = upperValue;
+				    			break;
+				    		}
+				    		else if(con == 0)
+				    		{
+				    			//有agg的 进行agg操作 这个是MAX
+				    			atomicMax(&intermedia[j],upperValue);
+				    		}
+				    		else if(con == 1)
+				    		{
+				    			//有agg的 进行agg操作 这个是MAX
+				    			atomicAdd(&intermedia[j],upperValue);
+				    		}
+				    		else if(con == 2)
+				    		{
+				    			//有agg的 进行agg操作 这个是AVG, TBD
+				    		}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 cudaError_t Subquery_proc(int *dim,int *dim_attr,int *dim_index,int lsize,int *fact,int *fact_attr,int* fact_index,int rsize)
 {
     struct timespec start_t, end_t;
@@ -672,12 +819,16 @@ cudaError_t Subquery_proc(int *dim,int *dim_attr,int *dim_index,int lsize,int *f
 
     printf("GPU-DB unnest Time: %lf ms\n\n", total/(1000*1000));
 
-    int * allAttr = NULL, * roundAttr = NULL, * d_attrSize = NULL, * d_attrNum = NULL, * d_roundNum;
+    int * allAttr = NULL, * roundAttr = NULL, * d_attrSize = NULL, * d_attrNum = NULL;
+    int * d_roundNum = NULL, * d_aggAttr = NULL, * d_psum = NULL, * intermediaRE = NULL;
+
     //three table size
     int attrSize[3] = {lsize, rsize, rsize};
     //number of attrs in each table
     int attrNum[3] = {3, 2, 2};    
     int roundNum[6] = {0, 3 , 1, 4, 0, 3};
+    // aggAttr show the aggregation for each inner attr : -1 is no agg, 0 is MAX/MIN, 1 is SUM, 2 is AVG
+    int aggAttr[6] = {-1, 0 , -1,-1,-1,-1}; 
     // indicate the comaprison , even number only, three loops
     //e.g., the first number of 2 indicate the first two attrs in roundNum will be compared
     int roundHist[3] = {2,2,2}; 
@@ -693,13 +844,19 @@ cudaError_t Subquery_proc(int *dim,int *dim_attr,int *dim_index,int lsize,int *f
     CUDACHECK(cudaMalloc((void **)&d_attrSize, 3 * sizeof(int))); 
     CUDACHECK(cudaMalloc((void **)&d_attrNum, 3 * sizeof(int))); 
     CUDACHECK(cudaMalloc((void **)&d_roundNum, 6 * sizeof(int))); 
+    CUDACHECK(cudaMalloc((void **)&d_aggAttr, 6 * sizeof(int))); 
+    CUDACHECK(cudaMalloc((void **)&d_psum, 6 * sizeof(int))); 
+    CUDACHECK(cudaMalloc((void **)&intermediaRE, lsize * sizeof(int)));  
 
     CUDACHECK(cudaMemcpy(d_attrSize,attrSize, 3 * sizeof(int),cudaMemcpyHostToDevice));
     CUDACHECK(cudaMemcpy(d_attrNum,attrNum, 3 * sizeof(int),cudaMemcpyHostToDevice));
 
     cudaMemcpy(d_roundNum,roundNum, 6 * sizeof(int),cudaMemcpyHostToDevice); 
+    cudaMemcpy(d_aggAttr,aggAttr, 6 * sizeof(int),cudaMemcpyHostToDevice); 
+    cudaMemcpy(d_psum,roundPsum, 6 * sizeof(int),cudaMemcpyHostToDevice); 
 
     attrTotalSize = 0;
+    int aggFunc = 0;
 
     cudaMemcpy(allAttr,dim, lsize * sizeof(int), cudaMemcpyDeviceToDevice);
     cudaMemcpy(allAttr + lsize,dim_attr, lsize * sizeof(int), cudaMemcpyDeviceToDevice);
@@ -718,9 +875,10 @@ cudaError_t Subquery_proc(int *dim,int *dim_attr,int *dim_index,int lsize,int *f
     clock_gettime(CLOCK_REALTIME,&start_t);
 
     cudaMemset(mapbit, 0, lsize * sizeof(bool));
+    cudaMemset(intermediaRE, 0, lsize * sizeof(int));
 
-    nestScanDynamicUnlimited_deviceFunc<<<32,128>>>(allAttr,roundAttr,roundLevel,d_attrSize,d_attrNum,d_roundNum,0,mapbit);
-
+    // nestScanDynamicUnlimited_deviceFunc<<<32,128>>>(allAttr,roundAttr,roundLevel,d_attrSize,d_attrNum,d_roundNum,0,mapbit,aggFunc, d_aggAttr, d_psum);
+    nestScanIterative_deviceFunc<<<32,128>>>(allAttr,roundAttr,roundLevel,d_attrSize,d_attrNum,d_roundNum,d_psum, 0,mapbit, d_aggAttr, intermediaRE);
     CUDACHECK(cudaDeviceSynchronize());
     clock_gettime(CLOCK_REALTIME,&end_t);
     timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
@@ -754,7 +912,6 @@ cudaError_t Subquery_proc(int *dim,int *dim_attr,int *dim_index,int lsize,int *f
     CUDACHECK(cudaStatus);
     return cudaStatus;
 }
-
 
 cudaError_t Preparation(int *all_l_table, int *all_l_attr, int l_size, int *all_r_table, int *all_r_attr, int r_size, int argc, char* argv[]);
 
