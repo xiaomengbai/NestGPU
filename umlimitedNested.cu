@@ -500,7 +500,7 @@ __global__ static void recallScanUmlimited(//Guo's code, the recursive kernel
     	int outer1 = round[currentLevel * 2];
 
     	int outerValue1 = allCol[outer1 * attrSize[0] + outerIndex];
-    	recallScanUmlimited1<<<4096,256>>>(outerValue1, allCol, inner1, outerIndex, currentLevel + 1, loopLevel, attrSize, attrNum, round,innerOuterMatchingBitmap);
+    	recallScanUmlimited<<<4096,256>>>(outerValue1, allCol, inner1, outerIndex, currentLevel + 1, loopLevel, attrSize, attrNum, round,innerOuterMatchingBitmap);
     }		
     if((innerOuterMatchingBitmap[outerIndex] == true && currentLevel < loopLevel)||currentLevel == loopLevel)
     {
