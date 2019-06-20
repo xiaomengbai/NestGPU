@@ -13,3 +13,11 @@ the "nestScanDynamicUnlimited_deviceFunc" is the entry
 and the "recallScanUmlimited" is the nested or recursive GPU kernel.
 
 the "nestScanIterative_deviceFunc" is the iterative kernel, supportting Query JA. 183 seconds on 4 million outer table and 1 million inner table.
+
+Query JA:
+
+SELECT S.s
+FROM S
+WHERE S.a IN ( SELECT MAX(R.a)
+               FROM R
+			   WHERE S.c = R.c);
