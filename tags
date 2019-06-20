@@ -1,0 +1,35 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_OUTPUT_MODE	u-ctags	/u-ctags or e-ctags/
+!_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//
+!_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/
+!_TAG_PROGRAM_URL	https://ctags.io/	/official site/
+!_TAG_PROGRAM_VERSION	0.0.0	/6418097/
+BILLION	umlimitedNested.cu	/^#define BILLION /;"	d	file:
+CUDACHECK	umlimitedNested.cu	/^#define CUDACHECK(/;"	d	file:
+MAX_INT	umlimitedNested.cu	/^#define MAX_INT /;"	d	file:
+NP2	umlimitedNested.cu	/^#define NP2(/;"	d	file:
+Preparation	umlimitedNested.cu	/^cudaError_t Preparation(int *all_l_table, int *all_l_index, int l_size, int *all_r_table, int *a/;"	f	typeref:typename:cudaError_t
+Subquery_proc	umlimitedNested.cu	/^cudaError_t Subquery_proc(int *dim,int *dim_attr,int *dim_index,int lsize,int *fact,int *fact_at/;"	f	typeref:typename:cudaError_t
+TABLE2	umlimitedNested.cu	/^#define TABLE2 /;"	d	file:
+assign_index	umlimitedNested.cu	/^__global__ static void assign_index(vec_t *dim, long  inNum){$/;"	f	typeref:typename:template<typename vec_t> void	file:
+assign_index	umlimitedNested.cu	/^__global__ static void assign_index(vec_t *dim, long  inNum,int rank){$/;"	f	typeref:typename:template<typename vec_t> void	file:
+build_hash_table	umlimitedNested.cu	/^__global__ static void build_hash_table(int *dim, long inNum, int *psum, int * bucket,int hsize)/;"	f	typeref:typename:void	file:
+build_hash_table_dual	umlimitedNested.cu	/^__global__ static void build_hash_table_dual(int *dim, int * dim_index, long inNum, int *psum, i/;"	f	typeref:typename:void	file:
+compare	umlimitedNested.cu	/^__global__ static void compare(int * a, int *b, int size)$/;"	f	typeref:typename:void	file:
+count_hash_num	umlimitedNested.cu	/^__global__ static void count_hash_num(int *dim, long  inNum,int *num,int hsize){$/;"	f	typeref:typename:void	file:
+count_join_result	umlimitedNested.cu	/^__global__ static void count_join_result(int* num, int* psum, int* bucket, int* fact, long inNum/;"	f	typeref:typename:void	file:
+count_join_result_dual	umlimitedNested.cu	/^__global__ static void count_join_result_dual(int* num, int* psum, int* bucket, int* fact, int */;"	f	typeref:typename:void	file:
+find_MAX	umlimitedNested.cu	/^__global__ static void find_MAX(vec_t* data,vec_t * msb,int size)$/;"	f	typeref:typename:template<typename vec_t> void	file:
+find_MSB	umlimitedNested.cu	/^__global__ static void find_MSB(vec_t* data,int * msb,int size)$/;"	f	typeref:typename:template<typename vec_t> void	file:
+main	umlimitedNested.cu	/^int main(int argc, char* argv[])$/;"	f	typeref:typename:int
+materialization	umlimitedNested.cu	/^__global__ static void materialization(int* dim, int * dim_attr, int* psum, int* fact, int* fact/;"	f	typeref:typename:void	file:
+nestScanDynamicUnlimited_deviceFunc	umlimitedNested.cu	/^__global__ static void nestScanDynamicUnlimited_deviceFunc(\/\/Guo's code, entry for GPU process/;"	f	typeref:typename:void	file:
+nestScanDynamic_deviceFunc	umlimitedNested.cu	/^__global__ static void nestScanDynamic_deviceFunc($/;"	f	typeref:typename:void	file:
+nestScanFilterDistributedCorrelated_deviceFunc	umlimitedNested.cu	/^__global__ static void nestScanFilterDistributedCorrelated_deviceFunc(\/\/Sofokils function$/;"	f	typeref:typename:void	file:
+recallScan	umlimitedNested.cu	/^__global__ static void recallScan($/;"	f	typeref:typename:void	file:
+recallScanUmlimited	umlimitedNested.cu	/^__global__ static void recallScanUmlimited(\/\/Guo's code, the recursive kernel$/;"	f	typeref:typename:void	file:
+scanCol	umlimitedNested.cu	/^__global__ static void scanCol(int inNum, int * result1, int * result2, int * result3, bool *map/;"	f	typeref:typename:void	file:
+see	umlimitedNested.cu	/^__global__ static void see(int * data)$/;"	f	typeref:typename:void	file:
+subquery	README.md	/^# subquery$/;"	c
+unnestScanFilterDistributedCorrelated_deviceFunc	umlimitedNested.cu	/^__global__ static void unnestScanFilterDistributedCorrelated_deviceFunc($/;"	f	typeref:typename:void	file:
