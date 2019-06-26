@@ -1,18 +1,22 @@
 /*
 query from w3schools
-SELECT OrderDate FROM Orders o 
-WHERE o.CustomerID IN ( SELECT CustomerID FROM Customers c
-                     WHERE o.OrderID IN (SELECT OrderID 
-FROM OrderDetails od, Products p,Employees e
-                                       WHERE od.ProductID = p.ProductID
- AND o.EmployeeID = e.EmployeeID));
+SELECT OrderDate FROM Orders o
+WHERE o.CustomerID IN (
+  SELECT CustomerID FROM Customers c
+  WHERE o.OrderID IN (
+    SELECT OrderID
+    FROM OrderDetails od, Products p,Employees e
+    WHERE od.ProductID = p.ProductID
+    AND o.EmployeeID = e.EmployeeID));
 
 query used in this file which is similar with the one above
-SELECT a.attr FROM a 
-WHERE a.ckey IN ( SELECT c.key FROM c
-               WHERE a.bkey IN (SELECT b.key FROM b
-                               WHERE a.attr = b.attr));
 
+SELECT a.attr FROM a
+WHERE a.ckey IN (
+  SELECT c.key FROM c
+  WHERE a.bkey IN (
+    SELECT b.key FROM b
+    WHERE a.attr = b.attr));
 */
 
 #include "cuda_runtime.h"
@@ -31,7 +35,7 @@ WHERE a.ckey IN ( SELECT c.key FROM c
 #include <string.h>
 #include <cuda.h>
 #include <time.h>
-#include <algorithm> 
+#include <algorithm>
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
 #include <thrust/system/cuda/execution_policy.h>
@@ -49,7 +53,7 @@ using std::string;
     pid,__FILE__,__LINE__,cudaGetErrorString(e)); \
     exit(EXIT_FAILURE); \
     } \
-} while(0) 
+} while(0)
 
 #define NP2(n)              do {                    \
 n--;                                            \
@@ -58,7 +62,7 @@ n |= n >> 2;                                    \
 n |= n >> 4;                                    \
 n |= n >> 8;                                    \
 n |= n >> 16;                                   \
-n ++; } while (0) 
+n ++; } while (0)
 
 #define TABLE2 0x8000000000000000
 template<typename vec_t>
@@ -133,7 +137,7 @@ __global__ static void assign_index(vec_t *dim, long  inNum){
 }
 
 __global__ static void count_hash_num(int *dim, long  inNum,int *num,int hsize){
-    
+
     int stride = blockDim.x * gridDim.x;
     int offset = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -156,7 +160,7 @@ __global__ static void build_hash_table(int *dim, long inNum, int *psum, int * b
     int offset = blockIdx.x * blockDim.x + threadIdx.x;
 
     for(int i=offset;i<inNum;i+=stride){
-        int joinKey = ((int *) dim)[i]; 
+        int joinKey = ((int *) dim)[i];
         int hKey = joinKey & (hsize-1);
         int pos = atomicAdd(&psum[hKey],1) * 2;
         assert(pos < inNum * 2);
@@ -209,7 +213,7 @@ __global__ static void materialization(int* data, int* psum, long inNum, int * f
     for(int i=offset;i<inNum;i+=stride){
     	int dimID = factFilter[i];
     	if(dimID != 0)
-    	{    		
+    	{
     		((int*)result)[localCount] = ((int *)data)[i];
             localCount ++;
     	}
@@ -225,7 +229,7 @@ __global__ static void right_materialization(int* data, int* psum, long inNum, i
     for(int i=offset;i<inNum;i+=stride){
     	int dimID = factFilter[i];
     	if(dimID != 0)
-    	{    		
+    	{
     		((int*)result)[localCount] = ((int *)data)[dimID];
             localCount ++;
     	}
@@ -269,8 +273,8 @@ __global__ static void build_hash_table_dual(int *dim, int * dim_index, long inN
     int offset = blockIdx.x * blockDim.x + threadIdx.x;
 
     for(int i=offset;i<inNum;i+=stride){
-        int joinKey = ((int *) dim)[i]; 
-        int joinAttr = ((int *) dim_index)[i]; 
+        int joinKey = ((int *) dim)[i];
+        int joinAttr = ((int *) dim_index)[i];
         int hKey = joinKey & (hsize-1);
         int pos = atomicAdd(&psum[hKey],1) * 3;
         assert(pos < inNum * 3);
@@ -310,7 +314,7 @@ __global__ static void count_join_result_dual(int* num, int* psum, int* bucket, 
             	}
             }
         }
-    }    
+    }
 }
 
 
@@ -341,7 +345,7 @@ __global__ static void recallScanUmlimited(
 
     //0 for project this attr, 1 for left of IN, 2 for right IN, 3 for left of join, 4 for right of join
     //same length with the attrNeeded, one to one correspondence
-    int attrOp[]   = {0,1,2,0,1,2,0,3,4}; 
+    int attrOp[]   = {0,1,2,0,1,2,0,3,4};
     */
 
 	int stride = blockDim.x * gridDim.x;
@@ -371,7 +375,7 @@ __global__ static void recallScanUmlimited(
 	    			loopIndex = currentLevel == 0? t : outerIndex;
 	    			recallScanUmlimited<<<32,128>>>(allCol, t, currentLevel + 1, loopLevel, attrSize, attrNum,attrIdx, psum, attrOP,innerOuterMatchingBitmap,interRE);
 	    			//after the recursive, scan interRE
-	    			leftValue = allCol[leftIdx * attrSize[0] + loopIndex];	    			
+	    			leftValue = allCol[leftIdx * attrSize[0] + loopIndex];
 	    			if(innerOuterMatchingBitmap[t] == true || leftValue == interRE[t])
 	    			{
 	    				innerOuterMatchingBitmap[loopIndex] = true;
@@ -389,7 +393,7 @@ __global__ static void recallScanUmlimited(
 	    				proValue = allCol[valueBegin + attrSize[1] * proIdx + t];
 	    				interRE[loopIndex] = proValue;
 	    				return;
-	    			}	    				
+	    			}
 	    		}
 	    		if(currentLevel != 0)
 	    			innerOuterMatchingBitmap[outerIndex] = false;
@@ -397,7 +401,7 @@ __global__ static void recallScanUmlimited(
 	    	else if(attrOP[i] == 4)//join processing
 	    	{
 	    		rightIdx = attrIdx[i];
-	    		
+
 	    		if(rightIdx >= 3)
 			    {
 			    	rightIdx -= 3;
@@ -436,8 +440,8 @@ __global__ static void recallScanUmlimited(
 	    		}
 	    	}
 	    }
-	}		
-} 
+	}
+}
 
 cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * b_key,int * b_attr,int rsize, int * c_key, int c_size)
 {
@@ -445,8 +449,8 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     int defaultBlock = 4096;
     double total = 0.0;
     double timeE = 0.0;
-    cudaStream_t s; 
-    CUDACHECK(cudaStreamCreate(&s)); 
+    cudaStream_t s;
+    CUDACHECK(cudaStreamCreate(&s));
 
     dim3 grid(defaultBlock);
     dim3 block(256);
@@ -459,24 +463,24 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     int all_count = 0;
     int * d_max, max, mask,*gpu_count_db = NULL,*gpu_count_new = NULL;
     // int alloc_size = rsize > lsize ? rsize : lsize;
-    int * factFilter_db = NULL, * bucket = NULL, * filter = NULL; 
+    int * factFilter_db = NULL, * bucket = NULL, * filter = NULL;
     int * filterResult1 = NULL, * filterResult2 = NULL, * filterResult3 = NULL, * gpu_resPsum = NULL, * rightResult = NULL;
     bool * mapbit =NULL;
     clock_gettime(CLOCK_REALTIME,&start_t);
-    
-    CUDACHECK(cudaMalloc((void **)&gpu_dim_hashNum, hsize * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&gpu_dim_psum, hsize * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&gpu_fact_psum, hsize * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&d_max, sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&gpu_count_db, 4096*256*sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&gpu_resPsum, 4096*256*sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&factFilter_db, lsize * sizeof(int))); 
+
+    CUDACHECK(cudaMalloc((void **)&gpu_dim_hashNum, hsize * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&gpu_dim_psum, hsize * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&gpu_fact_psum, hsize * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&d_max, sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&gpu_count_db, 4096*256*sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&gpu_resPsum, 4096*256*sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&factFilter_db, lsize * sizeof(int)));
     CUDACHECK(cudaMemset(gpu_dim_psum,0, hsize * sizeof(int)));
     CUDACHECK(cudaMemset(gpu_fact_psum,0, hsize * sizeof(int)));
 
-    CUDACHECK(cudaMalloc((void **)&mapbit, lsize * sizeof(bool)));    
+    CUDACHECK(cudaMalloc((void **)&mapbit, lsize * sizeof(bool)));
 
-    CUDACHECK(cudaMalloc((void **)&bucket, rsize * 2 * sizeof(int))); 
+    CUDACHECK(cudaMalloc((void **)&bucket, rsize * 2 * sizeof(int)));
 
     cudaMemset(mapbit, 0, lsize * sizeof(bool));
 
@@ -487,7 +491,7 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     //three table size
     int attrSize[3] = {lsize, rsize, rsize};
     //number of attrs in each table
-    int attrNum[3] = {3, 2, 1};    
+    int attrNum[3] = {3, 2, 1};
     // only two loops now
     int loopLevel = 3;
     string ** attrIdx = NULL, ** opera = NULL;
@@ -505,15 +509,15 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     attrIdx[0][1] = "a_ckey";
     attrIdx[0][2] = "sub";
     attrIdx[0][3] = "end";
-    
-    attrIdx[1][0] = "c_key"; 
-    attrIdx[1][1] = "a_bkey"; 
-    attrIdx[1][2] = "sub"; 
+
+    attrIdx[1][0] = "c_key";
+    attrIdx[1][1] = "a_bkey";
+    attrIdx[1][2] = "sub";
     attrIdx[1][3] = "end";
 
-    attrIdx[1][0] = "b_key"; 
-    attrIdx[1][1] = "a_attr"; 
-    attrIdx[1][2] = "b_attr"; 
+    attrIdx[1][0] = "b_key";
+    attrIdx[1][1] = "a_attr";
+    attrIdx[1][2] = "b_attr";
     attrIdx[1][3] = "end";
 
     opera[0][1] = "pro"; opera[0][1] = "in", opera[0][1] = "1"; opera[0][1] = "end";
@@ -526,10 +530,10 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     int * leftTable = NULL, * rightTable = NULL;
     //GPU-DB like processing, hard coding, bottom up
     clock_gettime(CLOCK_REALTIME,&start_t);
-    CUDACHECK(cudaMemset(gpu_dim_hashNum,0, hsize * sizeof(int)));  
-    CUDACHECK(cudaMemset(factFilter_db,0, lsize * sizeof(int)));    
-    CUDACHECK(cudaMemset(gpu_count_db,0, 4096*256 * sizeof(int)));   
-    
+    CUDACHECK(cudaMemset(gpu_dim_hashNum,0, hsize * sizeof(int)));
+    CUDACHECK(cudaMemset(factFilter_db,0, lsize * sizeof(int)));
+    CUDACHECK(cudaMemset(gpu_count_db,0, 4096*256 * sizeof(int)));
+
     count_hash_num<<<4096,256>>>(b_attr,rsize,gpu_dim_hashNum,hsize);
     CUDACHECK(cudaDeviceSynchronize());
     thrust::exclusive_scan(thrust::device, gpu_dim_hashNum, gpu_dim_hashNum + hsize, gpu_dim_psum); // in-place scan
@@ -542,7 +546,7 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     clock_gettime(CLOCK_REALTIME,&end_t);
     timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
     printf("build Time: %lf ms \n",  timeE/(1000*1000));
-    total += timeE;   
+    total += timeE;
 
     clock_gettime(CLOCK_REALTIME,&start_t);
 
@@ -551,7 +555,7 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     CUDACHECK(cudaDeviceSynchronize());
     see<<<1,1>>>(gpu_count_db);
     CUDACHECK(cudaMemcpy(&tmp1,&gpu_count_db[4096*256-1],sizeof(int),cudaMemcpyDeviceToHost));
-    thrust::exclusive_scan(thrust::device, gpu_count_db, gpu_count_db + 4096*256, gpu_resPsum); 
+    thrust::exclusive_scan(thrust::device, gpu_count_db, gpu_count_db + 4096*256, gpu_resPsum);
     CUDACHECK(cudaMemcpy(&tmp2,&gpu_resPsum[4096*256-1],sizeof(int),cudaMemcpyDeviceToHost));
 
     int resCount = tmp1 + tmp2;
@@ -559,14 +563,14 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     clock_gettime(CLOCK_REALTIME,&end_t);
     timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
     printf("%d rows probe Time: %lf ms \n", resCount, timeE/(1000*1000));
-    total += timeE;   
+    total += timeE;
 
     clock_gettime(CLOCK_REALTIME,&start_t);
 
-    CUDACHECK(cudaMalloc((void **)&filterResult1, resCount * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&filterResult2, resCount * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&filterResult3, resCount * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&rightResult, resCount * sizeof(int))); 
+    CUDACHECK(cudaMalloc((void **)&filterResult1, resCount * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&filterResult2, resCount * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&filterResult3, resCount * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&rightResult, resCount * sizeof(int)));
 
     materialization<<<4096,256>>>(a_bkey, gpu_resPsum, lsize, factFilter_db, filterResult1);
     materialization<<<4096,256>>>(a_ckey, gpu_resPsum, lsize, factFilter_db, filterResult2);
@@ -580,16 +584,16 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
 
     cudaFree(factFilter_db);
 
-    CUDACHECK(cudaMalloc((void **)&factFilter_db, resCount * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&filter, resCount * sizeof(int))); 
-    CUDACHECK(cudaMemset(factFilter_db,0, resCount * sizeof(int))); 
-    CUDACHECK(cudaMemset(filter,0, resCount * sizeof(int))); 
+    CUDACHECK(cudaMalloc((void **)&factFilter_db, resCount * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&filter, resCount * sizeof(int)));
+    CUDACHECK(cudaMemset(factFilter_db,0, resCount * sizeof(int)));
+    CUDACHECK(cudaMemset(filter,0, resCount * sizeof(int)));
 
     CUDACHECK(cudaDeviceSynchronize());
     clock_gettime(CLOCK_REALTIME,&end_t);
     timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
     printf("materialization Time: %lf ms \n",  timeE/(1000*1000));
-    total += timeE;  
+    total += timeE;
 
     clock_gettime(CLOCK_REALTIME,&start_t);
     //IN predicate processing
@@ -601,7 +605,7 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     clock_gettime(CLOCK_REALTIME,&end_t);
     timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
     printf("scan Time: %lf ms \n", timeE/(1000*1000));
-    total += timeE;   
+    total += timeE;
 
     cudaFree(filterResult1);
     cudaFree(filterResult2);
@@ -618,22 +622,22 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     int attrNeeded[] = {2,1,MAX_INT,5,0,MAX_INT,3,2,4};
     int attrPsum[] = {0,3,6};
     //0 for project, 1 for left of IN, 2 for right IN, 3 for left of join, 4 for right of join
-    int attrOp[]   = {0,1,2,0,1,2,0,3,4}; 
-    CUDACHECK(cudaMalloc((void **)&allAttr, attrTotalSize * sizeof(int))); 
-    // CUDACHECK(cudaMalloc((void **)&roundAttr, 3 * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&d_attrSize, 3 * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&d_attrNum, 3 * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&d_attrNeeded, 9 * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&d_attrOp, 9 * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&d_psum, 3 * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&intermediaRE, lsize * sizeof(int)));  
+    int attrOp[]   = {0,1,2,0,1,2,0,3,4};
+    CUDACHECK(cudaMalloc((void **)&allAttr, attrTotalSize * sizeof(int)));
+    // CUDACHECK(cudaMalloc((void **)&roundAttr, 3 * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&d_attrSize, 3 * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&d_attrNum, 3 * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&d_attrNeeded, 9 * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&d_attrOp, 9 * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&d_psum, 3 * sizeof(int)));
+    CUDACHECK(cudaMalloc((void **)&intermediaRE, lsize * sizeof(int)));
 
     CUDACHECK(cudaMemcpy(d_attrSize,attrSize, 3 * sizeof(int),cudaMemcpyHostToDevice));
     CUDACHECK(cudaMemcpy(d_attrNum,attrNum, 3 * sizeof(int),cudaMemcpyHostToDevice));
 
-    cudaMemcpy(d_attrNeeded,attrNeeded, 9 * sizeof(int),cudaMemcpyHostToDevice); 
-    cudaMemcpy(d_attrOp,attrOp, 9 * sizeof(int),cudaMemcpyHostToDevice); 
-    cudaMemcpy(d_psum,attrPsum, 3 * sizeof(int),cudaMemcpyHostToDevice); 
+    cudaMemcpy(d_attrNeeded,attrNeeded, 9 * sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy(d_attrOp,attrOp, 9 * sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy(d_psum,attrPsum, 3 * sizeof(int),cudaMemcpyHostToDevice);
 
     attrTotalSize = 0;
     int aggFunc = 0;
@@ -661,20 +665,20 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int lsize,int * 
     recallScanUmlimited<<<256,128>>>(allAttr, 0, 0, roundLevel, d_attrSize,d_attrNum,d_attrNeeded,d_psum, d_attrOp, mapbit, intermediaRE);
 
     // nestScanDynamicUnlimited_deviceFunc<<<32,128>>>(allAttr,roundAttr,roundLevel,d_attrSize,d_attrNum,d_attrNeeded,d_psum, d_attrOp, 0,mapbit, intermediaRE);
-    
+
     CUDACHECK(cudaDeviceSynchronize());
     clock_gettime(CLOCK_REALTIME,&end_t);
     timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
     printf("dynamic scan Time: %lf ms \n", timeE/(1000*1000));
-    total += timeE; 
+    total += timeE;
 
-    cudaError_t cudaStatus = cudaDeviceSynchronize();    
+    cudaError_t cudaStatus = cudaDeviceSynchronize();
 
     if(cudaStatus != cudaSuccess)
     {
         fprintf(stderr, "Subquery error\n");
         CUDACHECK(cudaStatus);
-    }  
+    }
 
 
     total += timeE;
@@ -733,13 +737,13 @@ int main(int argc, char* argv[])
 
 	for (int i = 0; i < b_size; i++)
 	{
-		b_key[i] = i;	
-		b_attr[i] = rand();	
+		b_key[i] = i;
+		b_attr[i] = rand();
 	}
 
 	for (int i = 0; i < c_size; i++)
 	{
-		c_key[i] = i + 1000000;	
+		c_key[i] = i + 1000000;
 	}
 
 	for (int i = 0; i < a_size; i++)
@@ -749,7 +753,7 @@ int main(int argc, char* argv[])
 			tmp ++;
 		a_bkey[i] = tmp;
 		a_ckey[i] = tmp + 1000000;
-		a_attr[i] = rand();	
+		a_attr[i] = rand();
 	}
 	cudaError_t cudaStatus;
 
@@ -780,12 +784,12 @@ cudaError_t Preparation(int *a_bkey, int * a_ckey, int * a_attr, int l_size, int
 	cudaEvent_t event;
 	cudaIpcMemHandle_t memHandle_t;
 
-	int defaultBlock = 4096;	
+	int defaultBlock = 4096;
 	int new_size = 0;
 	dim3 grid(defaultBlock);
 	dim3 block(256);
-	cudaStream_t s; 
-	CUDACHECK(cudaStreamCreate(&s)); 
+	cudaStream_t s;
+	CUDACHECK(cudaStreamCreate(&s));
 
 	double total = 0.0;
 
@@ -808,7 +812,7 @@ cudaError_t Preparation(int *a_bkey, int * a_ckey, int * a_attr, int l_size, int
 	double timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
 	total += timeE;
 
-	printf("init Time: %lf ms\n", timeE/(1000*1000));	
+	printf("init Time: %lf ms\n", timeE/(1000*1000));
 
 	clock_gettime(CLOCK_REALTIME,&start_t);
 	CUDACHECK(cudaMemcpyAsync(gpu_a_bkey, a_bkey, primaryKeySize, cudaMemcpyHostToDevice, s));
@@ -829,13 +833,13 @@ cudaError_t Preparation(int *a_bkey, int * a_ckey, int * a_attr, int l_size, int
 	clock_gettime(CLOCK_REALTIME, &start_t);
 
 	cudaStatus = Subquery_proc(gpu_a_bkey,gpu_a_ckey,gpu_a_attr,l_size,gpu_b_key,gpu_b_attr,r_size,gpu_c_key,c_size);
-	
+
 	clock_gettime(CLOCK_REALTIME,&end_t);
 	timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
 	total += timeE;
 
 	printf("Subquery Time: %lf ms\n", timeE/(1000*1000));
-	
+
 	clock_gettime(CLOCK_REALTIME, &start_t);
 	CUDACHECK(cudaFree(gpu_a_bkey));
 	CUDACHECK(cudaFree(gpu_a_ckey));
@@ -859,6 +863,6 @@ cudaError_t Preparation(int *a_bkey, int * a_ckey, int * a_attr, int l_size, int
 	clock_gettime(CLOCK_REALTIME,&end);
 	timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
 	printf("Whole Processing Time: %lf ms Whole time : %1f ms \n", total/(1000*1000),timeE/(1000*1000));
-		
+
 	return cudaDeviceSynchronize();
 }
