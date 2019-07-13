@@ -3989,6 +3989,11 @@ def gen_column_index(tree):
         __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
         __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
 
+    if isinstance(tree,SubQNode):
+        __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
+        __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
+
+    
     if isinstance(tree,OrderByNode):
            
         select_dict = tree.child.select_list.dict_exp_and_alias
