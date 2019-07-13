@@ -154,7 +154,7 @@ class YExpTool:
             after_list = input_token_list[(partition_index + 1):]
 
             before_exp = self.convert_token_list_to_exp_tree(before_list)
-            #pdb.set_trace()
+            pdb.set_trace()
             end_exp = self.convert_token_list_to_exp_tree(after_list)
 
             return YFuncExp(func_name, [before_exp, end_exp])
@@ -2581,6 +2581,7 @@ def convert_a_select_tree(a_s_select_node):
         
         if t_child.tokenname == 'T_COLUMN_LIST':
             #result.select_list = t_child
+
             result.select_list = FirstStepSelectList(t_child)
             continue
 
@@ -2848,7 +2849,10 @@ def build_plan_tree_from_a_select_node(a_query_node):
     #may be the key point here, t2 is a subQNode
     
     #Jump to 1151 in this file, the convert_to_binary_join_tree() in subQNode is under construction
-    #It is a tree now, does it still need to be converted?
+    #It is a tree now, does it still need to be converted? definitely YES. 13/07/2019
+    pdb.set_trace()
+	
+
     t3 = t2.convert_to_binary_join_tree() 
     
     return t3
@@ -3008,7 +3012,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
 
         check_type = None
         pdb.set_trace()
-        for para in exp.parameter_list: #second para is YSubExp at 3073, has to be processed which has not been properly handled yet
+        for para in exp.parameter_list: #second para is YSubExp at 3075, has to be processed which has not been properly handled yet
             if isinstance(para,YRawColExp):
                 res = __check_column__(para,table_list,table_alias_dict)
                 if res == -1 :
@@ -3921,6 +3925,9 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
             elif isinstance(para,YConsExp):
                 new_para_list.append(para)
 
+            elif isinstance(para,YSubExp): # may need more attention
+                new_para_list.append(para)
+
         new_exp = YFuncExp(exp.func_name,list(new_para_list))
 
     return new_exp
@@ -3993,7 +4000,7 @@ def gen_column_index(tree):
         __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
         __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
 
-    
+
     if isinstance(tree,OrderByNode):
            
         select_dict = tree.child.select_list.dict_exp_and_alias
@@ -5100,7 +5107,7 @@ def ysmart_tree_gen(schema,xml_file):
 
     node = build_plan_tree_from_a_select_node(thenode)
 
-    subnode = build_plan_tree_from_a_select_node(thesubnode)
+    #subnode = build_plan_tree_from_a_select_node(thesubnode)
     
     # big problem here
     gen_project_list(node)
@@ -5111,9 +5118,7 @@ def ysmart_tree_gen(schema,xml_file):
 
     handle_select_star(node)
 
-    gen_table_name(node)
-
-    pdb.set_trace()
+    gen_table_name(node)    
 
     predicate_pushdown(node)
 
@@ -5121,7 +5126,9 @@ def ysmart_tree_gen(schema,xml_file):
 
     gen_table_name(node)
 
-    gen_column_index(node)
+    pdb.set_trace()
+
+    gen_column_index(node) #do some thing
 
     return node
 
