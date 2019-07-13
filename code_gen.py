@@ -428,6 +428,10 @@ def get_tables(tree, joinAttr, aggNode, orderbyNode):
         joinAttr.factTables.append(tree)
         return
 
+    elif isinstance(tree, ystree.SubQNode):
+        joinAttr.factTables.append(tree)
+        return
+
     elif isinstance(tree, ystree.OrderByNode):
         obNode = copy.deepcopy(tree)
         orderbyNode.append(obNode)
@@ -584,12 +588,16 @@ def get_where_attr(exp, whereList, relList, conList):
                     get_where_attr(x,whereList, relList, conList)
                 elif isinstance(x, ystree.YRawColExp):
                     whereList.append(x)
+                elif isinstance(x, ystree.YSubExp):
+                    whereList.append(x)
         else:
             relList.append(exp.func_name)
-            for x in exp.parameter_list:
+            for x in exp.parameter_list: # second is YSubExp
                 if isinstance(x, ystree.YRawColExp):
                     whereList.append(x)
                 elif isinstance(x, ystree.YConsExp):
+                    conList.append(x.cons_value)
+                elif isinstance(x, ystree.YSubExp):
                     conList.append(x.cons_value)
 
     elif isinstance(exp, ystree.YRawColExp):
@@ -886,6 +894,7 @@ def generate_code(tree):
     print >>fo, "\tpp.total = pp.kernel = pp.pcie = 0;"
 
     resultNode = "result"
+    pdb.set_trace()
     joinAttr = JoinTranslation()
     aggNode = []
     orderbyNode = []
@@ -1176,6 +1185,14 @@ def generate_code(tree):
         """
 
         selectOnly = len(joinAttr.dimTables) == 0
+
+        for tn in joinAttr.factTables :
+            if isinstance(tn,ystree.SubQNode):
+            	if tn.subquery_select_node != None :
+            		hasSubquery = True
+            		break
+
+
         hasWhere = 0
         factName = joinAttr.factTables[0].table_name.lower() + "Table"
         resName = joinAttr.factTables[0].table_name.lower() + "Res"
@@ -1328,7 +1345,7 @@ def generate_code(tree):
         print >>fo, "\t\t" + factName + "->tupleNum = header.tupleNum;"
 
 ################# end of reading the needed attributes of fact table from disk ###############
-
+        pdb.set_trace()
         if joinAttr.factTables[0].where_condition is not None:
             hasWhere = 1
             whereExp = joinAttr.factTables[0].where_condition.where_condition_exp
@@ -2196,9 +2213,11 @@ def gpudb_code_gen(argv):
     os.chdir(resultDir)
     os.chdir(codeDir)
 
-    pdb.set_trace()
-
     if len(sys.argv) == 3:
+        #if isinstance(tree_node,ystree.SubQNode):
+        #    generate_code(tree_node.t3)
+
+        pdb.set_trace()    
         generate_code(tree_node)
 
     os.chdir(pwd)
