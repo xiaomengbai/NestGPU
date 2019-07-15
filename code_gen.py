@@ -598,7 +598,7 @@ def get_where_attr(exp, whereList, relList, conList):
                 elif isinstance(x, ystree.YConsExp):
                     conList.append(x.cons_value)
                 elif isinstance(x, ystree.YSubExp):
-                    conList.append(x.cons_value)
+                    conList.append(x)
 
     elif isinstance(exp, ystree.YRawColExp):
         whereList.append(exp)
