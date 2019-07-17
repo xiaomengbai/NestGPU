@@ -598,7 +598,7 @@ def get_where_attr(exp, whereList, relList, conList):
                 elif isinstance(x, ystree.YConsExp):
                     conList.append(x.cons_value)
                 elif isinstance(x, ystree.YSubExp):
-                    conList.append(x)
+                    whereList.append(x)
 
     elif isinstance(exp, ystree.YRawColExp):
         whereList.append(exp)
@@ -715,8 +715,10 @@ def generate_col_list(tn,indexList, colList):
         conList = []
         get_where_attr(tn.where_condition.where_condition_exp,whereList,relList,conList)
         for col in whereList:
-            if col.column_name not in indexList:
-                indexList.append(col.column_name)
+        	if isinstance(col, ystree.YSubExp):
+        		colList.append(col)
+        	elif col.column_name not in indexList:
+				indexList.append(col.column_name)
                 colList.append(col)
 
 """
@@ -1059,6 +1061,7 @@ def generate_code(tree):
                 print "Not supported yet: the where expression is too complicated"
                 print 1/0
 
+            pdb.set_trace()
             relName = tn.table_name.lower() + "Rel"
             print >>fo, "\t\tstruct scanNode " + relName + ";"
             print >>fo, "\t\t" + relName + ".tn = " + tnName + ";"
@@ -1374,8 +1377,12 @@ def generate_code(tree):
             print >>fo, "\t\tCHECK_POINTER(" + relName + ".outputIndex);"
 
             for i in range(0,len(newWhereList)):
-                colIndex = indexList.index(newWhereList[i].column_name)
-                print >>fo, "\t\t" + relName + ".whereIndex["+str(i) + "] = " + str(colIndex) + ";"
+            	if isinstance(newWhereList[i],ystree.YSubExp):
+            		print("here");
+            		#TBD
+            	else:
+            		colIndex = indexList.index(newWhereList[i].column_name) #here TBD
+            		print >>fo, "\t\t" + relName + ".whereIndex["+str(i) + "] = " + str(colIndex) + ";"
 
             for i in range(0,len(selectList)):
                 colIndex = selectList[i].column_name
@@ -1411,27 +1418,30 @@ def generate_code(tree):
                 if colIndex <0:
                     print 1/0
 
-                print >>fo, "\t\t(" + relName + ".filter)->exp[" + str(i) + "].index = " + str(colIndex) + ";"
-                print >>fo, "\t\t(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";" 
+                if isinstance(whereList[i],ystree.YSubExp) is False:
+                	print >>fo, "\t\t(" + relName + ".filter)->exp[" + str(i) + "].index = " + str(colIndex) + ";"
+                	print >>fo, "\t\t(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";" 
 
-                colType = whereList[i].column_type
-                ctype = to_ctype(colType)
+                if isinstance(whereList[i],ystree.YSubExp) is False:
+                	colType = whereList[i].column_type
+                	ctype = to_ctype(colType)
 
-                if ctype == "INT":
-                    print >>fo, "\t\t{"
-                    print >>fo, "\t\t\tint tmp = " + conList[i] + ";"
-                    print >>fo, "\t\t\tmemcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(int));"
-                    print >>fo, "\t\t}"
+	                if ctype == "INT":
+	                	if conList != []:
+		                    print >>fo, "\t\t{"
+		                    print >>fo, "\t\t\tint tmp = " + conList[i] + ";"
+		                    print >>fo, "\t\t\tmemcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(int));"
+		                    print >>fo, "\t\t}"
 
-                elif ctype == "FLOAT":
+	                elif ctype == "FLOAT":
 
-                    print >>fo, "\t\t{"
-                    print >>fo, "\t\t\tfloat tmp = " + conList[i] + ";"
-                    print >>fo, "\t\t\tmemcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(float));"
-                    print >>fo, "\t\t}"
-                    print 1/0
-                else:
-                    print >>fo, "\t\tstrcpy((" + relName + ".filter)->exp[" + str(i) + "].content," + conList[i] + ");\n"
+	                    print >>fo, "\t\t{"
+	                    print >>fo, "\t\t\tfloat tmp = " + conList[i] + ";"
+	                    print >>fo, "\t\t\tmemcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(float));"
+	                    print >>fo, "\t\t}"
+	                    print 1/0
+	                else:
+	                    print >>fo, "\t\tstrcpy((" + relName + ".filter)->exp[" + str(i) + "].content," + conList[i] + ");\n"
 
             if CODETYPE == 0:
                 print >>fo, "\t\tstruct tableNode * " + resName + " = tableScan(&" + relName + ", &pp);"
@@ -1451,7 +1461,7 @@ def generate_code(tree):
             print >>fo, "\t\tstruct tableNode * " + resName + " = " + factName + ";"
 
         factName = resName
-        for i in range(0,len(joinAttr.dimTables)):
+        for i in range(0,len(joinAttr.dimTables)): # joinAttr.dimTables is []
             jName = "jNode" + str(i)
             dimName = joinAttr.dimTables[i].table_name.lower() + "Res"
             print >>fo, "\t\tstruct joinNode " + jName + ";"
@@ -1579,7 +1589,7 @@ def generate_code(tree):
                 print >>fo, "\t\tdiskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
 
         print >>fo, "\t}\n"
-
+        #END
 
     elif joinType == 1:
         """
@@ -2214,8 +2224,8 @@ def gpudb_code_gen(argv):
     os.chdir(codeDir)
 
     if len(sys.argv) == 3:
-        #if isinstance(tree_node,ystree.SubQNode):
-        #    generate_code(tree_node.t3)
+        if isinstance(tree_node,ystree.SubQNode):
+            generate_code(tree_node.t3)
 
         pdb.set_trace()    
         generate_code(tree_node)

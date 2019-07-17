@@ -1157,9 +1157,7 @@ class SubQNode(QueryPlanTreeBase):
     	gen_project_list(node)
 
     	if check_schema(node) == -1:
-	    	return None
-
-		pdb.set_trace()
+	    	return None		
 
 		handle_select_star(node)
 
@@ -1170,8 +1168,10 @@ class SubQNode(QueryPlanTreeBase):
 		column_filtering(node)
 
 		gen_table_name(node)
-		
-		gen_column_index(node)
+
+        pdb.set_trace()
+
+        gen_column_index(node)
 
 # the get_pk function should be called after generating the index
     def get_pk(self):
@@ -1831,7 +1831,7 @@ class LRBSelectNode:
             if len(fa) < 3:
                 #fa is a base_relation with alias or not
                 #may be a subquery
-                if self.where_condition.isSubquery == True :
+                if self.where_condition is not None and self.where_condition.isSubquery == True :
                     a_r_item["type"] = "SubqueryTable"
                     a_r_item["source"] = fa
 
@@ -2372,9 +2372,9 @@ class FirstStepWhereCondition:
         self.realstructure = None
         
         self.converted_str = self.utility_convert_where_condition_to_str(self.source)
-
-        self.where_condition_exp = self.utility_convert_where_condition_to_exp(self.source)
         pdb.set_trace()
+        self.where_condition_exp = self.utility_convert_where_condition_to_exp(self.source)
+        
         self.converted_exp_str = self.utility_convert_exp_list_to_str(self.where_condition_exp)
 
 
@@ -2836,7 +2836,7 @@ def get_the_select_node_from_a_file(filename):
 
 #This function processes a T_SELECT node
 def build_plan_tree_from_a_select_node(a_query_node):
-    
+    pdb.set_trace()
     r = convert_a_select_tree(a_query_node)
     #should be fine until now
     r.process_from_list()
