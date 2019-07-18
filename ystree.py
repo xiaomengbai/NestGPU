@@ -1157,19 +1157,19 @@ class SubQNode(QueryPlanTreeBase):
     	gen_project_list(node)
 
     	if check_schema(node) == -1:
-	    	return None		
+	    	return None
+		
+	pdb.set_trace()
 
-		handle_select_star(node)
+	handle_select_star(node)
 
-		gen_table_name(node)
+	gen_table_name(node)
 
-		predicate_pushdown(node)
+	predicate_pushdown(node)
 
-		column_filtering(node)
+	column_filtering(node)
 
-		gen_table_name(node)
-
-        pdb.set_trace()
+	gen_table_name(node)        
 
         gen_column_index(node)
 
@@ -2330,7 +2330,7 @@ class FirstStepWhereCondition:
             yet = YExpTool()
 
             a_exp_input_list = []
-            #pdb.set_trace()
+            pdb.set_trace()
             for t_child in c:#.child_list:
 
                 a_token = {}
@@ -3817,7 +3817,7 @@ def predicate_pushdown(tree):
         predicate_pushdown(tree.right_child)
 
     elif isinstance(tree,SubQNode):
-        return 
+        return
 
     else:
         return
@@ -3899,6 +3899,7 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
     if isinstance(exp,YFuncExp):
         para_list = exp.parameter_list
         new_para_list = []
+        pdb.set_trace()
         for para in para_list:
             if isinstance(para,YRawColExp):
                 if para.column_name == "*":
@@ -5117,6 +5118,8 @@ def ysmart_tree_gen(schema,xml_file):
 
 
     handle_select_star(node)
+
+    pdb.set_trace()
 
     gen_table_name(node)    
 

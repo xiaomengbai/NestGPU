@@ -703,7 +703,7 @@ generate_col_list gets all the columns that will be scannned for a given table n
 """
 
 def generate_col_list(tn,indexList, colList):
-
+    #pdb.set_trace()
     for col in tn.select_list.tmp_exp_list:
         if col.column_name not in indexList:
             indexList.append(col.column_name)
@@ -1355,7 +1355,7 @@ def generate_code(tree):
             whereList = []
             relList = []
             conList = []
-
+            
             get_where_attr(whereExp,whereList,relList,conList)
             newWhereList = []
             whereLen = count_whereList(whereList, newWhereList)
@@ -2223,11 +2223,12 @@ def gpudb_code_gen(argv):
     os.chdir(resultDir)
     os.chdir(codeDir)
 
+    pdb.set_trace()
+
     if len(sys.argv) == 3:
         if isinstance(tree_node,ystree.SubQNode):
             generate_code(tree_node.t3)
 
-        pdb.set_trace()    
         generate_code(tree_node)
 
     os.chdir(pwd)
