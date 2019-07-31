@@ -997,9 +997,13 @@ class TwoJoinNode(QueryPlanTreeBase):
 
         if self.join_explicit is True:
             __get_func_para__(self.join_condition.on_condition_exp,tmp_list)
+#            print "self.on_condition_exp: ", self.join_condition.on_condition_exp.evaluate()
         else:
             __get_func_para__(self.join_condition.where_condition_exp,tmp_list)
+            # print "self.where_condition_exp: ", self.join_condition.where_condition_exp.evaluate()
 
+
+        # print "tmp_list: ", map(lambda x: x.evaluate(), tmp_list)
 
         for i in range(0,len(tmp_list)):
             #new_exp = __trace_to_leaf__(self,tmp_list[i],True)
@@ -1086,7 +1090,6 @@ class TwoJoinNode(QueryPlanTreeBase):
         else:
             sscs = self.select_list.converted_exp_str
 
-
         if self.where_condition is None:
             swc = str(None)
         else:
@@ -1100,10 +1103,11 @@ class TwoJoinNode(QueryPlanTreeBase):
             else:
                 #oc = self.join_condition.converted_exp_str
                 oc = self.join_condition.join_condition_exp.evaluate()
-
         else:
-            
             oc = str(None)
+            if self.join_condition.where_condition_exp is not None:
+                oc = "[Implicit]: " + self.join_condition.where_condition_exp.evaluate()
+
 
         print pb, "TwoJoinNode", "[" + sscs + "]", "[" + swc + "]", "[" + oc + "]"
 
@@ -3670,6 +3674,12 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
                 new_para_list.append(tmp_exp)
             
             elif isinstance(para,YConsExp):
+                if para.ref_col is not None:
+                    new_col = __gen_column_index__(para.ref_col, [para.ref_col.table_name], {})
+                    para.ref_col.table_name = new_col.table_name
+                    para.ref_col.column_name = new_col.column_name
+                    para.ref_col.column_type = new_col.column_type
+                    para.ref_col.func_obj = new_col.func_obj
                 new_para_list.append(para)
 
         new_exp = YFuncExp(exp.func_name,list(new_para_list))
@@ -4274,7 +4284,7 @@ def __select_list_filter__(select_list,table_list,table_alias_dict,new_select_di
 ##return all the YRawColExp in the YFuncExp
 #the col_list contains the reference, so the changing of col_list will also result a change in exp
 def __get_func_para__(exp,col_list):
-    
+
     if not isinstance(exp,YFuncExp):
         return
 
@@ -4791,7 +4801,7 @@ def __trace_to_leaf__(tree,exp,join_bool):
                 tmp_exp = tree.left_child.select_list.tmp_exp_list[index]
                 new_exp = copy.deepcopy(__trace_to_leaf__(tree.left_child,tmp_exp,False))
         else:
-            if join_bool is True and isinstance(tree.right_child,TableNode): 
+            if join_bool is True and isinstance(tree.right_child,TableNode):
                 tmp_exp = copy.deepcopy(exp)
                 tmp_exp.table_name = tree.right_child.select_list.tmp_exp_list[0].table_name
                 new_exp = copy.deepcopy(__trace_to_leaf__(tree.right_child,tmp_exp,False))
@@ -4891,7 +4901,7 @@ def search_external_cols(tree):
 
     # setup in a dictionary at the root node
     for col in external_cols:
-        tree.dynamic_values[col.column_name] = None 
+        tree.dynamic_values[col.column_name] = col
 
     def replace_cols_in_a_func_exp(_func_exp):
         if not isinstance(_func_exp, YFuncExp):
