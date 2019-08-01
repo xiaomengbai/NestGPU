@@ -2,3 +2,10 @@ sj
 TAGS
 a.cu
 a.out
+*.o
+*.pyc
+driver.cu
+GPUDATABASE
+example.driver.cu
+gmon.out
+load.c
