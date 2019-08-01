@@ -1106,8 +1106,8 @@ __global__ static void genScanFilter_or_float_lth_vec(char *col, long tupleNum, 
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
-    for(long i = tid; i<tupleNum;i+=stride[i]){
-        con = ((float*)col)[i] < where;
+    for(long i = tid; i<tupleNum;i+=stride){
+        con = ((float*)col)[i] < where[i];
         filter[i] |= con;
     }
 }
@@ -1424,13 +1424,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
         int format = sn->tn->dataFormat[index];
         int prevFormat = format;
 
-        if( (where->exp[0].rel == EQ_VEC || where->exp[0].rel == GTH_VEC || where->exp[0].rel == LTH_VEC || where->exp[0].rel == GEQ_VEC || where->exp[0].rel == LEQ_VEC) &&
+        if( (where->exp[0].relation == EQ_VEC || where->exp[0].relation == GTH_VEC || where->exp[0].relation == LTH_VEC || where->exp[0].relation == GEQ_VEC || where->exp[0].relation == LEQ_VEC) &&
             (where->exp[0].dataPos == MEM || where->exp[0].dataPos == MMAP || where->exp[0].dataPos == PINNED) )
         {
             char vec_addr_g[32];
             size_t vec_size = sn->tn->attrSize[index] * sn->tn->tupleNum;
             CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec_size) );
-            CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(vec_addr_g, *((void **) where->exp[0].content), vec_size) );
+            CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(vec_addr_g, *((void **) where->exp[0].content), vec_size, cudaMemcpyHostToDevice) );
 
             memcpy(where->exp[0].content, vec_addr_g, 32);
             where->exp[0].dataPos = GPU;
@@ -1582,13 +1582,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             index = sn->whereIndex[whereIndex];
             format = sn->tn->dataFormat[index];
 
-            if( (where->exp[i].rel == EQ_VEC || where->exp[i].rel == GTH_VEC || where->exp[i].rel == LTH_VEC || where->exp[i].rel == GEQ_VEC || where->exp[i].rel == LEQ_VEC) &&
+            if( (where->exp[i].relation == EQ_VEC || where->exp[i].relation == GTH_VEC || where->exp[i].relation == LTH_VEC || where->exp[i].relation == GEQ_VEC || where->exp[i].relation == LEQ_VEC) &&
                 (where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED) )
             {
                 char vec_addr_g[32];
                 size_t vec_size = sn->tn->attrSize[index] * sn->tn->tupleNum;
                 CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec_size) );
-                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(vec_addr_g, *((void **) where->exp[i].content), vec_size) );
+                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(vec_addr_g, *((void **) where->exp[i].content), vec_size, cudaMemcpyHostToDevice) );
 
                 memcpy(where->exp[i].content, vec_addr_g, 32);
                 where->exp[0].dataPos = GPU;
