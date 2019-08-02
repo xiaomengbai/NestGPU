@@ -59,6 +59,9 @@ loader: $(LOADER)
 $(LOADER): $(LOADER_SRC)
 	$(MAKE) -C $(UTIL_DIR)
 
+$(LOADER_SRC): $(SQL_FILE) $(SSB_SCHEMA) $(TRANSLATE_PY)
+	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA_FILE)
+
 
 # target: load-columns
 #   generate column files from table files
