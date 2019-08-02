@@ -85,11 +85,10 @@ TRANSLATE_PY := translate.py
 $(CUDA_DRIVER): $(SQL_FILE) $(SSB_SCHEMA) $(TRANSLATE_PY)
 	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA_FILE)
 
-# $(CUDA_GPUDB): $(CUDA_DRIVER)
-# 	$(MAKE) -C $(CUDA_DIR)
-
-gpudb: $(CUDA_DRIVER)
+$(CUDA_GPUDB): $(CUDA_DRIVER)
 	$(MAKE) -C $(CUDA_DIR)
+
+gpudb: $(CUDA_GPUDB)
 
 run:
 	$(CUDA_GPUDB) --datadir $(DATA_DIR)
