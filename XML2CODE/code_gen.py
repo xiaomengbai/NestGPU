@@ -1568,7 +1568,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
                     for col in pass_in_cols:
                         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
                         colLen = type_length(joinAttr.factTables[0].table_name, col.column_name, col.column_type)
-                        print >>fo, indent + "memcpy(" + pass_in_var + ", (char *)(content[" +  str(indexList.index(col.column_name)) + "]) + tupleid * " + colLen + ", " + colLen + ");"
+                        print >>fo, indent + "memcpy(" + pass_in_var + ", (char *)(" + factName + "->content[" +  str(indexList.index(col.column_name)) + "]) + tupleid * " + colLen + ", " + colLen + ");"
 
                     print >>fo, indent + "{"
 

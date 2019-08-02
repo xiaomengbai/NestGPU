@@ -9,3 +9,4 @@ GPUDATABASE
 example.driver.cu
 gmon.out
 load.c
+.tmp/
