@@ -126,8 +126,8 @@ from customer, supplier
 -- where c_custkey > s_suppkey 
 where c_custkey > (select min(p_partkey) from part where c_city = p_color and c_region = p_color) -- and s_city = p_color)
 -- and s_suppkey > (select min(p_partkey) from part where s_city = p_color and s_region = p_color)
-and s_city = 'UNITED KT1'
-and s_city = c_city
+and s_nation = 'BRAZIL'
+and s_nation = c_nation
 ;
 
 -- A more complex example

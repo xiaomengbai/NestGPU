@@ -98,7 +98,7 @@ char * materializeCol(struct materializeNode * mn, struct statistic * pp){
 
     clock_gettime(CLOCK_REALTIME,&end);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    printf("Materialization Time: %lf\n", timeE/(1000*1000));
+    // printf("Materialization Time: %lf\n", timeE/(1000*1000));
 
     return res;
 }

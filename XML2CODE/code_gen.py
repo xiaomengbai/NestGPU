@@ -1588,7 +1588,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
 
 
                 if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                    print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + var_subqRes + ", sizeof(void *));"
+                    print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
                 elif ctype == "INT":
                     if isinstance(conList[i], ystree.YRawColExp):
                         con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"

@@ -1,19 +1,23 @@
-.PHONY: clean
+.PHONY: clean gpudb
 
 help:
 	@echo "help          print this message"
+	@echo "driver        create $(CUDA_DRIVER)"
+	@echo "gpudb         generate $(CUDA_GPUDB)"
 	@echo "tables        generate tables ($(TABLES)) to $(DATA_DIR)"
 	@echo "loader        generate the loader ($(LOADER))"
 	@echo "load-columns  generate column files to $(DATA_DIR)"
-	@echo "gpudb         create $(CUDA_DRIVER) and generate $(CUDA_GPUDB)"
+	@echo "run           run the gpudb"
+	@echo ""
 	@echo "clean         clean all stuff"
+	@echo "clean-gpudb   clean $(CUDA_DRIVER) and $(CUDA_GPUDB)"
 	@echo ""
 
 # build test/dbgen/dbgen for generating tables
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF
+DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s 0.05
 
 $(DBGEN):
 	$(MAKE) -C $(DBGEN_DIR)
@@ -81,15 +85,23 @@ TRANSLATE_PY := translate.py
 $(CUDA_DRIVER): $(SQL_FILE) $(SSB_SCHEMA) $(TRANSLATE_PY)
 	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA_FILE)
 
-$(CUDA_GPUDB): $(CUDA_DRIVER)
+# $(CUDA_GPUDB): $(CUDA_DRIVER)
+# 	$(MAKE) -C $(CUDA_DIR)
+
+gpudb: $(CUDA_DRIVER)
 	$(MAKE) -C $(CUDA_DIR)
 
-gpudb: $(CUDA_GPUDB)
+run:
+	$(CUDA_GPUDB) --datadir $(DATA_DIR)
 
+clean-gpudb:
+	$(MAKE) -C $(CUDA_DIR) clean
+	rm -f $(CUDA_DRIVER)
 
-clean:
+clean: clean-gpudb
 	$(MAKE) -C $(DBGEN_DIR) clean
 	$(MAKE) -C $(UTIL_DIR) clean
-	$(MAKE) -C $(CUDA_DIR) clean
-	rm -f $(DATA_DIR)/*
-	rm -r $(DATA_DIR)
+	if [ -d $(DATA_DIR) ]; then \
+	  rm -f $(DATA_DIR)/*; \
+	  rm -r $(DATA_DIR); \
+	fi

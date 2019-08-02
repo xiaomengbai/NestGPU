@@ -317,7 +317,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
     else
         res->tupleNum = gbCount;
 
-    printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
+    // printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
 
     char ** gpuResult = NULL;
     char ** result = NULL;
@@ -377,7 +377,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
 
     clock_gettime(CLOCK_REALTIME,&end);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    printf("GroupBy Time: %lf\n", timeE/(1000*1000));
+    // printf("GroupBy Time: %lf\n", timeE/(1000*1000));
 
     return res;
 }

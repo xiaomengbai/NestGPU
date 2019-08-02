@@ -1490,7 +1490,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             char vec_addr_g[32];
             size_t vec_size = sn->tn->attrSize[index] * sn->tn->tupleNum;
             CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec_size) );
-            CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(vec_addr_g, *((void **) where->exp[0].content), vec_size, cudaMemcpyHostToDevice) );
+            CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), *((void **) where->exp[0].content), vec_size, cudaMemcpyHostToDevice) );
 
             memcpy(where->exp[0].content, vec_addr_g, 32);
             where->exp[0].dataPos = GPU;
@@ -1648,7 +1648,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                 char vec_addr_g[32];
                 size_t vec_size = sn->tn->attrSize[index] * sn->tn->tupleNum;
                 CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec_size) );
-                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(vec_addr_g, *((void **) where->exp[i].content), vec_size, cudaMemcpyHostToDevice) );
+                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), *((void **) where->exp[i].content), vec_size, cudaMemcpyHostToDevice) );
 
                 memcpy(where->exp[i].content, vec_addr_g, 32);
                 where->exp[0].dataPos = GPU;
@@ -1924,7 +1924,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     count = tmp1+tmp2;
     res->tupleNum = count;
-    printf("[INFO]Number of selection results: %d\n",count);
+    // printf("[INFO]Number of selection results: %d\n",count);
 
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
 
@@ -2046,7 +2046,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     clock_gettime(CLOCK_REALTIME,&end);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    printf("TableScan Time: %lf\n", timeE/(1000*1000));
+    // printf("TableScan Time: %lf\n", timeE/(1000*1000));
 
     return res;
 
