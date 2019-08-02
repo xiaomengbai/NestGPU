@@ -17,7 +17,8 @@ help:
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s 0.05
+TABLE_SCALE := 0.05
+DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
 	$(MAKE) -C $(DBGEN_DIR)
