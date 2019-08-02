@@ -1,0 +1,95 @@
+.PHONY: clean
+
+help:
+	@echo "help          print this message"
+	@echo "tables        generate tables ($(TABLES)) to $(DATA_DIR)"
+	@echo "loader        generate the loader ($(LOADER))"
+	@echo "load-columns  generate column files to $(DATA_DIR)"
+	@echo "gpudb         create $(CUDA_DRIVER) and generate $(CUDA_GPUDB)"
+	@echo "clean         clean all stuff"
+	@echo ""
+
+# build test/dbgen/dbgen for generating tables
+DBGEN_DIR := test/dbgen
+DBGEN := $(DBGEN_DIR)/dbgen
+DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
+DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF
+
+$(DBGEN):
+	$(MAKE) -C $(DBGEN_DIR)
+
+
+# target: tables
+#   genrerate tables
+
+# core dump when generating the *lineorder* table
+# core dump when load the *date* table
+TABLES := supplier customer part
+
+DATA_DIR := test/tables
+TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
+
+tables: $(TABLE_FILES)
+
+define GEN_TABLE_RULE
+$$(DATA_DIR)/$(tname).tbl: $$(DBGEN) $$(DBGEN_DIST) $$(DATA_DIR)
+	$$(DBGEN) $$(DBGEN_OPTS) -T $(shell echo $(tname) | head -c 1)
+	mv $(tname).tbl $$@
+endef
+
+$(foreach tname,$(TABLES), \
+    $(eval $(GEN_TABLE_RULE)) \
+)
+
+$(DATA_DIR):
+	mkdir -p $(DATA_DIR)
+
+# target: loader
+#   the program that loads columns from table files
+UTIL_DIR := src/utility
+LOADER_SRC := $(UTIL_DIR)/load.c
+LOADER := $(UTIL_DIR)/gpuDBLoader
+
+loader: $(LOADER)
+
+$(LOADER): $(LOADER_SRC)
+	$(MAKE) -C $(UTIL_DIR)
+
+
+# target: load-columns
+#   generate column files from table files
+LOAD_OPTS := --datadir $(DATA_DIR) $(foreach table,$(TABLES), --$(table) $(DATA_DIR)/$(table).tbl)
+load-columns: tables loader
+	$(LOADER) $(LOAD_OPTS)
+
+
+# target: gpudb
+#    generate and build the gpudb program
+
+CUDA_DIR := src/cuda
+CUDA_GPUDB := $(CUDA_DIR)/GPUDATABASE
+CUDA_DRIVER := $(CUDA_DIR)/driver.cu
+
+SSB_TEST_DIR := ./test/ssb_test
+SSB_SCHEMA := $(SSB_TEST_DIR)/ssb.schema
+
+SQL_FILE := test.sql
+SCHEMA_FILE := $(SSB_SCHEMA)
+
+TRANSLATE_PY := translate.py
+
+$(CUDA_DRIVER): $(SQL_FILE) $(SSB_SCHEMA) $(TRANSLATE_PY)
+	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA_FILE)
+
+$(CUDA_GPUDB): $(CUDA_DRIVER)
+	$(MAKE) -C $(CUDA_DIR)
+
+gpudb: $(CUDA_GPUDB)
+
+
+clean:
+	$(MAKE) -C $(DBGEN_DIR) clean
+	$(MAKE) -C $(UTIL_DIR) clean
+	$(MAKE) -C $(CUDA_DIR) clean
+	rm -f $(DATA_DIR)/*
+	rm -r $(DATA_DIR)
