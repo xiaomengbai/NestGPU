@@ -37,14 +37,14 @@ import config
 import pickle
 
 schema = None
-keepInGpu = 1 
+keepInGpu = 1
 baseIndent = " " * 4
 
 """
 Get the value of the configurable variables from config.py
 """
 
-joinType = config.joinType 
+joinType = config.joinType
 POS = config.POS
 SOA = config.SOA
 CODETYPE = config.CODETYPE
@@ -93,7 +93,7 @@ def generate_schema_file():
 """
 generate_soa generates a python script that will help transform
 data from AOS to SOA. This is only for comparing the performance
-of SOA with AOS. 
+of SOA with AOS.
 """
 
 def generate_soa():
@@ -426,9 +426,9 @@ def get_gbexp_list(exp_list,gb_exp_list):
                 gb_exp_list.append(tmp)
 
 """
-get_tables() gets the translation information for join, agg and order by nodes. 
+get_tables() gets the translation information for join, agg and order by nodes.
 Currently we only support star schema queries.
-We assume that the dimTable is always the right child of the join node. 
+We assume that the dimTable is always the right child of the join node.
 """
 
 def get_tables(tree, joinAttr, aggNode, orderbyNode):
@@ -452,7 +452,7 @@ def get_tables(tree, joinAttr, aggNode, orderbyNode):
         get_tables(tree.child, joinAttr, aggNode, orderbyNode)
 
     elif isinstance(tree, ystree.TwoJoinNode):
-        
+
         leftIndex = []
         rightIndex = []
         leftAttr = []
@@ -684,7 +684,7 @@ class mathExp:
             rightExp = exp.parameter_list[1]
 
             self.leftOp = mathExp()
-            self.rightOp = mathExp() 
+            self.rightOp = mathExp()
             self.leftOp.addOp(leftExp)
             self.rightOp.addOp(rightExp)
 
@@ -693,13 +693,13 @@ class mathExp:
 def printMathFunc(fo,prefix, mathFunc):
 
     if mathFunc.opName == "COLUMN":
-        print >>fo, prefix + ".op = NOOP;" 
+        print >>fo, prefix + ".op = NOOP;"
         print >>fo, prefix + ".opNum = 1;"
         print >>fo, prefix + ".exp = 0;"
         print >>fo, prefix + ".opType = COLUMN;"
         print >>fo, prefix + ".opValue = " + str(mathFunc.value) + ";"
     elif mathFunc.opName == "CONS":
-        print >>fo, prefix + ".op = NOOP;" 
+        print >>fo, prefix + ".op = NOOP;"
         print >>fo, prefix + ".opNum = 1;"
         print >>fo, prefix + ".exp = 0;"
         print >>fo, prefix + ".opType = CONS;"
@@ -716,7 +716,7 @@ def printMathFunc(fo,prefix, mathFunc):
 """
 generate_col_list gets all the columns that will be scannned for a given table node.
 @indexList stores the index of each column.
-@colList stores the columnExp for each column. 
+@colList stores the columnExp for each column.
 """
 
 def generate_col_list(tn,indexList, colList):
@@ -741,7 +741,7 @@ def generate_col_list(tn,indexList, colList):
                     if isinstance(par, ystree.YRawColExp) and par.column_name not in indexList:
                         indexList.append(par.column_name)
                         colList.append(par)
-                        
+
 
 
 
@@ -755,7 +755,7 @@ Several configurable variables (in config.py):
 
     @joinType determines whether we should generate invisible joins for star
     schema queries. 0 represents normal join and 1 represents invisible join.
-    
+
     @POS describes where the data are stored in the host memory and how the
     codes should be generated. 0 means data are stored in pageable host
     memory and data are explicitly transferred. 1 means data are stored in
@@ -829,7 +829,7 @@ def generate_code(tree):
 
     print >>fo, "#include \"../include/schema.h\""
 
-    if CODETYPE == 0:   
+    if CODETYPE == 0:
         print >>fo, "#include \"../include/cpuCudaLib.h\""
         print >>fo, "#include \"../include/gpuCudaLib.h\""
 
@@ -842,7 +842,7 @@ def generate_code(tree):
         print >>fo, "extern struct tableNode* orderBy(struct orderByNode *, struct statistic *);"
         print >>fo, "extern char* materializeCol(struct materializeNode * mn, struct statistic *);"
 
-    else:              
+    else:
         print >>fo, "#include <CL/cl.h>"
         print >>fo, "#include <string>"
         print >>fo, "#include \"../include/gpuOpenclLib.h\"\n"
@@ -867,7 +867,7 @@ def generate_code(tree):
     print >>fo, indent + "}} while(0)"
 
     print >>fo, "\nint main(int argc, char ** argv){\n"
-    
+
     if CODETYPE == 1:
         print >>fo, indent + "int psc = 0;"
         print >>fo, indent + "void * clTmp;"
@@ -957,7 +957,7 @@ def get_subqueries(tree, subq_list):
         return
 
 
-def generate_code_for_a_tree(fo, tree, lvl, mat_f):
+def generate_code_for_a_tree(fo, tree, lvl, out_f):
 
     global baseIndent
     indent_this_level = (lvl * 3 + 1) * baseIndent
@@ -1247,7 +1247,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
                 print >>fo, indent + "mergeIntoTable(" + resName + "," + tnName +", &pp);"
             else:
                 print >>fo, indent + "mergeIntoTable(" + resName + "," + tnName +", &context, &pp);"
-                
+
             print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
             print >>fo, indent + "freeTable(" + tnName + ");"
             if CODETYPE == 1:
@@ -1297,7 +1297,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
         print "  column list: ", map(lambda c : c.evaluate(), colList)
 
         for i in range(0,totalAttr):
-            col = colList[i] 
+            col = colList[i]
             if isinstance(col, ystree.YRawColExp):
                 colType = col.column_type
                 colIndex = col.column_name
@@ -1331,7 +1331,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
 
         indent = indent_this_level + baseIndent
         print >>fo, indent + "// Table node initialization"
-        print >>fo, indent + "struct tableNode *" + factName + " = (struct tableNode*)malloc(sizeof(struct tableNode));" 
+        print >>fo, indent + "struct tableNode *" + factName + " = (struct tableNode*)malloc(sizeof(struct tableNode));"
         print >>fo, indent + "CHECK_POINTER(" + factName + ");"
         print >>fo, indent + factName + "->totalAttr = " + str(totalAttr) + ";"
         print >>fo, indent + factName + "->attrType = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
@@ -1351,7 +1351,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
 
         tupleSize = "0"
         for i in range(0, totalAttr):
-            col = colList[i] 
+            col = colList[i]
             if isinstance(col, ystree.YRawColExp):
                 colType = col.column_type
                 colIndex = col.column_name
@@ -1548,7 +1548,10 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
                         print "ERROR: Unknown select column type in a subquery: ", selectItem.evaluate
                         print 1/0
 
-                    subq_res_size = type_length(subq_res_col.table_name, subq_res_col.column_name, subq_res_col.column_type)
+                    if relList[i] in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
+                        subq_res_size = "sizeof(float)";
+                    else:
+                        subq_res_size = type_length(subq_res_col.table_name, subq_res_col.column_name, subq_res_col.column_type)
 
 
                     print >>fo, ""
@@ -1701,7 +1704,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
             for j in range(0,len(lOutList)):
                 ctype = to_ctype(lAttrList[j].type)
                 print >>fo, indent + jName + ".leftOutputIndex[" + str(j) + "] = " + str(lOutList[j]) + ";"
-                print >>fo, indent + jName + ".leftOutputAttrType[" + str(j) + "] = " + ctype + ";" 
+                print >>fo, indent + jName + ".leftOutputAttrType[" + str(j) + "] = " + ctype + ";"
                 print >>fo, indent + jName + ".leftPos[" + str(j) + "] = " + str(lPosList[j]) + ";"
                 print >>fo, indent + jName + ".tupleSize += " + factName + "->attrSize[" + str(lOutList[j]) + "];"
 
@@ -1724,7 +1727,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
             if CODETYPE == 0:
                 print >>fo, indent + "struct tableNode *join" + str(i) + " = hashJoin(&" + jName + ",&pp);\n"
             else:
-                print >>fo, indent + "struct tableNode *join" + str(i) + " = hashJoin(&" + jName + ", &context, &pp);\n" 
+                print >>fo, indent + "struct tableNode *join" + str(i) + " = hashJoin(&" + jName + ", &context, &pp);\n"
 
             factName = "join" + str(i)
 
@@ -1736,7 +1739,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
                 print >>fo, indent + "mergeIntoTable("+resultNode+",join" + str(i) + ", &pp);"
             else:
                 print >>fo, indent + "mergeIntoTable("+resultNode+",join" + str(i) + ", &context, &pp);"
-                
+
 
             print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
             for i in range(0,len(joinAttr.dimTables)):
@@ -1754,7 +1757,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
             indent = indent_this_level + 2 * baseIndent
             print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
             print >>fo, indent + "freeTable(" +resultNode + ");"
-            print >>fo, indent + resultNode+" = join" + str(i) + ";" 
+            print >>fo, indent + resultNode+" = join" + str(i) + ";"
             for i in range(0,len(joinAttr.dimTables)-1):
                 jName = "join" + str(i)
                 print >>fo, indent + "freeTable(" + jName + ");"
@@ -1825,7 +1828,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
         totalAttr = len(indexList)
 
         for i in range(0,totalAttr):
-            col = colList[i] 
+            col = colList[i]
             if isinstance(col, ystree.YRawColExp):
                 colType = col.column_type
                 colIndex = col.column_name
@@ -1847,7 +1850,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
                 setTupleNum = 1
                 print >>fo, indent + "outFd = open(\"" + joinAttr.factTables[0].table_name + str(colIndex) + "\",O_RDONLY);"
                 print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
-                print >>fo, indent + "blockTotal = header.blockTotal;" 
+                print >>fo, indent + "blockTotal = header.blockTotal;"
                 print >>fo, indent + "close(outFd);"
 
         factIndex = []
@@ -1858,7 +1861,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
 
         jName = "jNode"
         print >>fo, indent + "struct joinNode " + jName + ";"
-        print >>fo, indent + jName + ".dimNum = " + str(dimNum) + ";" 
+        print >>fo, indent + jName + ".dimNum = " + str(dimNum) + ";"
         print >>fo, indent + jName + ".dimTable = (struct tableNode **) malloc(sizeof(struct tableNode) * " + jName + ".dimNum);"
         print >>fo, indent + "CHECK_POINTER(" + jName + ".dimTable);"
         print >>fo, indent + jName + ".factIndex = (int *) malloc(sizeof(int) * " + jName + ".dimNum);"
@@ -2041,7 +2044,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
         print >>fo, indent + factName + "->tupleSize = " + tupleSize
 
         for i in range(0,totalAttr):
-            col = colList[i] 
+            col = colList[i]
             colType = col.column_type
             colIndex =  col.column_name
             colLen = type_length(joinAttr.factTables[0].table_name, colIndex, colType)
@@ -2053,7 +2056,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
             print >>fo, indent + "blockSize[" + str(i) + "] += header.blockSize;"
             print >>fo, indent + "offset += sizeof(struct columnHeader);"
             print >>fo, indent + factName + "->dataFormat[" + str(i) + "] = header.format;"
-            print >>fo, indent + "outSize = header.blockSize;" 
+            print >>fo, indent + "outSize = header.blockSize;"
             print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
             print >>fo, indent + "outTable = (char *)mmap(0,outSize,PROT_READ,MAP_SHARED,outFd,offset);"
 
@@ -2159,7 +2162,7 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
                     print 1/0
 
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";" 
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM";
 
                 colType = whereList[i].column_type
@@ -2262,12 +2265,12 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
             exp = gb_exp_list[i]
             if isinstance(exp, ystree.YRawColExp):
                 print >>fo, indent + "gbNode->groupByIndex[" + str(i) + "] = " + str(exp.column_name) + ";"
-                print >>fo, indent + "gbNode->groupByType[" + str(i) + "] = gbNode->table->attrType[" + str(exp.column_name) + "];" 
-                print >>fo, indent + "gbNode->groupBySize[" + str(i) + "] = gbNode->table->attrSize[" + str(exp.column_name) + "];" 
+                print >>fo, indent + "gbNode->groupByType[" + str(i) + "] = gbNode->table->attrType[" + str(exp.column_name) + "];"
+                print >>fo, indent + "gbNode->groupBySize[" + str(i) + "] = gbNode->table->attrSize[" + str(exp.column_name) + "];"
             elif isinstance(exp, ystree.YConsExp):
-                print >>fo, indent + "gbNode->groupByIndex[" + str(i) + "] = -1;" 
-                print >>fo, indent + "gbNode->groupByType[" + str(i) + "] = INT;" 
-                print >>fo, indent + "gbNode->groupBySize[" + str(i) + "] = sizeof(int);" 
+                print >>fo, indent + "gbNode->groupByIndex[" + str(i) + "] = -1;"
+                print >>fo, indent + "gbNode->groupByType[" + str(i) + "] = INT;"
+                print >>fo, indent + "gbNode->groupBySize[" + str(i) + "] = sizeof(int);"
             else:
                 print 1/0
 
@@ -2374,6 +2377,35 @@ def generate_code_for_a_tree(fo, tree, lvl, mat_f):
     print >>fo, indent + "mn.table = "+resultNode + ";"
     if CODETYPE == 0:
         print >>fo, indent + "char *final = materializeCol(&mn, &pp);"
+
+        if lvl == 0 and out_f == True:
+            print >>fo, indent + "for(int i = 0; i < mn.table->tupleNum; i++){"
+            indent = indent_this_level + baseIndent
+            print >>fo, indent + "size_t tuple_off = 0;"
+            print >>fo, indent + "printf(\"Tuple %d: \", i);"
+            print >>fo, indent + "for(int j = 0; j < mn.table->totalAttr; j++){"
+            indent = indent_this_level + baseIndent * 2
+            print >>fo, indent + "switch(mn.table->attrType[j]){"
+            print >>fo, indent + "case INT:"
+            print >>fo, indent + baseIndent + "printf(\"(int) %d, \", *(int *)(final + i * mn.table->tupleSize + tuple_off)); break;"
+            print >>fo, indent + "case FLOAT:"
+            print >>fo, indent + baseIndent + "printf(\"(float) %f, \", *(float *)(final + i * mn.table->tupleSize + tuple_off)); break;"
+            print >>fo, indent + "case STRING:"
+            print >>fo, indent + baseIndent + "size_t strlen = mn.table->attrSize[j];"
+            print >>fo, indent + baseIndent + "char *strout = (char *)malloc(strlen + 1);"
+            print >>fo, indent + baseIndent + "strout[strlen] = '\\0';"
+            print >>fo, indent + baseIndent + "memcpy(strout, final + i * mn.table->tupleSize + tuple_off, strlen);"
+            print >>fo, indent + baseIndent + "printf(\"(string) %s, \", strout);"
+            print >>fo, indent + baseIndent + "free(strout);"
+            print >>fo, indent + baseIndent + "break;"
+            print >>fo, indent + "}"
+            print >>fo, indent + "tuple_off += mn.table->attrSize[j];"
+            indent = indent_this_level + baseIndent
+            print >>fo, indent + "}"
+            print >>fo, indent + "printf(\"\\n\");"
+            indent = indent_this_level
+            print >>fo, indent + "}"
+
     else:
         print >>fo, indent + "materializeCol(&mn, &context,&pp);"
         print >>fo, indent + "freeTable(" + resultNode + ");\n"
@@ -2399,7 +2431,7 @@ def gpudb_code_gen(argv):
         codeDir = "./opencl"
 
     includeDir = "./include"
-    schemaFile = None 
+    schemaFile = None
 
     if len(sys.argv) == 3:
         tree_node = ystree.ysmart_tree_gen(argv[1],argv[2])
@@ -2449,4 +2481,3 @@ def gpudb_code_gen(argv):
         metaFile.close()
 
     os.chdir(pwd)
-
