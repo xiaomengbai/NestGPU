@@ -124,9 +124,17 @@
 -- select avg(c_custkey) from customer where c_nation = 'MOROCCO';
 -- select avg(s_suppkey) from supplier where s_nation = 'MOROCCO';
 
+-- The subquery example
 select c_name, c_nation, c_city
 from customer
 where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation);
+
+-- select c_name, s_name
+-- from customer, supplier
+-- where s_suppkey > (select min(p_partkey) from part where s_city = p_color and s_region = p_color)
+-- and c_nation = 'BRAZIL'
+-- and s_nation = 'BRAZIL'
+-- and c_nation = s_nation;
 
 --select c_name, c_nation, c_city
 -- s_name, s_nation, s_city--s_nation, s_suppkey

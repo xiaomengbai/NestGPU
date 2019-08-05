@@ -1190,27 +1190,48 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
                 if colIndex <0:
                     print 1/0
 
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
-
                 colType = whereList[i].column_type
                 ctype = to_ctype(colType)
 
-                if ctype == "INT":
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
+                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+                else:
+                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+
+                # Get subquery result here
+                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                    generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], indexList)
+
+
+                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                    print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
+                elif ctype == "INT":
+                    if isinstance(conList[i], ystree.YRawColExp):
+                        con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
+                    else:
+                        con_value = conList[i]
                     print >>fo, indent + "{"
                     print >>fo, indent + baseIndent + "int tmp = " + conList[i] + ";"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(int));"
+                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(int));"
                     print >>fo, indent + "}"
-
                 elif ctype == "FLOAT":
+                    if isinstance(conList[i], ystree.YRawColExp):
+                        con_value = "*(float *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
+                    else:
+                        con_value = conList[i]
                     print >>fo, indent + "{"
                     print >>fo, indent + baseIndent + "float tmp = " + conList[i] + ";"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(float));"
+                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(float));"
                     print >>fo, indent + "}"
-
+                    print 1/0
                 else:
-                    print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + conList[i] + ");\n"
+                    if isinstance(conList[i], ystree.YRawColExp):
+                        con_value = "_" + conList[i].table_name + "_" + str(conList[i].column_name)
+                    else:
+                        con_value = conList[i]
+                    print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + con_value + ");\n"
 
             if CODETYPE == 0:
                 print >>fo, indent + "struct tableNode *tmp = tableScan(&" + relName + ", &pp);"
@@ -1523,72 +1544,7 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
 
                 # Get subquery result here
                 if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                    subq_id = conList[i].parameter_list[0].cons_value
-                    pass_in_cols = conList[i].parameter_list[1:]
-                    sub_tree = ystree.subqueries[subq_id]
-
-                    print "the subquery: "
-                    sub_tree.debug(0)
-                    print "the pass in cols: ", map(lambda c: c.evaluate(), pass_in_cols)
-
-                    subq_select_list = sub_tree.select_list.tmp_exp_list
-                    if len(subq_select_list) > 1:
-                        print "ERROR: more than one column are selected in a subquery!"
-                        sub_tree.debug(0)
-                        print 1/0
-
-                    selectItem = subq_select_list[0]
-                    subq_res_size = 0
-                    if isinstance(selectItem, ystree.YFuncExp):
-                        # Assume the aggregation function with only one parameter, i.e., the column
-                        subq_res_col = selectItem.parameter_list[0]
-                    elif isinstance(selectItem, ystree.YRawColExp):
-                        subq_res_col = selectItem
-                    else:
-                        print "ERROR: Unknown select column type in a subquery: ", selectItem.evaluate
-                        print 1/0
-
-                    if relList[i] in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
-                        subq_res_size = "sizeof(float)";
-                    else:
-                        subq_res_size = type_length(subq_res_col.table_name, subq_res_col.column_name, subq_res_col.column_type)
-
-
-                    print >>fo, ""
-                    print >>fo, indent + "// Process the subquery"
-                    for col in pass_in_cols:
-                        colLen = type_length(joinAttr.factTables[0].table_name, col.column_name, col.column_type)
-                        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-                        print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
-                        print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
-
-                    print >>fo, indent + var_subqRes + " = (char *)malloc(" + subq_res_size + " * header.tupleNum);"
-                    print >>fo, indent + "CHECK_POINTER(" + var_subqRes + ");\n"
-
-                    print >>fo, indent + "for(int tupleid = 0; tupleid < header.tupleNum; tupleid++){"
-                    indent = indent_this_level + baseIndent * 2
-
-                    for col in pass_in_cols:
-                        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-                        colLen = type_length(joinAttr.factTables[0].table_name, col.column_name, col.column_type)
-                        print >>fo, indent + "memcpy(" + pass_in_var + ", (char *)(" + factName + "->content[" +  str(indexList.index(col.column_name)) + "]) + tupleid * " + colLen + ", " + colLen + ");"
-
-                    print >>fo, indent + "{"
-
-                    generate_code_for_a_tree(fo, sub_tree, lvl + 1, False)
-
-                    print >>fo, indent + baseIndent + ""
-                    print >>fo, indent + baseIndent + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
-                    print >>fo, indent + "}"
-                    indent = indent_this_level + baseIndent
-                    print >>fo, indent + "}"
-
-                    for col in pass_in_cols:
-                        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-                        print >>fo, indent + "free(" + pass_in_var + ");"
-                    print >>fo, ""
-
-
+                    generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], indexList)
 
                 if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                     print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
@@ -1617,32 +1573,6 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
                     else:
                         con_value = conList[i]
                     print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + con_value + ");\n"
-
-
-                # if isinstance(conList[i], ystree.YRawColExp):
-                #     if ctype == "INT":
-                #         conList[i] = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
-                #     elif ctype == "FLOAT":
-                #         conList[i] = "*(float *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
-                #     else:
-                #         conList[i] = "_" + conList[i].table_name + "_" + str(conList[i].column_name)
-                # elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                #     conList[i] = "subq_result"
-
-                # if ctype == "INT":
-                #     print >>fo, indent + "{"
-                #     print >>fo, indent + baseIndent + "int tmp = " + conList[i] + ";"
-                #     print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(int));"
-                #     print >>fo, indent + "}"
-
-                # elif ctype == "FLOAT":
-                #     print >>fo, indent + "{"
-                #     print >>fo, indent + baseIndent + "float tmp = " + conList[i] + ";"
-                #     print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(float));"
-                #     print >>fo, indent + "}"
-                #     print 1/0
-                # else:
-                #     print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + conList[i] + ");\n"
 
             if CODETYPE == 0:
                 print >>fo, indent + "struct tableNode * " + resName + " = tableScan(&" + relName + ", &pp);"
@@ -2415,6 +2345,73 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
         print >>fo, indent + "clReleaseContext(context.context);"
         print >>fo, indent + "clReleaseProgram(context.program);\n"
 
+def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
+
+    indent = (lvl * 3 + 2) * baseIndent
+    var_subqRes = "subqRes" + str(lvl)
+
+    subq_id = con.parameter_list[0].cons_value
+    pass_in_cols = con.parameter_list[1:]
+    sub_tree = ystree.subqueries[subq_id]
+
+    print "the subquery: "
+    sub_tree.debug(0)
+    print "the pass in cols: ", map(lambda c: c.evaluate(), pass_in_cols)
+
+    subq_select_list = sub_tree.select_list.tmp_exp_list
+    if len(subq_select_list) > 1:
+        print "ERROR: more than one column are selected in a subquery!"
+        sub_tree.debug(0)
+        print 1/0
+
+    selectItem = subq_select_list[0]
+    subq_res_size = 0
+    if isinstance(selectItem, ystree.YFuncExp):
+        # Assume the aggregation function with only one parameter, i.e., the column
+        subq_res_col = selectItem.parameter_list[0]
+    elif isinstance(selectItem, ystree.YRawColExp):
+        subq_res_col = selectItem
+    else:
+        print "ERROR: Unknown select column type in a subquery: ", selectItem.evaluate
+        print 1/0
+
+    if rel in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
+        subq_res_size = "sizeof(float)";
+    else:
+        subq_res_size = type_length(subq_res_col.table_name, subq_res_col.column_name, subq_res_col.column_type)
+
+
+    print >>fo, ""
+    print >>fo, indent + "// Process the subquery"
+    for col in pass_in_cols:
+        colLen = type_length(col.table_name, col.column_name, col.column_type)
+        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+        print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
+        print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
+
+    print >>fo, indent + var_subqRes + " = (char *)malloc(" + subq_res_size + " * header.tupleNum);"
+    print >>fo, indent + "CHECK_POINTER(" + var_subqRes + ");\n"
+
+    print >>fo, indent + "for(int tupleid = 0; tupleid < header.tupleNum; tupleid++){"
+
+    for col in pass_in_cols:
+        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+        colLen = type_length(col.table_name, col.column_name, col.column_type)
+        print >>fo, indent + baseIndent + "memcpy(" + pass_in_var + ", (char *)(" + col.table_name.lower() + "Table->content[" +  str(indexList.index(col.column_name)) + "]) + tupleid * " + colLen + ", " + colLen + ");"
+
+    print >>fo, indent + baseIndent + "{"
+
+    generate_code_for_a_tree(fo, sub_tree, lvl + 1, False)
+
+    print >>fo, indent + baseIndent * 2 + ""
+    print >>fo, indent + baseIndent * 2 + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
+    print >>fo, indent + baseIndent + "}"
+    print >>fo, indent + "}"
+
+    for col in pass_in_cols:
+        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+        print >>fo, indent + "free(" + pass_in_var + ");"
+    print >>fo, ""
 
 """
 gpudb_code_gen: entry point for code generation.
