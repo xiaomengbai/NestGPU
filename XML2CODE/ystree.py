@@ -43,12 +43,12 @@ subqueries = []
 ############################################################################################
 
 class YExpTool:
-    
+
     token_list = ["ID", "DOT", "ASTERISK", "COMMA", "LPAREN", "RPAREN", "'SUM'", "'AVG'", "'MAX'", "'MIN'", "'COUNT'", "NUMBER", "QUOTED_STRING", "DIVIDE", "PLUS", "MINUS"]
 
     token_list_agg_func = ["'SUM'", "'AVG'", "'MAX'", "'MIN'", "'COUNT'"]
-    
-  
+
+
     def __init__(self):
         pass
 
@@ -57,7 +57,7 @@ class YExpTool:
         len_input_token_list = len(input_token_list)
 
         if len_input_token_list == 1:
-            
+
             a_token = input_token_list[0]
             atc = a_token["content"]
             atn = a_token["name"]
@@ -76,7 +76,7 @@ class YExpTool:
             elif atn == "T_RESERVED" and atc.upper() == "NULL":
                 return YConsExp(atc, "NULL")
 
-        
+
         if len_input_token_list == 3:
 
             first_token = input_token_list[0]
@@ -96,7 +96,16 @@ class YExpTool:
                 return YFuncExp(first_token["name"], [])
 
 
-        #todo: we also should consider: count(*) 
+        if len_input_token_list >= 3 and len_input_token_list % 2 == 1:
+            commas = input_token_list[1::2]
+            if all(map(lambda t: t["name"] == "COMMA", commas)):
+                cons = input_token_list[0::2]
+                return YFuncExp( "LIST", map(lambda t: self.convert_token_list_to_exp_tree([t]), cons) )
+
+
+
+
+        #todo: we also should consider: count(*)
 
         #---------------------------------------------------------------
         #Step 0: look for boolean expression: "<" ">" "<>" "like" "is"   ---? Not Like?
@@ -115,7 +124,7 @@ class YExpTool:
 
         for i in range(0, len_input_token_list):
             a_token = input_token_list[i]
-            
+
             atc = a_token["content"]
             atn = a_token["name"]
 
@@ -135,7 +144,11 @@ class YExpTool:
                 partition_index = i
                 partition_type = "IS"
                 continue
-            elif atn in ["EQ", "GTH", "LTH", "NOT_EQ","GEQ","LEQ"]:
+            elif atn == "T_RESERVED" and atc.upper() == "IN":
+                partition_index = i
+                partition_type = "IN"
+                continue
+            elif atn in ["EQ", "GTH", "LTH", "NOT_EQ", "GEQ", "LEQ"]:
                 partition_index = i
                 partition_type = atn
                 continue
@@ -144,7 +157,7 @@ class YExpTool:
         if partition_index > 0:
 
             func_name = partition_type
-            
+
             before_list = input_token_list[:partition_index]
             after_list = input_token_list[(partition_index + 1):]
 
@@ -152,7 +165,7 @@ class YExpTool:
             end_exp = self.convert_token_list_to_exp_tree(after_list)
 
             return YFuncExp(func_name, [before_exp, end_exp])
-        
+
 
         #---------------------------------------------------------------
         #Step 1: look for plus or minus
@@ -165,7 +178,7 @@ class YExpTool:
 
         for i in range(0, len_input_token_list):
             a_token = input_token_list[i]
-            
+
             atc = a_token["content"]
             atn = a_token["name"]
 
@@ -185,11 +198,11 @@ class YExpTool:
                 first_minus_index = i
                 continue
 
-        
+
         if first_plus_index > 0:
             before_list = input_token_list[:first_plus_index]
             after_list = input_token_list[(first_plus_index + 1):]
-            
+
             before_exp = self.convert_token_list_to_exp_tree(before_list)
             end_exp = self.convert_token_list_to_exp_tree(after_list)
 
@@ -198,7 +211,7 @@ class YExpTool:
         elif first_minus_index > 0:
             before_list = input_token_list[:first_minus_index]
             after_list = input_token_list[(first_minus_index + 1):]
-            
+
             before_exp = self.convert_token_list_to_exp_tree(before_list)
             end_exp = self.convert_token_list_to_exp_tree(after_list)
 
@@ -208,7 +221,7 @@ class YExpTool:
         #---------------------------------------------------------------
         #Step 2: look for multiply and divide
         #---------------------------------------------------------------
-        
+
         sub_level = 0
 
         first_multiply_index = -1
@@ -216,7 +229,7 @@ class YExpTool:
 
         for i in range(0, len_input_token_list):
             a_token = input_token_list[i]
-            
+
             atc = a_token["content"]
             atn = a_token["name"]
 
@@ -236,11 +249,11 @@ class YExpTool:
                 first_divide_index = i
                 continue
 
-        
+
         if first_multiply_index > 0:
             before_list = input_token_list[:first_multiply_index]
             after_list = input_token_list[(first_multiply_index + 1):]
-            
+
             before_exp = self.convert_token_list_to_exp_tree(before_list)
             end_exp = self.convert_token_list_to_exp_tree(after_list)
 
@@ -249,7 +262,7 @@ class YExpTool:
         elif first_divide_index > 0:
             before_list = input_token_list[:first_divide_index]
             after_list = input_token_list[(first_divide_index + 1):]
-            
+
             before_exp = self.convert_token_list_to_exp_tree(before_list)
             end_exp = self.convert_token_list_to_exp_tree(after_list)
 
@@ -275,15 +288,15 @@ class YExpTool:
 
 
             sub_level = 0
-             
+
             t_para_list = []
             a_para_list = []
 
             for i in range(2, len_input_token_list - 1):
                 a_token = input_token_list[i]
-                 
+
                 a_para_list.append(a_token)
-            
+
                 atc = a_token["content"]
                 atn = a_token["name"]
 
@@ -300,26 +313,26 @@ class YExpTool:
                     for ai in a_para_list:
                         t_list.append(ai)
                     t_para_list.append(t_list)
-                    
+
                     a_para_list = []
-                     
+
             t_para_list.append(a_para_list)
 
 
             para_exp_list = []
             for ap in t_para_list:
                 para_exp_list.append(self.convert_token_list_to_exp_tree(ap))
-            
+
 
             return YFuncExp(func_name, para_exp_list)
 
         elif first_token["name"] == "LPAREN":
-            
+
             last_token = input_token_list[-1]
 
             if last_token["name"] == "RPAREN":
                 return self.convert_token_list_to_exp_tree(input_token_list[1:-1])
-            
+
             else:
                 print >>sys.stderr,input_token_list, last_token
                 exit(29)
@@ -339,7 +352,7 @@ class YExpTool:
                     else:
                         print "Unknown parameter for SUBQ: ", token
                         exit(99)
-                        
+
                 return YFuncExp("SUBQ", par_list)
 
             else:
@@ -360,7 +373,7 @@ class YExpBase:
         pass
 
     def evaluate(self):
-        pass 
+        pass
 
 class YFuncExp(YExpBase):
 
@@ -368,7 +381,7 @@ class YFuncExp(YExpBase):
     parameter_list = None
     func_obj = None
 
-    
+
     def __init__(self, input_func_name, input_parameter_list):
 
         self.func_name = input_func_name.upper()
@@ -395,7 +408,7 @@ class YFuncExp(YExpBase):
     def gen_func_obj(self,obj):
         self.func_obj = obj
         for x in self.parameter_list:
-            x.gen_func_obj(self) 
+            x.gen_func_obj(self)
 
 ### replace an exp in the parameter_list
     def replace(self,old_exp,new_exp):
@@ -404,7 +417,7 @@ class YFuncExp(YExpBase):
             if x.compare(old_exp) is True:
                 new_list.append(new_exp)
             else:
-                new_list.append(x) 
+                new_list.append(x)
         self.set_para_list(new_list)
 
     def convert_to_upper(self):
@@ -421,7 +434,7 @@ class YFuncExp(YExpBase):
         for x in self.parameter_list:
             res = res | x.has_groupby_func()
         return res
-    
+
     def get_value_type(self):
         return "DECIMAL"
 
@@ -443,7 +456,7 @@ class YFuncExp(YExpBase):
 
 
 class YConsExp(YExpBase):
-    
+
     cons_type = None
 
     cons_value = None
@@ -467,7 +480,7 @@ class YConsExp(YExpBase):
 
     def convert_to_upper(self):
         pass
-  
+
     def has_groupby_func(self):
         return False
 
@@ -494,7 +507,7 @@ class YRawColExp(YExpBase):
     column_name = None
     column_type = None
     func_obj = None
-    
+
     def __init__(self, input_table_name, input_column_name):
 
         self.table_name = input_table_name.upper()
@@ -553,12 +566,12 @@ class YRawColExp(YExpBase):
 
 #Sub-types could be: TableNode, SelectProjectNode, GroupByNode, OrderByNode, TwoJoinNode, MultipleJoinNode
 class QueryPlanTreeBase(object):
-    
+
     source = None
     i_am_the_tree = None
 
     select_list = None
-    
+
     #Not all nodes can have where_condition
     #but, a GroupByNode node can get where_condition from its parents
     where_condition = None
@@ -570,7 +583,7 @@ class QueryPlanTreeBase(object):
 
     table_list = []
     table_alias_dict = {}
-    dynamic_values = {} # a dictionary storing dynamic values from upper level columns 
+    dynamic_values = {} # a dictionary storing dynamic values from upper level columns
                         # key: column name, value: value
     def __init__(self):
 
@@ -623,7 +636,7 @@ class QueryPlanTreeBase(object):
 
             gb.child = self
             self.parent = gb
-            
+
             for x in self.table_list:
                 if x not in gb.table_list:
                         gb.table_list.append(x)
@@ -645,7 +658,7 @@ class QueryPlanTreeBase(object):
 
             if agg_bool is False:
                 return self
-        
+
             gb = GroupByNode()
             gb.source = self.source
             gb.i_am_the_tree = self.i_am_the_tree
@@ -667,7 +680,7 @@ class QueryPlanTreeBase(object):
 
             return gb
 
-    
+
     def convert_to_binary_join_tree(self):
 
         return self
@@ -727,7 +740,7 @@ class OrderByNode(QueryPlanTreeBase):
         for y in self.order_by_clause.order_indicator_list:
             i = i + y
             i = i + ","
-            
+
         print pb, "OrderByNode", "[" + xes + "]", "[" + i + "]"
 
 
@@ -738,7 +751,7 @@ class GroupByNode(QueryPlanTreeBase):
     child = None
     parent = None
     composite = None
-    
+
     def __init__(self):
         super(GroupByNode, self).__init__()
 
@@ -767,7 +780,7 @@ class GroupByNode(QueryPlanTreeBase):
             tmp.append(new_exp)
             ret_exp_list.append(tmp)
             gb_exp_list.append(new_exp)
-        
+
         ret_exp_list.append(gb_exp_list)
         return ret_exp_list
 
@@ -842,7 +855,7 @@ class SelectProjectNode(QueryPlanTreeBase):
     in_table_alias_dict = {}
 
     def __init__(self):
-        
+
         self.in_table_list = []
         self.in_table_alias_dict = {}
 
@@ -852,7 +865,7 @@ class SelectProjectNode(QueryPlanTreeBase):
         self.child = self.child.release_order_by()
 
         return super(SelectProjectNode,self).release_order_by()
-        
+
     def release_group_by(self):
         self.child = self.child.release_group_by()
 
@@ -903,7 +916,7 @@ class SelectProjectNode(QueryPlanTreeBase):
         self.child.debug(level + 1)
 
 
-        
+
 class TableNode(QueryPlanTreeBase):
 
     parent = None
@@ -939,7 +952,7 @@ class TableNode(QueryPlanTreeBase):
             sscs = str(None)
         else:
             sscs = self.select_list.converted_exp_str
-                
+
             #sscs = self.select_list.converted_str
 
         if self.where_condition is None:
@@ -951,7 +964,7 @@ class TableNode(QueryPlanTreeBase):
 
         tmp_str_select_list = "[" + sscs + "]"
         tmp_str_where_condition = "[" + str(swc) + "]"
-        
+
 
         print pb, "TableNode", self.table_name, "{" + self.table_alias + "}", tmp_str_select_list, tmp_str_where_condition
 
@@ -959,7 +972,7 @@ class TableNode(QueryPlanTreeBase):
 class TwoJoinNode(QueryPlanTreeBase):
 
     join_explicit = None
-    join_type = None 
+    join_type = None
     join_condition = None
     left_composite = None
     right_composite = None
@@ -1124,7 +1137,7 @@ class MultipleJoinNode(QueryPlanTreeBase):
 
     def __init__(self):
         super(MultipleJoinNode, self).__init__()
-        
+
 
     def release_order_by(self):
 
@@ -1133,7 +1146,7 @@ class MultipleJoinNode(QueryPlanTreeBase):
 
         for a_child in tmp_list:
             self.children_list.append(a_child.release_order_by())
-        
+
         return super(MultipleJoinNode,self).release_order_by()
 
     def release_group_by(self):
@@ -1157,26 +1170,26 @@ class MultipleJoinNode(QueryPlanTreeBase):
 
         #Step2: process myself
         if True:
-            
+
             tmp_children_list = list(self.children_list)
 
             current_node = None
 
             tmp_index = -1
-            
+
             for a_child in tmp_children_list:
-                
+
                 if current_node is None:
 
                     current_node = a_child
 
                 else:
-                    
+
                     a_join_node = TwoJoinNode()
 
                     a_join_node.source = self
                     a_join_node.join_explicit = self.join_explicit
-                    
+
                     a_join_node.left_child = copy.deepcopy(current_node)
                     a_join_node.left_child.parent = a_join_node
                     a_join_node.right_child = copy.deepcopy(a_child)
@@ -1198,7 +1211,7 @@ class MultipleJoinNode(QueryPlanTreeBase):
                     for x in a_child.table_list:
                         if x not in a_join_node.table_list:
                             a_join_node.table_list.append(x)
-                    
+
                     if self.join_explicit == True:
 
                         tmp_list_join_condition = self.join_info[0]
@@ -1287,7 +1300,7 @@ class CompositeNode(QueryPlanTreeBase):
         return
 
 
-    
+
 ############################################################################################
 ############################################################################################
 ########################    LRBSelectNode    ###############################################
@@ -1316,11 +1329,11 @@ class LRBSelectNode:
 
 
     def utility_convert_to_initial_plan_tree(self, a_input, i_am_the_tree):
-        
+
         tn = None
 
         if a_input["type"] == 'BaseTable':
-            
+
             #tn should be a simple tablescan
             tn = TableNode()
             tn.source = a_input
@@ -1335,28 +1348,28 @@ class LRBSelectNode:
 
             tn.table_name = a_input["content"].upper()
             tn.table_alias = a_input["alias"].upper()
-            
+
             if tn.table_alias == "":
                 tn.table_list.append(tn.table_name)
             else:
                 tn.table_list.append(tn.table_alias)
                 tn.table_alias_dict[tn.table_alias] = tn.table_name
-            
+
 
         elif a_input["type"] == 'SubQuery':
-            
+
             #tn should have two nodes: a SP and its underlying child
             tn = SelectProjectNode()
             tn.source = a_input
             tn.i_am_the_tree = i_am_the_tree
-            
+
             if i_am_the_tree:
                 tn.select_list = self.select_list
                 tn.where_condition = self.where_condition
                 tn.group_by_clause = self.group_by_clause
                 tn.having_clause = self.having_clause
                 tn.order_by_clause = self.order_by_clause
-                
+
 
             tn.child = a_input["content"].convert_to_initial_query_plan_tree()
             tn.table_alias = a_input["alias"]
@@ -1423,7 +1436,7 @@ class LRBSelectNode:
             a_scfl_item = scfl[0]
 
             final_node = self.utility_convert_to_initial_plan_tree(a_scfl_item, True)
-            
+
         else:
 
             final_node = MultipleJoinNode()
@@ -1439,9 +1452,9 @@ class LRBSelectNode:
             # Step1: set up children
             tmp_list = []
             for a_scfl_item in scfl:
-                
+
                 result_item = self.utility_convert_to_initial_plan_tree(a_scfl_item, False)
-                        
+
                 tmp_list.append(result_item)
                 for x in result_item.table_alias_dict.keys():
                     if x not in final_node.table_alias_dict.keys():
@@ -1454,7 +1467,7 @@ class LRBSelectNode:
                         final_node.table_list.append(x)
 
             final_node.children_list = list(tmp_list)
-                
+
 
             # Step 2: setup join condition
             final_node.join_explicit = False
@@ -1495,7 +1508,7 @@ class LRBSelectNode:
         pb = ""
         for i in range(level):
             pb += " "
-        
+
 
         print pb, "a SELECT:"
         print pb, "my select_list:", self.select_list
@@ -1571,7 +1584,7 @@ class LRBSelectNode:
                     tmp_scan_list = []
 
             else:
-                # a_from_item is a subquery   
+                # a_from_item is a subquery
                 a_from_item.process_from_list()
 
         final_from_list.append(tmp_scan_list)
@@ -1588,11 +1601,11 @@ class LRBSelectNode:
         # dict: source:xmlnode, content:content(tablename), type:BaseTable|Subquery|JoinClause, alias:alias
 
         for fa in final_from_list:
-          
+
 
             #fa is an array
             #fa can only a base_relation, a join clause, or a subquery
-            
+
             a_r_item = dict()
 
             #--------Case 1----------------------------------------------------------------------------
@@ -1623,7 +1636,7 @@ class LRBSelectNode:
                 if (not isinstance(x, LRBSelectNode)) and x.content.upper() == "JOIN":
                     #fa is a join clause
                     hasjoin = True
-                
+
             if not hasjoin:
                 #fa must be a subquery
 
@@ -1639,14 +1652,14 @@ class LRBSelectNode:
                     else:
                         if x.tokenname.upper() == 'ID':
                             t_id = x.content
-                #content is the LRBSelectNode 
+                #content is the LRBSelectNode
                 a_r_item["content"] = t_sub_tree
                 a_r_item["alias"] = t_id
 
                 t_converted_from_list.append(a_r_item)
 
                 continue
-            
+
             #--------Case 3--------------------------------------------------------------------------
             #fa is join clause
 
@@ -1658,28 +1671,28 @@ class LRBSelectNode:
             a_r_item["jc_jointype_list"] = []
             a_r_item["jc_on_condition"] = []
 
-            
+
             in_on = False
 
             t_list = []
             for x in fa:
                 t_list.append(x)
 
-                
+
                 if isinstance(x, LRBSelectNode):
                     continue
-                
+
                 if x.content.upper() == "JOIN":
 
                     #now I have met a sub_join_item
-                    
+
                     if not in_on:
 
                         t_atomic_list = t_list[:-3]
 
-                        a_jointype = t_list[-3].content 
+                        a_jointype = t_list[-3].content
                         a_final_item = self.utility_convert_from_list(t_atomic_list)
-            
+
                         a_r_item["content"].append(a_final_item)
                         a_r_item["jc_jointype_list"].append(a_jointype)
 
@@ -1693,8 +1706,8 @@ class LRBSelectNode:
 
                         t_atomic_list = t_list[:-3]
 
-                        a_jointype = t_list[-3].content 
-                        
+                        a_jointype = t_list[-3].content
+
 
                         #a_r_item["jc_on_condition"].append(t_atomic_list)
 
@@ -1704,24 +1717,24 @@ class LRBSelectNode:
                         a_r_item["jc_jointype_list"].append(a_jointype)
 
                         in_on = False
-                        
+
                         #reset
                         t_list = []
 
                         continue
 
                 if x.content.upper() == "ON":
-                    
+
                     #now I have met the final sub_join_item
 
                     t_atomic_list = t_list[:-1]
 
                     a_final_item = self.utility_convert_from_list(t_atomic_list)
-            
+
                     a_r_item["content"].append(a_final_item)
 
                     in_on = True
-                    
+
                     #reset
                     t_list = []
 
@@ -1747,7 +1760,7 @@ class FirstStepSelectList:
 
     source = None
     converted_str = None
-    
+
     realstructure = None
 
 
@@ -1763,13 +1776,13 @@ class FirstStepSelectList:
 
         if select_list is None:
             return return_exp_list
-        
+
 
         yet = YExpTool()
 
         for t_child in select_list.child_list:
-           
-            
+
+
             if t_child.tokenname == 'T_SELECT_COLUMN':
 
                 a_exp_input_list = []
@@ -1810,23 +1823,23 @@ class FirstStepSelectList:
                     self.dict_exp_and_alias[a_exp] = my_as_alias.upper()
 
                 # case 2: implicit a, or a.b
-                    
+
                 elif isinstance(a_exp, YRawColExp):
                     self.dict_exp_and_alias[a_exp] = a_exp.column_name
 
-                    
+
                 # case 3: no alias
-                    
+
                 else:
                     self.dict_exp_and_alias[a_exp] = None
 
-                
+
                 return_exp_list.append(a_exp)
 
             else:
                 #must be comma
                 pass
-            
+
         return return_exp_list
 
 
@@ -1836,17 +1849,17 @@ class FirstStepSelectList:
             return str(select_list)
 
         result_str = ""
-    
+
         for t_child in select_list.child_list:
 
             if t_child.tokenname == 'T_SELECT_COLUMN':
-            
+
                 tmp_str = ""
                 for t_t_child in t_child.child_list:
                     tmp_str += t_t_child.content
 
                 result_str += tmp_str
-                
+
 
             elif t_child.tokenname == 'COMMA':
                 result_str += " , "
@@ -1879,7 +1892,7 @@ class FirstStepSelectList:
         self.converted_exp_str = self.utility_convert_exp_list_to_str(self.tmp_exp_list)
 
         self.realstructure = None
-        
+
 
 class FirstStepOnCondition:
 
@@ -1895,7 +1908,7 @@ class FirstStepOnCondition:
         is_and_or = False
 
         if on_condition_item.tokenname == 'T_COND_OR' or on_condition_item.tokenname == 'T_COND_AND':
-            
+
             result_str = ""
 
             for a_child in on_condition_item.child_list:
@@ -1905,7 +1918,7 @@ class FirstStepOnCondition:
             return result_str
 
         else:
-            
+
             if on_condition_item.tokenname == 'GTH':
                 return ">"
             elif on_condition_item.tokenname == 'LTH':
@@ -1932,7 +1945,7 @@ class FirstStepOnCondition:
                 result_str += self.utility_convert_on_condition_item_to_str(a_item)
                 result_str += ""
             return result_str
-        
+
 
 
     def __init__(self, input_on_condition):
@@ -1944,7 +1957,7 @@ class FirstStepOnCondition:
         #we here use FirstStepWhereCondition's methonds
 
         u = FirstStepWhereCondition(None)
-        
+
         self.on_condition_exp = u.utility_convert_real_where_condition_to_exp(self.source)
         self.converted_exp_str = u.utility_convert_exp_list_to_str(self.on_condition_exp)
 
@@ -1953,7 +1966,7 @@ class FirstStepWhereCondition:
 
     source = None
     converted_str = None
-    
+
     realstructure = None
 
     where_condition_exp = None
@@ -1964,7 +1977,7 @@ class FirstStepWhereCondition:
         is_and_or = False
 
         if where_condition_item.tokenname == 'T_COND_OR' or where_condition_item.tokenname == 'T_COND_AND':
-            
+
             result_str = ""
 
             for a_child in where_condition_item.child_list:
@@ -1974,7 +1987,7 @@ class FirstStepWhereCondition:
             return result_str
 
         else:
-            
+
             if where_condition_item.tokenname == 'GTH':
                 return ">"
             elif where_condition_item.tokenname == 'LTH':
@@ -1984,10 +1997,10 @@ class FirstStepWhereCondition:
             elif where_condition_item.tokenname == "GEQ":
                 return ">="
             elif where_condition_item.tokenname == "LEQ":
-                return "<="     
+                return "<="
             else:
                 return where_condition_item.content
-              
+
 
     def utility_convert_where_condition_to_str(self, where_condition):
         if where_condition is None:
@@ -2018,43 +2031,43 @@ class FirstStepWhereCondition:
 
 
             c = c[0]
-            
+
             if c.tokenname != 'T_COND_OR' and c.tokenname != 'T_COND_AND':
 
                 exit(29)
-                
+
             func_name = None
             if c.tokenname == 'T_COND_OR':
                 func_name = "OR"
             elif c.tokenname == 'T_COND_AND':
                 func_name = 'AND'
 
-                
+
             all_my_child_list = c.child_list
             my_first_child = all_my_child_list[0]
-            
+
             if my_first_child.tokenname == 'T_COND_OR' or my_first_child.tokenname == 'T_COND_AND':
                 #that means that all my children are all and or or.
                 #what I should do is to return a func expr
                 pl = []
-                
+
 
                 for a_child in all_my_child_list:
                     pl.append(self.utility_convert_real_where_condition_to_exp([a_child]))
 
-                
+
                 yfc = YFuncExp(func_name, pl)
-                
+
                 return yfc
-                
-            elif my_first_child.tokenname == 'T_RESERVED' and ((my_first_child.content.upper() == 'AND') or (my_first_child.content.upper() == 'OR')):   
+
+            elif my_first_child.tokenname == 'T_RESERVED' and ((my_first_child.content.upper() == 'AND') or (my_first_child.content.upper() == 'OR')):
                 # we must remove the first child
                 return self.utility_convert_real_where_condition_to_exp(all_my_child_list[1:])
-            
+
             else:
-                
+
                 return self.utility_convert_real_where_condition_to_exp(all_my_child_list)
-            
+
         else:
             #two cases:
             #Case 1: an regular exp: a.f1 > b.f2
@@ -2065,19 +2078,20 @@ class FirstStepWhereCondition:
 
             if len(c) == 3:
                 #maybe this is case 2
-                
+
                 if c[0].tokenname == "LPAREN" and c[2].tokenname == "RPAREN" and (c[1].tokenname == "T_COND_AND" or c[1].tokenname == "T_COND_OR"):
                     #must be case 2
                     return self.utility_convert_real_where_condition_to_exp([c[1]])
-                
 
-            if len(c) == 5:
+
+
+            if len(c) == 5 and (c[1].tokenname == "T_SELECT" or c[3].tokenname == "T_SELECT"):
                 select_pos = None
                 if c[0].tokenname == "LPAREN" and c[2].tokenname == "RPAREN" and c[1].tokenname == "T_SELECT":
                     select_pos = 1
                 elif c[2].tokenname == "LPAREN" and c[4].tokenname == "RPAREN" and c[3].tokenname == "T_SELECT":
                     select_pos = 3
-                    
+
                 if select_pos != None:
                     subqueries.append( build_plan_tree_from_a_select_node( c[select_pos] ) )
                     external_cols = []
@@ -2113,8 +2127,8 @@ class FirstStepWhereCondition:
 
                 a_exp_input_list.append(a_token)
 
-            return yet.convert_token_list_to_exp_tree(a_exp_input_list) 
-        
+            return yet.convert_token_list_to_exp_tree(a_exp_input_list)
+
 
     def utility_convert_where_condition_to_exp(self, where_condition):
 
@@ -2146,7 +2160,7 @@ class FirstStepGroupBy:
 
     source = None
     converted_str = None
-    
+
     realstructure = None
 
     groupby_exp_list = None
@@ -2175,20 +2189,20 @@ class FirstStepGroupBy:
             return []
 
         first_group_by_list = group_by_clause.child_list[2:]
-        
+
         real_group_by_list = []
 
         a_group_by_item = []
         for eachitem in first_group_by_list:
-            
-            #todo: we don't consider GROUP BY myfunc(a,b)! 
+
+            #todo: we don't consider GROUP BY myfunc(a,b)!
 
             if eachitem.tokenname != 'COMMA':
 
                 a_token = {}
                 a_token["name"] = eachitem.tokenname
                 a_token["content"] = eachitem.content
-                
+
                 a_group_by_item.append(a_token)
 
             else:
@@ -2219,7 +2233,7 @@ class FirstStepGroupBy:
                 return s
         for x in input_exp:
             t_str = x.evaluate()
-            s = s + "(" + t_str + ")" 
+            s = s + "(" + t_str + ")"
             s = s + " , "
         return s[:-2]
 
@@ -2241,7 +2255,7 @@ class FirstStepOrderBy:
     converted_str = None
     converted_exp_str = None
 
-    
+
     orderby_exp_list = None
 
     #Asc or Desc
@@ -2249,25 +2263,25 @@ class FirstStepOrderBy:
 
 
     def utility_convert_order_by_to_exp_list(self, order_by_clause):
-        
+
         if order_by_clause is None:
             return []
 
         first_order_by_list = order_by_clause.child_list[2:]
-        
+
         real_order_by_list = []
 
         a_order_by_item = []
         for eachitem in first_order_by_list:
-            
-            #todo: we don't consider ORDER BY myfunc(a,b)! 
+
+            #todo: we don't consider ORDER BY myfunc(a,b)!
 
             if eachitem.tokenname != 'COMMA':
 
                 a_token = {}
                 a_token["name"] = eachitem.tokenname
                 a_token["content"] = eachitem.content
-                
+
                 a_order_by_item.append(a_token)
 
             else:
@@ -2281,17 +2295,17 @@ class FirstStepOrderBy:
                 real_order_by_list.append(new_one)
 
                 a_order_by_item = []
-        
+
 
         real_order_by_list.append(a_order_by_item)
 
         return_exp_list = []
         tmp_order_indicator_list = []
-        
+
         yet = YExpTool()
 
         for a_order_by_item in real_order_by_list:
-            
+
             #we must handle the order indicator: DESC or ASC
             a_order_indicator = None
             if a_order_by_item[-1]["name"] == 'T_RESERVED':
@@ -2301,17 +2315,17 @@ class FirstStepOrderBy:
                 #default 'ASC'
                 a_order_indicator = 'ASC'
                 a_final_item = a_order_by_item
-            
+
             tmp_order_indicator_list.append(a_order_indicator)
 
             return_exp_list.append(yet.convert_token_list_to_exp_tree(a_final_item))
 
-        
+
         self.order_indicator_list = tmp_order_indicator_list
 
         return return_exp_list
 
-        
+
 
 
     def __init__(self, input_order_by):
@@ -2322,7 +2336,7 @@ class FirstStepOrderBy:
 
         self.order_indicator_list = []
         self.orderby_exp_list = self.utility_convert_order_by_to_exp_list(self.source)
-        
+
         #self.converted_exp_str = self.utility_convert_exp_list_to_str(self.orderby_exp_list)
 
 
@@ -2342,7 +2356,7 @@ def convert_a_select_tree(a_s_select_node):
         if t_child.tokenname == 'RESERVED':
             #this is a useless select keyword
             continue
-        
+
         if t_child.tokenname == 'T_COLUMN_LIST':
             #result.select_list = t_child
             result.select_list = FirstStepSelectList(t_child)
@@ -2367,15 +2381,15 @@ def convert_a_select_tree(a_s_select_node):
             result.order_by_clause = FirstStepOrderBy(t_child)
             continue
 
-        
 
-        
+
+
 
         if t_child.tokenname == 'T_FROM':
 
             tmp_list = []
             for t_t_child in t_child.child_list:
-                
+
                 if t_t_child.tokenname != 'T_SELECT':
                     tmp_list.append(t_t_child)
                 else:
@@ -2389,7 +2403,7 @@ def convert_a_select_tree(a_s_select_node):
     return result
 
 
-    
+
 
 class LRBSTreeNode:
 
@@ -2420,9 +2434,9 @@ class LRBSTreeNode:
         pb = ""
         for i in range(level):
             pb += " "
-        
+
         print pb, self.content, self.tokenname
-        
+
 
         for a_child in self.child_list:
 
@@ -2431,7 +2445,7 @@ class LRBSTreeNode:
 def processNode(node):
 
     current_node = None
-   
+
     if node.nodeType == Node.ELEMENT_NODE:
 
         if node.nodeName == 'node':
@@ -2448,10 +2462,10 @@ def processNode(node):
                 t_content = child.childNodes[0].nodeValue
 
         #now we have all info of a node
-        
+
         current_node = LRBSTreeNode(t_line, t_positioninline, t_tokenname, t_childcount, t_tokentype, t_content)
         #print t_content
-        
+
         for child in node.childNodes:
 
             if child.nodeName != 'content':
@@ -2459,10 +2473,10 @@ def processNode(node):
                 a_child_node = processNode(child)
 
                 if a_child_node is not None:
-        
+
                     current_node.append_a_child(a_child_node)
-                    
-                    
+
+
 
     return current_node
 
@@ -2482,7 +2496,7 @@ def column_unique_in_table(column_name,table_name):
     for x in global_table_dict[table_name].column_list:
         if x.column_name == column_name:
             count = count +1
-            
+
     if count ==1:
         return True
     else:
@@ -2497,7 +2511,7 @@ def column_in_table(column_name,table_name):
     for x in global_table_dict[table_name].column_list:
         if x.column_name == column_name:
             return True
-    return False    
+    return False
 
 
 def lookup_a_table(input_table_name):
@@ -2563,7 +2577,7 @@ class TableSchema:
         self.column_name_list = []
         for a_column in self.column_list:
             self.column_name_list.append(a_column.column_name)
-            
+
 
     def get_column_name_by_index(self, input_index):
         return self.column_list[input_index].column_name
@@ -2607,7 +2621,7 @@ def get_the_select_node_from_a_file(filename):
 
 #This function processes a T_SELECT node
 def build_plan_tree_from_a_select_node(a_query_node):
-    
+
     r = convert_a_select_tree(a_query_node)
 
     r.process_from_list()
@@ -2621,7 +2635,7 @@ def build_plan_tree_from_a_select_node(a_query_node):
     t2 = t1.release_group_by()
 
     t3 = t2.convert_to_binary_join_tree()
-    
+
     process_the_plan_tree(t3)
 
     return t3
@@ -2629,7 +2643,7 @@ def build_plan_tree_from_a_select_node(a_query_node):
 def process_schema_in_a_file(schema_name):
 
     global global_table_dict
-    
+
     #a line is a table, format: tablename, (columnname:columntype), ...
     fo = open(schema_name)
     als = fo.readlines()
@@ -2641,7 +2655,7 @@ def process_schema_in_a_file(schema_name):
         t_al_a = al.split("|")
 
         table_name = t_al_a[0].upper()
-        
+
         to_be_added_list = []
         for a_tmp_col_raw in t_al_a[1:]:
             if ":" not in a_tmp_col_raw:
@@ -2661,7 +2675,7 @@ def process_schema_in_a_file(schema_name):
 
             to_be_added_list.append(a_col)
 
-        
+
         a_table = TableSchema(table_name, to_be_added_list)
 
         #print table_name, a_table
@@ -2671,7 +2685,7 @@ def process_schema_in_a_file(schema_name):
 
 
 def debug_global_tables():
-    
+
     global global_table_dict
 
     for x in global_table_dict.keys():
@@ -2710,13 +2724,13 @@ def __check_column__(exp,table_list,table_alias_dict):
 
                 if column_unique_in_table(exp.column_name,tmp_name) is False:
                     return -1
-            
+
 
         elif exp.column_name == '*':
             return 0
         else:
             count = 0
-            
+
             tmp_name = None
             table_name = None
             for x in table_list:
@@ -2742,7 +2756,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
     res = 0
     func_dict = {                                                                   \
 ##
-## the key is function name and for each function, there are three parameters: 
+## the key is function name and for each function, there are three parameters:
 ##      1. number of parameters: 0 means any length that is greater than 0
 ##      2. type of input parameters, this is a list
 ##      3. type of return value, this is a list
@@ -2766,8 +2780,10 @@ def __check_func_para__(exp,table_list,table_alias_dict):
             "GEQ":[2,["INTEGER","DECIMAL","DATE","TEXT"],["BOOLEAN"]],             \
             "NOT_EQ":[2,["INTEGER","DECIMAL","DATE","TEXT"],["BOOLEAN"]],                 \
             "IS":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]], \
-            "SUBQ":[0,["INTEGER","DECIMAL", "DATE", "TEXT"],["DECIMAL", "INTEGER", "DATE", "TEXT"]]
-        }
+            "SUBQ":[0,["INTEGER","DECIMAL", "DATE", "TEXT"],["DECIMAL", "INTEGER", "DATE", "TEXT"]], \
+            "IN":[2,["TEXT", "DATE"],["BOOLEAN"]], \
+            "LIST":[0,["TEXT", "DATE"],["TEXT", "DATE"]],
+    }
 
     if isinstance(exp,YFuncExp):
         if exp.func_name not in func_dict.keys():
@@ -2806,7 +2822,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                 if column_type is not None:
                     if column_type not in func_dict[exp.func_name.upper()][1]:
                         return -1
-                    
+
                     if check_type is None or exp.func_name == "SUBQ":
                         check_type = column_type
 
@@ -2825,8 +2841,8 @@ def __check_func_para__(exp,table_list,table_alias_dict):
             elif isinstance(para,YFuncExp):
                 res = __check_func_para__(para,table_list,table_alias_dict)
                 if res == -1 :
-                    return -1       
-            
+                    return -1
+
                 return_type = func_dict[para.func_name.upper()][2]
                 for tmp in return_type:
                     if tmp not in func_dict[exp.func_name.upper()][1]:
@@ -2839,6 +2855,9 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                         check_type = return_type[0]
 
                 else:
+                    if para.func_name == "LIST" and check_type in return_type:
+                        return 0
+
                     if len(return_type) >1:
                         if check_type not in ["INTEGER","DECIMAL"]:
                             return -1
@@ -2847,7 +2866,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                             return -1
 
             else:
-                if para.ref_col is not None:
+                if exp.func_name == "LIST" or para.ref_col is not None:
                     try:
                         column_type
                     except NameError:
@@ -2864,11 +2883,11 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                         continue
 
                     elif check_type in ["DATE","TEXT"] and column_type in ["DATE","TEXT"]:
-                            continue
+                        continue
 
                     if check_type != para.cons_type:
                         return -1
-            
+
     else:
         res = -1
 
@@ -2899,16 +2918,16 @@ def __schema_select_list__(select_list,table_list,table_alias_dict):
 
     return res
 
-## this function is to check the grammar of the func exp in the groupby  select_list 
+## this function is to check the grammar of the func exp in the groupby  select_list
 
 def __groupby_func_check__(exp,gb_list,table_list,table_alias_dict):
 
 
     res = 0
-    
+
     if isinstance(exp,YFuncExp) is not True:
         return 0
-    
+
     res = __check_func_para__(exp,table_list,table_alias_dict)
     if res == -1:
         return -1
@@ -2935,7 +2954,7 @@ def __groupby_func_check__(exp,gb_list,table_list,table_alias_dict):
         else:
             continue
 
-    
+
 ##
 ## the select_list shouldnot have any grammar errors.
 ##
@@ -2950,7 +2969,7 @@ def __schema_groupby__(groupby_list,select_list,table_list,table_alias_dict):
         return -1
 
     exp_dict = select_list.dict_exp_and_alias
-    
+
     for exp in groupby_list.groupby_exp_list :
         if isinstance(exp,YRawColExp):
             res = __check_column__(exp,table_list,table_alias_dict)
@@ -2963,11 +2982,11 @@ def __schema_groupby__(groupby_list,select_list,table_list,table_alias_dict):
             if res == -1:
                 return -1
 
-        else: 
+        else:
             continue
 
     for exp in exp_dict.keys():
-        if isinstance(exp,YRawColExp):  
+        if isinstance(exp,YRawColExp):
             tmp_bool = False
             for tmp in groupby_list.groupby_exp_list:
                 if isinstance(tmp,YRawColExp):
@@ -3015,11 +3034,11 @@ def __schema_having__(having_exp,groupby_list,table_list,table_alias_dict):
 
 def __schema_where__(where,table_list,table_alias_dict):
     res = 0
-    func_list = ["AND","OR","EQ", "GTH", "LTH", "NOT_EQ", "GEQ","LEQ","LIKE","IS"]
+    func_list = ["AND","OR","EQ", "GTH", "LTH", "NOT_EQ", "GEQ","LEQ","LIKE","IS", "IN"]
 
     if where is None:
         return res
-    
+
     exp = where.where_condition_exp
     if isinstance(exp,YFuncExp):
         if exp.func_name not in func_list:
@@ -3051,7 +3070,7 @@ def __schema_where__(where,table_list,table_alias_dict):
 
         if column_type.upper() is not "BOOLEAN":
             return -1
-        
+
 
     return res
 
@@ -3075,7 +3094,7 @@ def __schema_join__(join_cond,table_list,table_alias_dict):
     return res
 
 def __schema_orderby__(orderby_exp_list,select_list_alias,table_list,table_alias_dict):
-    
+
     res = 0
 
     for exp in orderby_exp_list:
@@ -3115,8 +3134,8 @@ def check_schema(tree):
     res = 0
 
     if isinstance(tree,TableNode):
-        
-        if lookup_a_table(tree.table_name) is None:     
+
+        if lookup_a_table(tree.table_name) is None:
             print >>sys.stderr,"\tGrammar error: the table doesn't exit",tree.table_name
             exit(39)
 
@@ -3140,7 +3159,7 @@ def check_schema(tree):
 
         res = check_schema(tree.child)
         if res == 1:
-            return -1 
+            return -1
 
     elif isinstance(tree,TwoJoinNode):
         if tree.join_explicit == True:
@@ -3153,7 +3172,7 @@ def check_schema(tree):
         if res == -1:
             print >>sys.stderr,"\tGrammar error:where condition error",tree.where_condition.converted_str
             exit(39)
-        
+
         res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
         if res ==-1:
             print >>sys.stderr,"\tGrammar error:select list error",tree.select_list.converted_str
@@ -3177,7 +3196,7 @@ def check_schema(tree):
         if res == -1:
             print >>sys.stderr,"\tGrammar error:where condition error",tree.where_condition.converted_str
             exit(39)
-        
+
         res = __schema_groupby__(tree.group_by_clause,tree.select_list,tree.table_list,tree.table_alias_dict)
         if res == -1:
             print >>sys.stderr,"\tGrammar error:groupby clause error"
@@ -3190,7 +3209,7 @@ def check_schema(tree):
                 exit(39)
 
         res = check_schema(tree.child)
-    
+
     elif isinstance(tree,SelectProjectNode):
 
         res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
@@ -3202,7 +3221,7 @@ def check_schema(tree):
         if res == -1:
             print >>sys.stderr,"\tGrammar error:where condition error",tree.where_condition.converted_str
             exit(39)
-        
+
         res = __schema_groupby__(tree.group_by_clause,tree.select_list,tree.table_list,tree.table_alias_dict)
         if res == -1:
             print >>sys.stderr,"\tGrammar error:groupby clause error"
@@ -3219,7 +3238,7 @@ def check_schema(tree):
     return res
 
 def __remove_para__(para):
-    
+
     exp = para.func_obj
     new_list = []
 
@@ -3238,7 +3257,7 @@ def __remove_para__(para):
 
 
 def __gen_join_key__(exp,key_bool):
-        
+
     return_exp = None
     func_list = ["AND","OR"]
 
@@ -3254,7 +3273,7 @@ def __gen_join_key__(exp,key_bool):
             if not isinstance(x,YFuncExp):
                 print >>sys.stderr,"Internal error: __gen_join_key__"
                 exit(29)
-            
+
             tmp_exp = __gen_join_key__(x,True)
 
             if tmp_exp is not None:
@@ -3267,7 +3286,7 @@ def __gen_join_key__(exp,key_bool):
             __remove_para__(exp_list[0])
             return return_exp
 
-        else:   
+        else:
             for x in exp_list:
                 __remove_para__(x)
             return_exp = YFuncExp("AND",exp_list)
@@ -3292,7 +3311,7 @@ def __gen_join_key__(exp,key_bool):
 def __boolean_exp_filter__(exp,table_list,table_alias_dict,remove_bool):
     return_exp = None
     func_list = ["AND","OR"]
-    
+
     if isinstance(exp,YFuncExp):
         if exp.func_name == "IS":
             return  None
@@ -3356,7 +3375,7 @@ def __boolean_exp_filter__(exp,table_list,table_alias_dict,remove_bool):
                         if column_in_table(tmp.column_name,table_alias_dict[x]):
                             tmp_bool = True
                             break
-                    
+
                 elif isinstance(tmp,YConsExp):
                     tmp_bool = True
 
@@ -3364,9 +3383,9 @@ def __boolean_exp_filter__(exp,table_list,table_alias_dict,remove_bool):
                     new_exp = __boolean_exp_filter__(tmp,table_list,table_alias_dict,False)
                     if new_exp is not None:
                         tmp_bool = True
-            
+
                 exp_bool = tmp_bool and exp_bool
-            
+
             if exp_bool is True:
                 return_exp = copy.deepcopy(exp)
                 if remove_bool is True:
@@ -3384,7 +3403,7 @@ def __boolean_exp_filter__(exp,table_list,table_alias_dict,remove_bool):
 
 def __groupby_where_filter__(exp):
     func_list = ["AND","OR"]
-    
+
     if not isinstance(exp,YFuncExp):
         print >>sys.stderr,"Internal error:__groupby_where_filter__"
         exit(29)
@@ -3413,7 +3432,7 @@ def __groupby_where_filter__(exp):
             return exp
 
 def predicate_pushdown(tree):
-    
+
     if isinstance(tree,TableNode):
         return
 
@@ -3424,7 +3443,7 @@ def predicate_pushdown(tree):
 
         if tree.where_condition is  not None:
 
-            new_where = __groupby_where_filter__(tree.where_condition.where_condition_exp) 
+            new_where = __groupby_where_filter__(tree.where_condition.where_condition_exp)
 #### the where condition of the groupby node is pushed down by its parent.
 ### only the exp without the agg function can be pushed to its child
             if new_where is not None:
@@ -3439,7 +3458,7 @@ def predicate_pushdown(tree):
                     tree.child.where_condition = FirstStepWhereCondition(None)
                     tree.child.where_condition.where_condition_exp = copy.deepcopy(new_where)
 
-### check if all the where condition has been pushed down to the child 
+### check if all the where condition has been pushed down to the child
             if tree.where_condition.where_condition_exp.has_groupby_func() is False:
                 tree.where_condition = None
 
@@ -3460,7 +3479,7 @@ def predicate_pushdown(tree):
         new_exp = None
 
         if tree.where_condition is not None:
-# the where_condition of the SP node will not be changed        
+# the where_condition of the SP node will not be changed
             exp = copy.deepcopy(tree.where_condition.where_condition_exp)
 
             if exp is not None:
@@ -3479,7 +3498,7 @@ def predicate_pushdown(tree):
                             if isinstance(x,YRawColExp):
                                 tmp.column_name = x.column_name
                                 tmp.table_name = x.table_name
-                            
+
                             else:
 #### fix me here:select * from (select (f1+f2) a from t1) x where x.a >1;
                                 func_obj = tmp.func_obj
@@ -3496,9 +3515,9 @@ def predicate_pushdown(tree):
                                         new_para_list.append(cur_para)
 
                                 func_obj.set_para_list(new_para_list)
-                                
+
                             break
-                
+
                         if isinstance(x,YRawColExp):
                             if tmp.column_name == x.column_name:
                                 tmp_bool = True
@@ -3543,7 +3562,7 @@ def predicate_pushdown(tree):
 
             left_exp =__boolean_exp_filter__(exp, tree.left_child.table_list, tree.left_child.table_alias_dict, True)
             right_exp =__boolean_exp_filter__(exp, tree.right_child.table_list, tree.right_child.table_alias_dict, True)
-            
+
             if left_exp is not None:
                 if tree.left_child.where_condition is None:
                     tree.left_child.where_condition = FirstStepWhereCondition(None)
@@ -3579,7 +3598,7 @@ def __gen_column_index__(exp,table_list,table_alias_dict):
 
     if exp is None:
         return None
-    
+
     new_exp = None
 
     if isinstance(exp,YRawColExp):
@@ -3595,7 +3614,7 @@ def __gen_column_index__(exp,table_list,table_alias_dict):
                 if exp.table_name not in table_list:
                     print >>sys.stderr,"Internal Error:__gen_column_index__"
                     exit(29)
-                tmp_table =  lookup_a_table(exp.table_name) 
+                tmp_table =  lookup_a_table(exp.table_name)
 
                 if tmp_table is None:
                     return None
@@ -3643,9 +3662,9 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
         print >>sys.stderr,"Internal Error:__gen_func_index__"
         exit(29)
 
-    if exp is None: 
+    if exp is None:
         return None
-    
+
 
     if isinstance(exp,YFuncExp):
         para_list = exp.parameter_list
@@ -3655,7 +3674,7 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
                 if para.column_name == "*":
                     print >>sys.stderr,"Internal Error:__gen_func_index__"
                     exit(29)
-                if para.table_name in table_list:    
+                if para.table_name in table_list:
                     new_para = __gen_column_index__(para,table_list,table_alias_dict)
                     if new_para is None:
                         print >>sys.stderr,"Internal Error:__gen_func_index__"
@@ -3672,7 +3691,7 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
                     exit(29)
 
                 new_para_list.append(tmp_exp)
-            
+
             elif isinstance(para,YConsExp):
                 if para.ref_col is not None:
                     new_col = __gen_column_index__(para.ref_col, [para.ref_col.table_name], {})
@@ -3685,10 +3704,10 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
         new_exp = YFuncExp(exp.func_name,list(new_para_list))
 
     return new_exp
-        
+
 
 def __gen_select_index__(select_list,table_list,table_alias_dict):
-    
+
     if select_list is None:
         return
     new_select_dict = {}
@@ -3742,16 +3761,16 @@ def __get_gb_list__(exp,col_list):
         for x in exp.parameter_list:
             if isinstance(x,YFuncExp):
                 __get_gb_list__(x,col_list)
-    
+
 
 def gen_column_index(tree):
-    
+
     if isinstance(tree,TableNode):
         __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
         __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
 
     if isinstance(tree,OrderByNode):
-           
+
         select_dict = tree.child.select_list.dict_exp_and_alias
         exp_list = tree.child.select_list.tmp_exp_list
 
@@ -3867,10 +3886,10 @@ def gen_column_index(tree):
 
         join_exp = None
         if tree.join_explicit is True:
-            join_exp = tree.join_condition.on_condition_exp 
+            join_exp = tree.join_condition.on_condition_exp
 
         elif tree.join_condition is not None:
-            join_exp = tree.join_condition.where_condition_exp 
+            join_exp = tree.join_condition.where_condition_exp
 
         if tree.left_child.select_list is not None:
             left_select = tree.left_child.select_list.dict_exp_and_alias
@@ -3985,10 +4004,10 @@ def gen_column_index(tree):
 
         join_exp = None
         if tree.join_explicit is True:
-            join_exp = tree.join_condition.on_condition_exp 
+            join_exp = tree.join_condition.on_condition_exp
 
         elif tree.join_condition is not None:
-            join_exp = tree.join_condition.where_condition_exp 
+            join_exp = tree.join_condition.where_condition_exp
 
         if tree.right_child.select_list is not None:
             right_select = tree.right_child.select_list.dict_exp_and_alias
@@ -4100,7 +4119,7 @@ def gen_column_index(tree):
 
         gen_column_index(tree.left_child)
         gen_column_index(tree.right_child)
-        
+
     elif isinstance(tree,MultipleJoinNode):
         pass
 
@@ -4108,13 +4127,13 @@ def gen_column_index(tree):
         __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
         __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
         gen_column_index(tree.child)
-        
+
 
 
 def __gen_project_list__(select_list,table_list,table_alias_dict,project_list):
 
     exp_dict = select_list.dict_exp_and_alias
-    
+
     for exp in select_list.tmp_exp_list:
         col_type = None
 
@@ -4216,11 +4235,11 @@ def gen_project_list(tree):
 
 
 def __select_list_filter__(select_list,table_list,table_alias_dict,new_select_dict,new_exp_list):
-    
+
     math_func_list = ["PLUS","MINUS","DIVIDE","MULTIPLY"]
 
     if select_list is None:
-        return 
+        return
 
 
     for exp in select_list.tmp_exp_list:
@@ -4276,9 +4295,9 @@ def __select_list_filter__(select_list,table_list,table_alias_dict,new_select_di
                     new_exp = copy.deepcopy(tmp)
                     new_exp_list.append(new_exp)
                     new_select_dict[new_exp] = None
-            
 
-    return 
+
+    return
 
 
 ##return all the YRawColExp in the YFuncExp
@@ -4299,7 +4318,7 @@ def __get_func_para__(exp,col_list):
 ## for join select_list pruning. add where and join_cond to the child's select_lsit
 def __add_func_to_select__(exp,table_list,table_alias_dict,new_dict,new_list):
 
-    bool_func_list = ["AND","OR"]   
+    bool_func_list = ["AND","OR"]
 
     if exp is None or not isinstance(exp,YFuncExp):
         return
@@ -4308,7 +4327,7 @@ def __add_func_to_select__(exp,table_list,table_alias_dict,new_dict,new_list):
         for para in exp.parameter_list:
             if isinstance(para,YFuncExp):
                 __add_func_to_select__(para,table_list,table_alias_dict,new_dict,new_list)
-            
+
     else:
         col_list = []
         __get_func_para__(exp,col_list)
@@ -4340,7 +4359,7 @@ def column_filtering(tree):
 
         new_select_dict = {}
         new_exp_list = []
-        
+
         for exp in tree.order_by_clause.orderby_exp_list:
             if isinstance(exp,YRawColExp):
                 for x in tree.child.select_list.tmp_exp_list:
@@ -4370,7 +4389,7 @@ def column_filtering(tree):
         column_filtering(tree.child)
 
     elif isinstance(tree,GroupByNode):
-            
+
         new_select_dict = {}
         new_exp_list = []
 
@@ -4379,7 +4398,7 @@ def column_filtering(tree):
 
             for exp in tree.group_by_clause.groupby_exp_list:
                 if isinstance(exp,YFuncExp):
-                    col_list = []   
+                    col_list = []
                     __get_func_para__(exp,col_list)
                     tmp_bool = False
                     for x in col_list:
@@ -4489,7 +4508,7 @@ def column_filtering(tree):
         elif tree.join_condition is not None:
             __add_func_to_select__(tree.join_condition.where_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
             __add_func_to_select__(tree.join_condition.where_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
-            
+
 
         if tree.left_child.select_list is None:
             tree.left_child.select_list = FirstStepSelectList(None)
@@ -4516,7 +4535,7 @@ def column_filtering(tree):
         else:
             tree.left_child.select_list.dict_exp_and_alias = left_select_dict
             tree.left_child.select_list.tmp_exp_list = left_exp_list
-        
+
         if tree.right_child.select_list is None:
             tree.right_child.select_list = FirstStepSelectList(None)
 
@@ -4545,17 +4564,17 @@ def column_filtering(tree):
 
         column_filtering(tree.left_child)
         column_filtering(tree.right_child)
-    
+
     elif isinstance(tree,SelectProjectNode):
 
         new_select_dict = {}
-        new_exp_list = []       
+        new_exp_list = []
 
         if tree.select_list is None or tree.child.select_list is None:
             print >>sys.stderr,"Internal Error:column_filtering"
             exit(29)
 ########shouldn't change the select_list of the sp. it may be used when generating index
-        
+
         child_exp_list = tree.child.select_list.tmp_exp_list
         child_exp_dict = tree.child.select_list.dict_exp_and_alias
 
@@ -4601,7 +4620,7 @@ def column_filtering(tree):
 
 
 def __gen_col_table_name__(exp,table_list,table_alias_dict):
-    
+
     if isinstance(exp,YRawColExp) is False:
         return
 
@@ -4609,13 +4628,13 @@ def __gen_col_table_name__(exp,table_list,table_alias_dict):
         table_schema = lookup_a_table(exp.table_name)
         if table_schema is None:
             table_schema = lookup_a_table(table_alias_dict[exp.table_name])
-    
+
         if table_schema is None:
             print >>sys.stderr,"Internal Error:__gen_col_table_name__"
             exit(29)
 
         exp.column_type = table_schema.get_column_type_by_name(exp.column_name)
-        return 
+        return
 
     if exp.column_name == "*":
         return
@@ -4676,7 +4695,7 @@ def gen_table_name(tree):
 
     elif isinstance(tree,SelectProjectNode):
         gen_table_name(tree.child)
-    
+
     elif isinstance(tree,TwoJoinNode):
         gen_table_name(tree.left_child)
         gen_table_name(tree.right_child)
@@ -4684,13 +4703,13 @@ def gen_table_name(tree):
 def __groupby_func_name__(exp):
     if not isinstance(exp,YFuncExp):
         return None
-                
+
     if exp.func_name in  agg_func_list:
-        return exp.func_name 
-                    
+        return exp.func_name
+
     for x in exp.parameter_list:
         if isinstance(x,YFuncExp):
-            tmp_name = __groupby_func_name__(x) 
+            tmp_name = __groupby_func_name__(x)
             if tmp_name is not None:
                 return tmp_name
 
@@ -4819,9 +4838,9 @@ def __trace_to_leaf__(tree,exp,join_bool):
 
     elif isinstance(tree,SelectProjectNode):
         index = exp.column_name
-        tmp_exp = tree.child.select_list.tmp_exp_list[index] 
+        tmp_exp = tree.child.select_list.tmp_exp_list[index]
         new_exp = __trace_to_leaf__(tree.child,tmp_exp,False)
-        return new_exp 
+        return new_exp
 
 def list_contain_exp(exp_list,exp):
 
@@ -4837,8 +4856,6 @@ def ysmart_get_schema(schema):
 
 
 def process_the_plan_tree(tree):
-
-    global subqueries
 
     gen_project_list(tree)
 

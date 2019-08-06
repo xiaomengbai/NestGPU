@@ -28,7 +28,7 @@
 -- and lo_quantity<=35;
 
 -- q2_1
--- select sum(lo_revenue),d_year,p_brand1 
+-- select sum(lo_revenue),d_year,p_brand1
 -- from lineorder,part,supplier,ddate
 -- where lo_orderdate = d_datekey
 -- and lo_partkey = p_partkey
@@ -39,8 +39,8 @@
 -- order by d_year,p_brand1;
 
 -- q2_2
--- select sum(lo_revenue),d_year,p_brand1 
--- from lineorder, part, supplier,ddate 
+-- select sum(lo_revenue),d_year,p_brand1
+-- from lineorder, part, supplier,ddate
 -- where lo_orderdate = d_datekey
 -- and lo_partkey = p_partkey
 -- and lo_suppkey = s_suppkey
@@ -51,7 +51,7 @@
 -- order by d_year,p_brand1;
 
 -- q2_3
--- select sum(lo_revenue),d_year,p_brand1 
+-- select sum(lo_revenue),d_year,p_brand1
 -- from lineorder,part,supplier,ddate
 -- where lo_orderdate = d_datekey
 -- and lo_partkey = p_partkey
@@ -125,9 +125,23 @@
 -- select avg(s_suppkey) from supplier where s_nation = 'MOROCCO';
 
 -- The subquery example
-select c_name, c_nation, c_city
+-- select c_name, c_nation, c_city
+-- from customer
+-- where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation)
+-- and c_custkey > 3;
+
+select c_name, c_nation
 from customer
-where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation);
+--where c_nation in ('MOROCCO', 'JORDAN');
+where c_nation in ('MOROCCO', 'JORDAN');
+
+-- select c_name, c_nation, c_city
+-- from customer
+-- where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation and s_suppkey < (select avg(p_partkey) from part where p_size < 20)));
+
+-- select c_name, c_city, s_name, s_city
+-- from customer, supplier
+-- where c_city = s_city and c_nation = 'MOROCCO';
 
 -- select c_name, s_name
 -- from customer, supplier

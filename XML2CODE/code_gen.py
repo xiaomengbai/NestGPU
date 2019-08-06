@@ -614,7 +614,7 @@ def get_where_attr(exp, whereList, relList, conList):
                         conList.append(x.ref_col)
                     else:
                         conList.append(x.cons_value)
-                elif isinstance(x, ystree.YFuncExp) and x.func_name == "SUBQ":
+                elif isinstance(x, ystree.YFuncExp) and (x.func_name == "SUBQ" or x.func_name == "LIST"):
                     conList.append(x)
 
     elif isinstance(exp, ystree.YRawColExp):
@@ -1207,6 +1207,16 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
 
                 if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                     print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
+                elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "LIST":
+                    vec_len = len(conList[i].parameter_list)
+                    vec_item_len = type_length(whereList[i].table_name, whereList[i].column_name, whereList[i].column_type)
+                    print >>fo, indent + "{"
+                    print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ")"
+                    for idx in range(0, vec_len):
+                        item = conList[i].parameter_list[idx]
+                        print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
+                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &vec, sizeof(char **));"
+                    print >>fo, indent + "}"
                 elif ctype == "INT":
                     if isinstance(conList[i], ystree.YRawColExp):
                         con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
@@ -1548,6 +1558,16 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
 
                 if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                     print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
+                elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "LIST":
+                    vec_len = len(conList[i].parameter_list)
+                    vec_item_len = type_length(whereList[i].table_name, whereList[i].column_name, whereList[i].column_type)
+                    print >>fo, indent + "{"
+                    print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ")"
+                    for idx in range(0, vec_len):
+                        item = conList[i].parameter_list[idx]
+                        print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
+                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &vec, sizeof(char **));"
+                    print >>fo, indent + "}"
                 elif ctype == "INT":
                     if isinstance(conList[i], ystree.YRawColExp):
                         con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
@@ -1578,9 +1598,6 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
                 print >>fo, indent + "struct tableNode * " + resName + " = tableScan(&" + relName + ", &pp);"
             else:
                 print >>fo, indent + "struct tableNode * " + resName + " = tableScan(&" + relName + ", &context, &pp);"
-
-            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                print >>fo, indent + "free(" + var_subqRes + ");\n"
 
             if selectOnly == 0:
                 print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"

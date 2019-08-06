@@ -1,4 +1,4 @@
-.PHONY: clean gpudb
+.PHONY: clean gpudb clean-gpudb
 
 help:
 	@echo "help          print this message"
@@ -28,7 +28,7 @@ $(DBGEN):
 #   genrerate tables
 
 # core dump when generating the *lineorder* table
-# core dump when load the *date* table
+# core dump when loading the *date* table
 TABLES := supplier customer part
 
 DATA_DIR := test/tables
@@ -99,6 +99,8 @@ gpudb: $(CUDA_GPUDB)
 run:
 	$(CUDA_GPUDB) --datadir $(DATA_DIR)
 
+
+# clean
 clean-gpudb:
 	$(MAKE) -C $(CUDA_DIR) clean
 	rm -f $(CUDA_DRIVER)
