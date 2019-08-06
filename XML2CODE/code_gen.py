@@ -1196,6 +1196,8 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
                 if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                     print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+                elif relList[i] == "IN" and isinstance(conList[i], basestring):# in ("MOROCCO")
+                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EQ;"
                 else:
                     print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
@@ -1547,6 +1549,8 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
 
                 if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                     print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+                elif relList[i] == "IN" and isinstance(conList[i], basestring):
+                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EQ;"
                 else:
                     print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
 
