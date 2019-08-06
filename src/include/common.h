@@ -34,7 +34,7 @@
     n |= n >> 4;                                    \
     n |= n >> 8;                                    \
     n |= n >> 16;                                   \
-    n ++; } while (0) 
+    n ++; } while (0)
 
 
 enum {
@@ -57,6 +57,7 @@ enum {
     GEQ,
     LEQ,
     NOT_EQ,
+    IN,
 
     EQ_VEC,
     GTH_VEC,
@@ -104,7 +105,7 @@ enum {
     NOOP
 };
 
-/* header of each block in the column */ 
+/* header of each block in the column */
 
 struct columnHeader{
     long totalTupleNum; /* the total number of tuples in this column */
@@ -125,7 +126,7 @@ struct columnHeader{
 #define MAX_DICT_NUM    30000
 
 struct dictHeader{
-    int dictNum;                /* number of distict values in the dictionary */ 
+    int dictNum;                /* number of distict values in the dictionary */
     int bitNum;                 /* the number of bits used to compress the data */
     int hash[MAX_DICT_NUM];     /* the hash table to store the dictionaries */
 };
@@ -139,6 +140,7 @@ struct whereExp{
     int relation;
     char content[32];
     int dataPos;
+    int vlen;
 };
 
 struct whereCondition{
@@ -203,7 +205,7 @@ struct tableNode{
 
 struct groupByExp{
     int func;               /* the group by function */
-    struct mathExp exp;     /* the math exp */ 
+    struct mathExp exp;     /* the math exp */
 };
 
 struct groupByNode{

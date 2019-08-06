@@ -1212,8 +1212,10 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
                 elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "LIST":
                     vec_len = len(conList[i].parameter_list)
                     vec_item_len = type_length(whereList[i].table_name, whereList[i].column_name, whereList[i].column_type)
+                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].vlen  = " + str(vec_len) + ";"
                     print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ")"
+                    print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ");"
+                    print >>fo, indent + baseIndent + "memset(vec, 0, " + vec_item_len + " * " + str(vec_len) + ");"
                     for idx in range(0, vec_len):
                         item = conList[i].parameter_list[idx]
                         print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
@@ -1565,8 +1567,10 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
                 elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "LIST":
                     vec_len = len(conList[i].parameter_list)
                     vec_item_len = type_length(whereList[i].table_name, whereList[i].column_name, whereList[i].column_type)
+                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].vlen  = " + str(vec_len) + ";"
                     print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ")"
+                    print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ");"
+                    print >>fo, indent + baseIndent + "memset(vec, 0, " + vec_item_len + " * " + str(vec_len) + ");"
                     for idx in range(0, vec_len):
                         item = conList[i].parameter_list[idx]
                         print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"

@@ -133,7 +133,7 @@
 select c_name, c_nation
 from customer
 --where c_nation in ('MOROCCO', 'JORDAN');
-where c_nation in ('MOROCCO');
+where c_nation in ('MOROCCO', 'JORDAN', 'ARGENTINA');
 
 -- select c_name, c_nation, c_city
 -- from customer
