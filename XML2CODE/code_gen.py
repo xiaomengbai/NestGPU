@@ -2401,8 +2401,10 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
         print 1/0
 
     if rel in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
-        subq_res_size = "sizeof(float)";
+        constant_len_res = True
+        subq_res_size = "sizeof(float)"
     else:
+        constant_len_res = False
         subq_res_size = type_length(subq_res_col.table_name, subq_res_col.column_name, subq_res_col.column_type)
 
 
@@ -2414,7 +2416,7 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
         print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
         print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
 
-    print >>fo, indent + var_subqRes + " = (char *)malloc(" + subq_res_size + " * header.tupleNum);"
+    print >>fo, indent + var_subqRes + " = (char *)malloc(" + (subq_res_size if constant_len_res else "sizeof(char *)") + " * header.tupleNum);"
     print >>fo, indent + "CHECK_POINTER(" + var_subqRes + ");\n"
 
     print >>fo, indent + "for(int tupleid = 0; tupleid < header.tupleNum; tupleid++){"
@@ -2429,7 +2431,13 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
     generate_code_for_a_tree(fo, sub_tree, lvl + 1, False)
 
     print >>fo, indent + baseIndent * 2 + ""
-    print >>fo, indent + baseIndent * 2 + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
+    if constant_len_res:
+        print >>fo, indent + baseIndent * 2 + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
+    else:
+        print >>fo, indent + baseIndent * 2 + "((char **)" + var_subqRes + ")[tupleid] = (char *)malloc(sizeof(int) + " + subq_res_size + " * mn.table->tupleNum);"
+        print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
+        print >>fo, indent + baseIndent * 2 + "*(int *)(((char **)" + var_subqRes + ")[tupleid]) = mn.table->tupleNum;"
+        print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
     print >>fo, indent + baseIndent + "}"
     print >>fo, indent + "}"
 

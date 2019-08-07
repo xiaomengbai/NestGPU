@@ -130,10 +130,13 @@
 -- where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation)
 -- and c_custkey > 3;
 
+-- select c_name, c_nation
+-- from customer
+-- where c_nation in ('MOROCCO', 'JORDAN', 'ARGENTINA');
+
 select c_name, c_nation
 from customer
---where c_nation in ('MOROCCO', 'JORDAN');
-where c_nation in ('MOROCCO', 'JORDAN', 'ARGENTINA');
+where c_nation in (select s_nation from supplier where s_suppkey > 98);
 
 -- select c_name, c_nation, c_city
 -- from customer

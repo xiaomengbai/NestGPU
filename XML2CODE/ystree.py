@@ -2844,6 +2844,9 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                     return -1
 
                 return_type = func_dict[para.func_name.upper()][2]
+                if para.func_name == "SUBQ" and exp.func_name == "IN" and check_type in return_type:
+                    return 0
+
                 for tmp in return_type:
                     if tmp not in func_dict[exp.func_name.upper()][1]:
                         return -1

@@ -58,6 +58,7 @@ enum {
     LEQ,
     NOT_EQ,
     IN,
+    IN_VEC,
 
     EQ_VEC,
     GTH_VEC,

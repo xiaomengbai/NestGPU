@@ -267,6 +267,20 @@ __global__ static void genScanFilter_and_in(char *col, int colSize, long tupleNu
     }
 }
 
+__global__ static void genScanFilter_and_in_vec(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int vlen = *((*(int ***)where->content)[i]);
+        char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
+        filter[i] &= con;
+    }
+}
+
 __global__ static void genScanFilter_and_eq(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -835,6 +849,20 @@ __global__ static void genScanFilter_init_in(char *col, int colSize, long tupleN
     }
 }
 
+__global__ static void genScanFilter_init_in_vec(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int vlen = *((*(int ***)where->content)[i]);
+        char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
+        filter[i] = con;
+    }
+}
+
 __global__ static void genScanFilter_init_eq(char *col, int colSize,long tupleNum, struct whereExp * where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -959,6 +987,20 @@ __global__ static void genScanFilter_or_in(char *col, int colSize, long tupleNum
     for(long i = tid; i < tupleNum; i += stride){
         for(long j = 0; j < vlen; j++)
             con |= (stringCmp(col + colSize * i, *(char **)where->content + colSize * j, colSize) == 0);
+        filter[i] |= con;
+    }
+}
+
+__global__ static void genScanFilter_or_in_vec(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int vlen = *((*(int ***)where->content)[i]);
+        char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
         filter[i] |= con;
     }
 }
@@ -1547,6 +1589,27 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             memcpy(where->exp[0].content, vec_addr_g, 32);
             where->exp[0].dataPos = GPU;
         }
+
+        if( where->exp[0].relation == IN_VEC &&
+            (where->exp[0].dataPos == MEM || where->exp[0].dataPos == MMAP || where->exp[0].dataPos == PINNED) )
+        {
+            char vec_addr_g[32];
+            size_t vec1_size = sizeof(void *) * sn->tn->tupleNum;
+            void **vec1_addrs = (void **)malloc(vec1_size);
+            for(int i = 0; i < sn->tn->tupleNum; i++) {
+                // [int: vec_len][char *: string1][char *: string2] ...
+                size_t vec2_size = *((*(int ***)(where->exp[0].content))[i]) * sn->tn->attrSize[index] + sizeof(int);
+                CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) &vec1_addrs[i], vec2_size) );
+                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy( vec1_addrs[i], (*(char ***)where->exp[0].content)[i], vec2_size, cudaMemcpyHostToDevice) );
+            }
+            CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec1_size) );
+            CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), vec1_addrs, vec1_size, cudaMemcpyHostToDevice) );
+            free(vec1_addrs);
+
+            memcpy(where->exp[0].content, vec_addr_g, 32);
+            where->exp[0].dataPos = GPU;
+        }
+
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
 
@@ -1653,6 +1716,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     genScanFilter_init_leq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                 else if (rel == IN)
                     genScanFilter_init_in<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
+                else if (rel == IN_VEC)
+                    genScanFilter_init_in_vec<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
             }
 
         }else if(format == DICT){
@@ -1897,6 +1962,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             genScanFilter_and_leq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == IN)
                             genScanFilter_and_in<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
+                        else if (rel == IN_VEC)
+                            genScanFilter_and_in_vec<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
                     }else{
                         if (rel == EQ)
                             genScanFilter_or_eq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
@@ -1920,6 +1987,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             genScanFilter_or_leq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == IN)
                             genScanFilter_or_in<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
+                        else if (rel == IN_VEC)
+                            genScanFilter_or_in_vec<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
                     }
                 }
 
