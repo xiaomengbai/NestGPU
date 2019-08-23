@@ -104,16 +104,26 @@ __device__ static float calMathExp(char **content, struct mathExp exp, int pos){
 
     }else if (exp.op == DIVIDE){
         res = calMathExp(content, ((struct mathExp*)exp.exp)[0],pos) / calMathExp(content, ((struct mathExp*)exp.exp)[1], pos);
-        
-    }else if (exp.op == LAE){ // >=
-        res = calMathExp(content, ((struct mathExp*)exp.exp)[0],pos) > calMathExp(content, ((struct mathExp*)exp.exp)[1] ? ((struct mathExp*)exp.exp)[0],pos) : calMathExp(content, ((struct mathExp*)exp.exp)[1], pos);
-    }
-
-    else if (exp.op == LEE){ // <=
-        res = calMathExp(content, ((struct mathExp*)exp.exp)[0],pos) < calMathExp(content, ((struct mathExp*)exp.exp)[1] ? ((struct mathExp*)exp.exp)[0],pos) : calMathExp(content, ((struct mathExp*)exp.exp)[1], pos);
     }
 
     return res;
+}
+
+
+__device__ __forceinline__ float atomicMaxFloat (float * addr, float value) {
+    float old;
+    old = (value >= 0) ? __int_as_float(atomicMax((int *)addr, __float_as_int(value))) :
+         __uint_as_float(atomicMin((unsigned int *)addr, __float_as_uint(value)));
+
+    return old;
+}
+
+__device__ __forceinline__ float atomicMinFloat (float * addr, float value) {
+        float old;
+        old = (value >= 0) ? __int_as_float(atomicMin((int *)addr, __float_as_int(value))) :
+             __uint_as_float(atomicMax((unsigned int *)addr, __float_as_uint(value)));
+
+        return old;
 }
 
 /*
@@ -138,12 +148,28 @@ __global__ static void agg_cal_cons(char ** content, int colNum, struct groupByE
 
                 float tmpRes = calMathExp(content, exp[j].exp, i)/tupleNum;
                 buf[j] += tmpRes;
+            }else if (func == MAX){
+
+                float tmpRes = calMathExp(content, exp[j].exp, i);
+                buf[j] = buf[j] > tmpRes ? buf[j] : tmpRes;
+            }else if (func == MIN){
+
+                float tmpRes = calMathExp(content, exp[j].exp, i);
+                buf[j] = buf[j] < tmpRes ? buf[j] : tmpRes;
             }
         }
     }
 
     for(int i=0;i<colNum;i++)
-        atomicAdd(&((float *)result[i])[0], buf[i]);
+    {
+        int func = exp[i].func;
+        if (func == SUM)
+            atomicAdd(&((float *)result[i])[0], buf[i]);
+        else if (func == MAX)
+            atomicMaxFloat(&((float *)result[i])[0], buf[i]);
+        else if (func == MIN)
+            atomicMinFloat(&((float *)result[i])[0], buf[i]);
+    }
 }
 
 /*
@@ -177,13 +203,18 @@ __global__ static void agg_cal(char ** content, int colNum, struct groupByExp* e
                         memcpy(result[j] + offset*attrSize, content[index] + i * attrSize, attrSize);
                 }
 
-            } else if (func == SUM ){
+            }else if (func == SUM ){
                 float tmpRes = calMathExp(content, exp[j].exp, i);
                 atomicAdd(& ((float *)result[j])[offset], tmpRes);
-            } else if (func == MAX ){
-                float tmpRes = calMathExp(content, exp[j].exp, i); //exp.op is LAE and exp.op is LEE in MIN
-                atomicAdd(& ((float *)result[j])[offset], tmpRes);
-            } else if (func == AVG){
+            }else if (func == MAX ){
+                float tmpRes = calMathExp(content, exp[j].exp, i);
+                atomicMaxFloat(& ((float *)result[j])[offset], tmpRes);
+
+            }else if (func == MIN ){
+                float tmpRes = calMathExp(content, exp[j].exp, i);
+                atomicMinFloat(& ((float *)result[j])[offset], tmpRes);
+
+            }else if (func == AVG){
                 float tmpRes = calMathExp(content, exp[j].exp, i)/groupNum[hKey];
                 atomicAdd(& ((float *)result[j])[offset], tmpRes);
             }
@@ -327,7 +358,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
     else
         res->tupleNum = gbCount;
 
-    // printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
+    printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
 
     char ** gpuResult = NULL;
     char ** result = NULL;
@@ -387,7 +418,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
 
     clock_gettime(CLOCK_REALTIME,&end);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    // printf("GroupBy Time: %lf\n", timeE/(1000*1000));
+    printf("GroupBy Time: %lf\n", timeE/(1000*1000));
 
     return res;
 }
