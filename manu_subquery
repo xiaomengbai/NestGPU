@@ -78,11 +78,6 @@ __global__ static void count_hash_num(int *dim, long  inNum,int *num,int hsize){
     }
 }
 
-__global__ static void see(int * data)
-{
-	int stride = blockDim.x * gridDim.x;
-    long offset = blockIdx.x*blockDim.x + threadIdx.x;
-}
 
 __global__ static void build_hash_table(int *dim, long inNum, int *psum, int * bucket,int hsize){
 
@@ -263,9 +258,9 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
     int hsize = b_size;
     NP2(hsize);
 
+    //for GPU-DB like processing
     int *gpu_dim_psum = NULL, *gpu_fact_psum = NULL, *gpu_dim_hashNum = NULL;
     
-    int * d_max, max;
     int * gpu_count_db = NULL,  * gpu_count_new = NULL, * gpu_resPsum = NULL;
     int * factFilter_db = NULL, * bucket = NULL, * filter = NULL; 
     int * filterResult1 = NULL, * filterResult2 = NULL, * filterResult3 = NULL, * rightResult1 = NULL, * rightResult2 = NULL;
@@ -279,7 +274,6 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
     CUDACHECK(cudaMalloc((void **)&gpu_dim_hashNum, hsize * sizeof(int))); 
     CUDACHECK(cudaMalloc((void **)&gpu_dim_psum, hsize * sizeof(int))); 
     CUDACHECK(cudaMalloc((void **)&gpu_fact_psum, hsize * sizeof(int))); 
-    CUDACHECK(cudaMalloc((void **)&d_max, sizeof(int))); 
     CUDACHECK(cudaMalloc((void **)&gpu_count_db, 4096*256*sizeof(int))); 
     CUDACHECK(cudaMalloc((void **)&gpu_resPsum, 4096*256*sizeof(int))); 
     CUDACHECK(cudaMalloc((void **)&factFilter_db, a_size * sizeof(int))); 
@@ -325,8 +319,6 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
 
     CUDACHECK(cudaDeviceSynchronize());
 
-    see<<<1,1>>>(gpu_count_db);
-
     CUDACHECK(cudaMemcpy(&tmp1,&gpu_count_db[4096*256-1],sizeof(int),cudaMemcpyDeviceToHost));
     thrust::exclusive_scan(thrust::device, gpu_count_db, gpu_count_db + 4096*256, gpu_resPsum); 
     CUDACHECK(cudaMemcpy(&tmp2,&gpu_resPsum[4096*256-1],sizeof(int),cudaMemcpyDeviceToHost));
@@ -346,9 +338,11 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
     CUDACHECK(cudaMalloc((void **)&rightResult1, resCount * sizeof(int))); 
     CUDACHECK(cudaMalloc((void **)&rightResult2, resCount * sizeof(int))); 
 
+    //fact table materialization
     materialization<<<4096,256>>>(a_bkey, gpu_resPsum, a_size, factFilter_db, filterResult1);
     materialization<<<4096,256>>>(a_ckey, gpu_resPsum, a_size, factFilter_db, filterResult2);
     materialization<<<4096,256>>>(a_attr, gpu_resPsum, a_size, factFilter_db, filterResult3);
+    //dimension table materialization
     right_materialization<<<4096,256>>>(b_key , gpu_resPsum, a_size, factFilter_db, rightResult1);
     right_materialization<<<4096,256>>>(b_attr, gpu_resPsum, a_size, factFilter_db, rightResult2);
 
@@ -372,7 +366,7 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
     //IN predicate processing
 
     clock_gettime(CLOCK_REALTIME,&start_t);
-    
+    //scan intermedia result for aggregation, like MAX()
     scanCol<<<4096,256>>>(resCount, a_attr_new, rightResult2,factFilter_db);
 
     CUDACHECK(cudaDeviceSynchronize());
@@ -389,6 +383,8 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
 
     printf("GPU-DB like nest Time: %lf ms\n\n", total/(1000*1000));
 
+    //the following is indexing based. main idea is sorting the innermost table 
+    //actually, it is another way for join processing
     int * hist_index = NULL, * pre_index  = NULL, * b_offset = NULL;
     total = 0.0;
     int range_num = 1024;
@@ -397,7 +393,7 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
     CUDACHECK(cudaMalloc((void **)&pre_index,   range_num * sizeof(int)));
     CUDACHECK(cudaMalloc((void **)&b_offset, b_size * sizeof(int))); 
     CUDACHECK(cudaMemset(hist_index, 0, range_num * sizeof(int)));
-
+    //the offsets of tuples in table b
     assign_index<int><<<4096,256>>>(b_offset, b_size);
 
     clock_gettime(CLOCK_REALTIME,&start_t);
@@ -431,6 +427,8 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
     index_scan<<<4096,256>>>(a_bkey, a_size, b_key, b_offset, b_size, hist_index, pre_index, filter, gpu_count_new, 10);
 
     CUDACHECK(cudaDeviceSynchronize());
+
+    //the rest is just the same with GPU-DB like processing which is unnested.
 
     CUDACHECK(cudaMemcpy(&tmp1,&gpu_count_new[4096*256-1],sizeof(int),cudaMemcpyDeviceToHost));
     thrust::exclusive_scan(thrust::device, gpu_count_new, gpu_count_new + 4096*256, gpu_resPsum); 
@@ -480,7 +478,6 @@ cudaError_t Subquery_proc(int *a_bkey,int * a_ckey,int * a_attr,int a_size,int *
         CUDACHECK(cudaStatus);
     }  
 
-
     total += timeE;
 
     clock_gettime(CLOCK_REALTIME, &start_t);
@@ -520,9 +517,9 @@ int main(int argc, char* argv[])
 		if(atoi(argv[2])!=0)
 			b_size = atoi(argv[2])*1024*1024;
 	}
-	int *a_bkey,*a_ckey,*a_attr;
-	int *b_key,*b_attr;
-	int *c_key;
+	int *a_bkey,*a_ckey,*a_attr; //fact table
+	int *b_key,*b_attr; //dimension table
+	int *c_key; // for future use
 	int c_size = b_size;
 
 	fprintf(stderr,"R relation size %d Rows , S relation size %d \n",a_size,b_size);
@@ -534,6 +531,7 @@ int main(int argc, char* argv[])
 	CUDACHECK(cudaHostAlloc((void **)&a_attr, sizeof(int)*a_size, cudaHostAllocPortable | cudaHostAllocMapped));
 	CUDACHECK(cudaHostAlloc((void **)&c_key, sizeof(int)*c_size, cudaHostAllocPortable | cudaHostAllocMapped));
 
+	//data generation, TPCH-like
 	for (int i = 0; i < b_size; i++)
 	{
 		b_key[i] = i;	
@@ -637,13 +635,6 @@ cudaError_t Preparation(int *a_bkey, int * a_ckey, int * a_attr, int a_size, int
 	clock_gettime(CLOCK_REALTIME,&end_t);
 	timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
 	printf("second GPU original memory free Time: %lf ms\n", timeE/(1000*1000));
-	total += timeE;
-
-	clock_gettime(CLOCK_REALTIME, &start_t);
-	cudaDeviceSynchronize();
-	clock_gettime(CLOCK_REALTIME,&end_t);
-	timeE = (end_t.tv_sec -  start_t.tv_sec)* BILLION + end_t.tv_nsec - start_t.tv_nsec;
-	printf("second CPU memory free Time: %lf ms\n", timeE/(1000*1000));
 	total += timeE;
 
 	clock_gettime(CLOCK_REALTIME,&end);
