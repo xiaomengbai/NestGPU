@@ -104,6 +104,13 @@ __device__ static float calMathExp(char **content, struct mathExp exp, int pos){
 
     }else if (exp.op == DIVIDE){
         res = calMathExp(content, ((struct mathExp*)exp.exp)[0],pos) / calMathExp(content, ((struct mathExp*)exp.exp)[1], pos);
+        
+    }else if (exp.op == LAE){ // >=
+        res = calMathExp(content, ((struct mathExp*)exp.exp)[0],pos) > calMathExp(content, ((struct mathExp*)exp.exp)[1] ? ((struct mathExp*)exp.exp)[0],pos) : calMathExp(content, ((struct mathExp*)exp.exp)[1], pos);
+    }
+
+    else if (exp.op == LEE){ // <=
+        res = calMathExp(content, ((struct mathExp*)exp.exp)[0],pos) < calMathExp(content, ((struct mathExp*)exp.exp)[1] ? ((struct mathExp*)exp.exp)[0],pos) : calMathExp(content, ((struct mathExp*)exp.exp)[1], pos);
     }
 
     return res;
@@ -170,8 +177,11 @@ __global__ static void agg_cal(char ** content, int colNum, struct groupByExp* e
                         memcpy(result[j] + offset*attrSize, content[index] + i * attrSize, attrSize);
                 }
 
-            }else if (func == SUM ){
+            } else if (func == SUM ){
                 float tmpRes = calMathExp(content, exp[j].exp, i);
+                atomicAdd(& ((float *)result[j])[offset], tmpRes);
+            } else if (func == MAX ){
+                float tmpRes = calMathExp(content, exp[j].exp, i); //exp.op is LAE and exp.op is LEE in MIN
                 atomicAdd(& ((float *)result[j])[offset], tmpRes);
             } else if (func == AVG){
                 float tmpRes = calMathExp(content, exp[j].exp, i)/groupNum[hKey];
