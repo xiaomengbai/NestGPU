@@ -134,10 +134,14 @@
 -- from customer
 -- where c_nation in ('MOROCCO', 'JORDAN', 'ARGENTINA');
 
-select c_name, c_nation
-from customer
-where c_nation like '%O%N';
+-- select c_name, c_nation
+-- from customer
+-- where c_nation like '%O%N';
 -- like '%MO%CO%';
+
+select min(c_custkey), c_nation
+from customer
+group by c_nation;
 
 -- select c_name, c_nation
 -- from customer

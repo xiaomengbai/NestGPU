@@ -222,7 +222,14 @@ __global__ static void agg_cal(char ** content, int colNum, struct groupByExp* e
     }
 }
 
+__global__ static void init_int_array(int *array, int array_size, int init_value)
+{
+    int stride = blockDim.x * gridDim.x;
+    int index = blockIdx.x * blockDim.x + threadIdx.x;
 
+    for(int i = index; i < array_size; i += stride)
+        array[i] = init_value;
+}
 /* 
  * groupBy: group by the data and calculate. 
  * 
@@ -374,6 +381,11 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
         res->dataPos[i] = GPU;
         res->attrTotalSize[i] = res->tupleNum * res->attrSize[i];
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&gpuResult[i], &result[i], sizeof(char *), cudaMemcpyHostToDevice));
+
+        if(gb->gbExp[i].func == MIN && res->attrSize[i] == sizeof(int))
+            init_int_array<<<grid, block>>>((int *)result[i], res->tupleNum, FLOAT_MAX);
+        else if(gb->gbExp[i].func == MAX && res->attrSize[i] == sizeof(int))
+            init_int_array<<<grid, block>>>((int *)result[i], res->tupleNum, FLOAT_MIN);
     }
 
 
