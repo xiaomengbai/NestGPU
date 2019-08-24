@@ -162,7 +162,17 @@ class YExpTool:
             after_list = input_token_list[(partition_index + 1):]
 
             before_exp = self.convert_token_list_to_exp_tree(before_list)
-            end_exp = self.convert_token_list_to_exp_tree(after_list)
+            if partition_type == "LIKE":
+                if len(after_list) != 1:
+                    print "only one string is permitted after LIKE"
+                    exit(1)
+
+                pattern = after_list[0]['content'].lstrip("'").rstrip("'")
+
+                substrs = map(lambda s: "'" + s + "'", pattern.split("%"))
+                end_exp = YFuncExp( "LIST", map(lambda sub: self.convert_token_list_to_exp_tree([{'content': sub, 'name': 'QUOTED_STRING'}]), substrs) )
+            else:
+                end_exp = self.convert_token_list_to_exp_tree(after_list)
 
             return YFuncExp(func_name, [before_exp, end_exp])
 
@@ -2782,7 +2792,8 @@ def __check_func_para__(exp,table_list,table_alias_dict):
             "IS":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]], \
             "SUBQ":[0,["INTEGER","DECIMAL", "DATE", "TEXT"],["DECIMAL", "INTEGER", "DATE", "TEXT"]], \
             "IN":[2,["TEXT", "DATE"],["BOOLEAN"]], \
-            "LIST":[0,["TEXT", "DATE"],["TEXT", "DATE"]],
+            "LIST":[0,["TEXT", "DATE"],["TEXT", "DATE"]], \
+            "LIKE":[2,["TEXT"],["BOOLEAN"]], \
     }
 
     if isinstance(exp,YFuncExp):
@@ -2846,6 +2857,9 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                 return_type = func_dict[para.func_name.upper()][2]
                 if para.func_name == "SUBQ" and exp.func_name == "IN" and check_type in return_type:
                     return 0
+                if para.func_name == "LIST" and exp.func_name == "LIKE" and check_type in return_type:
+                    return 0
+
 
                 for tmp in return_type:
                     if tmp not in func_dict[exp.func_name.upper()][1]:

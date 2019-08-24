@@ -136,7 +136,13 @@
 
 select c_name, c_nation
 from customer
-where c_nation in (select s_nation from supplier where s_suppkey > 98);
+where c_nation like '%O%N';
+-- like '%MO%CO%';
+
+-- select c_name, c_nation
+-- from customer
+-- where c_nation in (select s_nation from supplier where s_suppkey > 98);
+
 
 -- select c_name, c_nation, c_city
 -- from customer

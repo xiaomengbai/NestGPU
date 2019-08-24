@@ -58,7 +58,7 @@ enum {
     LEQ,
     NOT_EQ,
     IN,
-    IN_VEC,
+    LIKE,
 
     EQ_VEC,
     GTH_VEC,
@@ -66,6 +66,7 @@ enum {
     GEQ_VEC,
     LEQ_VEC,
     NOT_EQ_VEC,
+    IN_VEC,
 
 /* for where condition */
     AND ,
