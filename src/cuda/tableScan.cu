@@ -311,6 +311,7 @@ __global__ static void genScanFilter_and_in(char *col, int colSize, long tupleNu
     int vlen = where->vlen;
 
     for(long i = tid; i < tupleNum; i += stride){
+        con = 0;
         for(long j = 0; j < vlen; j++)
             con |= (stringCmp(col + colSize * i, *(char **)where->content + colSize * j, colSize) == 0);
         filter[i] &= con;
@@ -325,6 +326,7 @@ __global__ static void genScanFilter_and_in_vec(char *col, int colSize, long tup
     for(long i = tid; i < tupleNum; i += stride){
         int vlen = *((*(int ***)where->content)[i]);
         char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        con = 0;
         for(long j = 0; j < vlen; j++)
             con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
         filter[i] &= con;
@@ -339,6 +341,7 @@ __global__ static void genScanFilter_and_like(char *col, int colSize, long tuple
 
     for(long i = tid; i < tupleNum; i += stride){
         int pos = 0, res;
+        con = 1;
         for(long j = 0; j < vlen; j++){
             const char *str1 = col + colSize * i;
             const char *str2 = *(char **)where->content + colSize * j;
@@ -929,6 +932,7 @@ __global__ static void genScanFilter_init_in(char *col, int colSize, long tupleN
     int vlen = where->vlen;
 
     for(long i = tid; i < tupleNum; i += stride){
+        con = 0;
         for(long j = 0; j < vlen; j++)
             con |= (stringCmp(col + colSize * i, *(char **)where->content + colSize * j, colSize) == 0);
         filter[i] = con;
@@ -943,6 +947,7 @@ __global__ static void genScanFilter_init_in_vec(char *col, int colSize, long tu
     for(long i = tid; i < tupleNum; i += stride){
         int vlen = *((*(int ***)where->content)[i]);
         char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        con = 0;
         for(long j = 0; j < vlen; j++)
             con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
         filter[i] = con;
@@ -957,6 +962,7 @@ __global__ static void genScanFilter_init_like(char *col, int colSize, long tupl
 
     for(long i = tid; i < tupleNum; i += stride){
         int pos = 0, res;
+        con = 1;
         for(long j = 0; j < vlen; j++){
             const char *str1 = col + colSize * i;
             const char *str2 = *(char **)where->content + colSize * j;
@@ -1108,6 +1114,7 @@ __global__ static void genScanFilter_or_in(char *col, int colSize, long tupleNum
     int vlen = where->vlen;
 
     for(long i = tid; i < tupleNum; i += stride){
+        con = 0;
         for(long j = 0; j < vlen; j++)
             con |= (stringCmp(col + colSize * i, *(char **)where->content + colSize * j, colSize) == 0);
         filter[i] |= con;
@@ -1122,6 +1129,7 @@ __global__ static void genScanFilter_or_in_vec(char *col, int colSize, long tupl
     for(long i = tid; i < tupleNum; i += stride){
         int vlen = *((*(int ***)where->content)[i]);
         char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        con = 0;
         for(long j = 0; j < vlen; j++)
             con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
         filter[i] |= con;
@@ -1136,6 +1144,7 @@ __global__ static void genScanFilter_or_like(char *col, int colSize, long tupleN
 
     for(long i = tid; i < tupleNum; i += stride){
         int pos = 0, res;
+        con = 1;
         for(long j = 0; j < vlen; j++){
             const char *str1 = col + colSize * i;
             const char *str2 = *(char **)where->content + colSize * j;
