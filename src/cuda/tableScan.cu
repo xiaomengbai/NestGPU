@@ -1742,6 +1742,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), *((void **) where->exp[0].content), vec_size, cudaMemcpyHostToDevice) );
 
             /* free memory here? */
+            free( *((void **) where->exp[0].content) );
             memcpy(where->exp[0].content, vec_addr_g, 32);
             where->exp[0].dataPos = GPU;
         }
@@ -1754,6 +1755,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec_size) );
             CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), *((void **) where->exp[0].content), vec_size, cudaMemcpyHostToDevice) );
 
+            free( *((void **) where->exp[0].content) );
             memcpy(where->exp[0].content, vec_addr_g, 32);
             where->exp[0].dataPos = GPU;
         }
@@ -1769,11 +1771,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                 size_t vec2_size = *((*(int ***)(where->exp[0].content))[i]) * sn->tn->attrSize[index] + sizeof(int);
                 CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) &vec1_addrs[i], vec2_size) );
                 CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy( vec1_addrs[i], (*(char ***)where->exp[0].content)[i], vec2_size, cudaMemcpyHostToDevice) );
+                free( (*(char ***)where->exp[0].content)[i] );
             }
             CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec1_size) );
             CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), vec1_addrs, vec1_size, cudaMemcpyHostToDevice) );
             free(vec1_addrs);
 
+            free(*(char ***)where->exp[0].content);
             memcpy(where->exp[0].content, vec_addr_g, 32);
             where->exp[0].dataPos = GPU;
         }
