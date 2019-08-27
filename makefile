@@ -27,9 +27,8 @@ $(DBGEN):
 # target: tables
 #   genrerate tables
 
-# core dump when generating the *lineorder* table
-# core dump when loading the *date* table
-TABLES := supplier customer part
+#TABLES := supplier customer part
+TABLES := supplier
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
@@ -82,7 +81,11 @@ CUDA_DRIVER := $(CUDA_DIR)/driver.cu
 TPCH_TEST_DIR := ./test/tpch_test
 TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
-SQL_FILE := test.sql
+
+# Add tpch queries
+SQL_FILE := $(TPCH_TEST_DIR)/test.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+
 SCHEMA_FILE := $(TPCH_SCHEMA)
 
 TRANSLATE_PY := translate.py
