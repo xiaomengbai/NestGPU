@@ -24,8 +24,8 @@ TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 SCHEMA := $(TPCH_SCHEMA)
 
 # Add tpch queries
-SQL_FILE := $(TPCH_TEST_DIR)/test.sql
-#SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/test.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 
 
 # build test/dbgen/dbgen for generating tables
