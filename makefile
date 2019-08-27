@@ -22,7 +22,6 @@ SCHEMA := $(TPCH_SCHEMA)
 SQL_FILE ?= test.sql
 
 
-
 # build test/dbgen/dbgen for generating tables
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
