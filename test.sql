@@ -139,6 +139,7 @@
 -- where c_nation like '%O%N';
 -- like '%MO%CO%';
 
+<<<<<<< HEAD
 select c_name, s_name, c_address, s_address
 from customer, supplier
 where c_custkey = s_suppkey;
@@ -146,15 +147,27 @@ where c_custkey = s_suppkey;
 -- select min(c_custkey), c_nation
 -- from customer
 -- group by c_nation;
+=======
+--select min(c_custkey), c_nation
+--from customer
+--group by c_nation;
+
+
+
+select S_NAME from supplier;
+
+--select c_name
+--from customer;
+--where c_nationkey in (select s_nationkey from supplier where s_suppkey > 98);
+>>>>>>> Add testing query for tpc-h schema
 
 -- select c_name, c_nation
 -- from customer
 -- where c_nation in (select s_nation from supplier where s_suppkey > 98);
 
-
--- select c_name, c_nation, c_city
--- from customer
--- where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation and s_suppkey < (select avg(p_partkey) from part where p_size < 20)));
+--select c_name, c_nation, c_city 
+--from customer
+--where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation and s_suppkey < (select avg(p_partkey) from part where p_size < 20)));
 
 -- select c_name, c_city, s_name, s_city
 -- from customer, supplier
