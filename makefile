@@ -16,7 +16,9 @@ help:
 
 SSB_TEST_DIR := ./test/ssb_test
 SSB_SCHEMA := $(SSB_TEST_DIR)/ssb.schema
-TPCH_SCHEMA := $(SSB_TEST_DIR)/tpch.schema
+
+TPCH_TEST_DIR := ./test/tpch_test
+TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
 SQL_FILE ?= test.sql
@@ -96,7 +98,6 @@ load-columns: tables loader
 CUDA_DIR := src/cuda
 CUDA_GPUDB := $(CUDA_DIR)/GPUDATABASE
 CUDA_DRIVER := $(CUDA_DIR)/driver.cu
-
 
 TRANSLATE_PY := translate.py
 CUDA_DRIVER_DEP := XML2CODE/code_gen.py XML2CODE/ystree.py
