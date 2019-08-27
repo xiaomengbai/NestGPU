@@ -79,7 +79,8 @@ CUDA_GPUDB := $(CUDA_DIR)/GPUDATABASE
 CUDA_DRIVER := $(CUDA_DIR)/driver.cu
 
 SSB_TEST_DIR := ./test/ssb_test
-SSB_SCHEMA := $(SSB_TEST_DIR)/ssb.schema
+#SSB_SCHEMA := $(SSB_TEST_DIR)/ssb.schema
+SSB_SCHEMA := $(SSB_TEST_DIR)/tpch.schema
 
 SQL_FILE := test.sql
 SCHEMA_FILE := $(SSB_SCHEMA)
