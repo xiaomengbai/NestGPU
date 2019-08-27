@@ -10,7 +10,7 @@ CC      = gcc
 # Current values for WORKLOAD are:  SSBM, TPCH, TPCR
 DATABASE=DB2 
 MACHINE =LINUX 
-WORKLOAD =SSBM 
+WORKLOAD =TPCH
 #
 # add -EDTERABYTE if orderkey will execeed 32 bits (SF >= 300)
 # and make the appropriate change in gen_schema() of runit.sh
