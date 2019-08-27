@@ -11,7 +11,7 @@ select
 from
         part,
         supplier
---        partsupp,
+--       partsupp,
 --       nation,
 --       region
 where

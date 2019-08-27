@@ -19,7 +19,10 @@ SSB_SCHEMA := $(SSB_TEST_DIR)/ssb.schema
 TPCH_SCHEMA := $(SSB_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
-SQL_FILE ?= test.sql
+
+# Add tpch queries
+#SQL_FILE := $(TPCH_TEST_DIR)/test.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 
 
 # build test/dbgen/dbgen for generating tables
