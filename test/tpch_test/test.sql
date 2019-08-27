@@ -1,5 +1,20 @@
--- SIMPLE TPC-H query
-select S_NAME from supplier;
+-- SIMPLE TPC-H query (WORKS)
+-- select * from supplier;
+
+-- SIMPLE TPC-H query (WORKS)
+-- select * from part;
+
+-- SIMPLE TPC-H query (WORKS)
+-- select * from customer;
+
+-- SIMPLE TPC-H query (WORKS)
+--select * from nation;
+
+-- SIMPLE TPC-H query (WORKS)
+-- select * from region;
+
+-- SIMPLE TPC-H query (WORKS)
+select * from partsupp;
 
 
 -- Testing "FILTER"
