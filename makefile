@@ -85,7 +85,6 @@ $(LOADER_SRC): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP)
 #   generate column files from table files
 LOAD_OPTS := --datadir $(DATA_DIR) $(foreach table,$(TABLES), --$(table) $(DATA_DIR)/$(table).tbl)
 load-columns: tables loader
-	echo $(LOADER) $(LOAD_OPTS)
 	$(LOADER) $(LOAD_OPTS)
 
 
