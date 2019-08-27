@@ -139,18 +139,25 @@
 -- where c_nation like '%O%N';
 -- like '%MO%CO%';
 
-select min(c_custkey), c_nation
-from customer
-group by c_nation;
+--select min(c_custkey), c_nation
+--from customer
+--group by c_nation;
+
+
+
+select S_NAME from supplier;
+
+--select c_name
+--from customer;
+--where c_nationkey in (select s_nationkey from supplier where s_suppkey > 98);
 
 -- select c_name, c_nation
 -- from customer
 -- where c_nation in (select s_nation from supplier where s_suppkey > 98);
 
-
--- select c_name, c_nation, c_city
--- from customer
--- where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation and s_suppkey < (select avg(p_partkey) from part where p_size < 20)));
+--select c_name, c_nation, c_city 
+--from customer
+--where  c_custkey < (select avg(s_suppkey) from supplier where c_nation = s_nation and s_suppkey < (select avg(p_partkey) from part where p_size < 20)));
 
 -- select c_name, c_city, s_name, s_city
 -- from customer, supplier
