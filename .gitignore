@@ -1,17 +1,59 @@
-sj
-TAGS
-a.cu
-a.out
-*.o
-*.pyc
-driver.cu
-GPUDATABASE
-example.driver.cu
-gmon.out
-load.c
-.tmp/
+# GPUDB file #
+##############
 schema.h
 gpuDBLoader
 dbgen
 qgen
 test/tables/
+.tmp/
+sj
+TAGS
+a.cu
+a.out
+driver.cu
+GPUDATABASE
+example.driver.cu
+gmon.out
+load.c
+
+# Other files #
+###############
+*.png
+
+# Compiled source #
+###################
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.pyc
+
+# Packages #
+############
+# it's better to unpack these files and commit the raw source
+# git has its own built in compression methods
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases #
+######################
+*.log
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.vscode
