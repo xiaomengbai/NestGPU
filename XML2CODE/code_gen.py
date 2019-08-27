@@ -320,7 +320,7 @@ def generate_loader():
 
     print >>fo, "\twhile((table=getopt_long(argc,argv,\"\",long_options,&long_index))!=-1){"
     print >>fo, "\t\tswitch(table){"
-    print >>fo, "\t\t\tcase '6':"
+    print >>fo, "\t\t\tcase '" + str(i + 2) + "':"
     print >>fo, "\t\t\t\tsetPath = 1;"
     print >>fo, "\t\t\t\tstrcpy(path,optarg);"
     print >>fo, "\t\t\t\tbreak;"

@@ -10,3 +10,8 @@ example.driver.cu
 gmon.out
 load.c
 .tmp/
+schema.h
+gpuDBLoader
+dbgen
+qgen
+test/tables/
