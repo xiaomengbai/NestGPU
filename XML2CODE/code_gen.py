@@ -15,18 +15,6 @@
    limitations under the License.
 """
 
-"""
-Some assumptions:
-    1. the supported query is SSBM query
-    2. the fact table is the left child of the the join node and the dimension table is the right table
-    3. the size of the dimension table is small enough to be fit into GPU memory.
-    4. currently each thread will try to allocate its needed gpu memory before executing.
-       if it fails, it can wait until it gets the memory. There may be deadlocks here.
-    5. the current relation supported in where list is only AND, OR
-    6. the data to be grouped by and ordered by are small enough to be fit into gpu memory
-    7. dimension tables are not compressed.
-"""
-
 import sys
 import commands
 import os.path

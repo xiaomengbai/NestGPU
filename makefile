@@ -33,7 +33,7 @@ SQL_FILE := $(TPCH_TEST_DIR)/test.sql
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 0.05
+TABLE_SCALE := 0.01
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
@@ -41,9 +41,8 @@ $(DBGEN):
 
 # target: tables
 #   genrerate tables
-
-#TABLES := supplier customer part
-TABLES := supplier
+TABLES := supplier part customer nation region partsupp
+#region partsupp
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
