@@ -1272,7 +1272,7 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
             print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
             print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
 
-############## end of wherecondition not none
+            ############## end of wherecondition not none
 
         else:
             print >>fo, indent + "if(blockTotal != 1){"
@@ -1472,7 +1472,7 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
 
         print >>fo, indent + factName + "->tupleNum = header.tupleNum;\n"
 
-################# end of reading the needed attributes of fact table from disk ###############
+        ################# end of reading the needed attributes of fact table from disk ###############
 
         if joinAttr.factTables[0].where_condition is not None:
             hasWhere = 1
