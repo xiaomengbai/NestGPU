@@ -8,13 +8,13 @@
 -- select * from customer;
 
 -- SIMPLE TPC-H query (WORKS)
---select * from nation;
+-- select * from nation;
 
 -- SIMPLE TPC-H query (WORKS)
--- select * from region;
+select * from region;
 
 -- SIMPLE TPC-H query (WORKS)
-select * from partsupp;
+-- select * from partsupp;
 
 
 -- Testing "FILTER"

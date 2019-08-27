@@ -28,7 +28,6 @@ SQL_FILE := $(TPCH_TEST_DIR)/test.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 
 
-
 # build test/dbgen/dbgen for generating tables
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen

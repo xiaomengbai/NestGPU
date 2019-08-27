@@ -1,8 +1,8 @@
 --TPC-H Q2 (Type JA)
 select
 	s_acctbal,
-        s_name,
---      n_name,
+	s_name,
+--	n_name,
 	p_partkey,
 	p_mfgr,
 	s_address,
@@ -11,14 +11,14 @@ select
 from
         part,
         supplier
---      partsupp,
---      nation,
---      region
+--        partsupp,
+--       nation,
+--       region
 where
         p_partkey = s_suppkey
---      p_partkey = ps_partkey
+--      and p_partkey = ps_partkey
 --      and s_suppkey = ps_suppkey
-	and p_size = 10
+--      and p_size = 10
 --      and p_type like '%[TYPE]'
 --      and s_nationkey = n_nationkey
 --      and n_regionkey = r_regionkey
