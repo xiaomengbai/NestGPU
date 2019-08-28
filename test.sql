@@ -139,9 +139,13 @@
 -- where c_nation like '%O%N';
 -- like '%MO%CO%';
 
-select min(c_custkey), c_nation
-from customer
-group by c_nation;
+select c_name, s_name, c_address, s_address
+from customer, supplier
+where c_custkey = s_suppkey;
+
+-- select min(c_custkey), c_nation
+-- from customer
+-- group by c_nation;
 
 -- select c_name, c_nation
 -- from customer
