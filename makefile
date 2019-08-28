@@ -39,7 +39,6 @@ $(DBGEN):
 # target: tables
 #   genrerate tables
 TABLES := supplier part customer nation region partsupp
-#region partsupp
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
