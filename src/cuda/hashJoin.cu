@@ -419,6 +419,22 @@ __global__ void static joinFact_int(int *resPsum, char * fact,  int attrSize, lo
     }
 }
 
+__global__ void static joinFact(int *resPsum, char *fact, int attrSize, long num, int *filterNum, char *result)
+{
+    int startIndex = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride     = blockDim.x * gridDim.x;
+
+    for(long i = startIndex; i < num; i += stride){
+        if(filterNum[i]){
+            long localOffset = resPsum[i] * attrSize;
+            for(int j = 0; j < filterNum[i]; j++){
+                memcpy(result + localOffset, fact + i * attrSize, attrSize);
+                localOffset += attrSize;
+            }
+        }
+    }
+}
+
 __global__ void static joinDim_rle(int *resPsum, char * dim, int attrSize, long tupleNum, int * filter, char * result){
 
     int startIndex = blockIdx.x*blockDim.x + threadIdx.x;
@@ -511,6 +527,25 @@ __global__ void static joinDim_int_new(int *resPsum, char * dim, int attrSize, l
                 dimId = JRes[localCount];
                 ((int*)result)[localCount] = ((int*)dim)[dimId-1];
                 localCount ++;
+            }
+        }
+    }
+}
+
+__global__ void static joinDim(int *resPsum, char *dim, int attrSize, long num, int *filterNum, int *JRes, char *result)
+{
+    int startIndex = blockIdx.x * blockDim.x + threadIdx.x;
+    int stride     = blockDim.x * gridDim.x;
+
+    for(long i = startIndex; i < num; i += stride){
+        int dimNum = filterNum[i];
+        if(dimNum){
+            long localCount = resPsum[i];
+            int dimId;
+            for(int j = 0; j < dimNum; j++){
+                dimId = JRes[localCount];
+                memcpy(result + localCount * attrSize, dim + (dimId - 1) * attrSize, attrSize);
+                localCount++;
             }
         }
     }
@@ -817,10 +852,13 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
                     gpu_fact = table;
                 }
 
-                if(attrSize == sizeof(int))
-                    joinFact_int<<<grid,block>>>(filterPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum,filterNum,gpu_result);
-                else
-                    joinFact_other<<<grid,block>>>(gpu_resPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum,gpuFactFilter,gpu_result);
+
+                joinFact<<<grid,block>>>(filterPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum,filterNum,gpu_result);
+
+                // if(attrSize == sizeof(int))
+                //     joinFact_int<<<grid,block>>>(filterPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum,filterNum,gpu_result);
+                // else
+                //     joinFact_other<<<grid,block>>>(gpu_resPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum,gpuFactFilter,gpu_result);
 
             }else if (format == DICT){
                 struct dictHeader * dheader = NULL;
@@ -866,7 +904,8 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
 
                 unpack_rle<<<grid,block>>>(gpu_fact, gpuRle,jNode->leftTable->tupleNum, dNum);
 
-                joinFact_int<<<grid,block>>>(gpu_resPsum,gpuRle, attrSize, jNode->leftTable->tupleNum,gpuFactFilter,gpu_result);
+                //joinFact_int<<<grid,block>>>(gpu_resPsum,gpuRle, attrSize, jNode->leftTable->tupleNum,gpuFactFilter,gpu_result);
+                joinFact<<<grid, block>>>(gpu_resPsum, gpuRle, attrSize, jNode->leftTable->tupleNum, gpuFactFilter, gpu_result);
 
                 CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuRle));
 
@@ -882,10 +921,11 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
                     gpu_fact = table;
                 }
 
-                if(attrType == sizeof(int))
-                    joinDim_int_new<<<grid,block>>>(filterPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum, filterNum, JRes, gpu_result);
-                else
-                    joinDim_other<<<grid,block>>>(gpu_resPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum, gpuFactFilter,gpu_result);
+                joinDim<<<grid, block>>>(filterPsum, gpu_fact, attrSize, jNode->leftTable->tupleNum, filterNum, JRes, gpu_result);
+                // if(attrType == sizeof(int))
+                //     joinDim_int_new<<<grid,block>>>(filterPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum, filterNum, JRes, gpu_result);
+                // else
+                //     joinDim_other<<<grid,block>>>(gpu_resPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum, gpuFactFilter,gpu_result);
 
             }else if (format == DICT){
                 struct dictHeader * dheader = NULL;
