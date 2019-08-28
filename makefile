@@ -16,7 +16,8 @@ help:
 
 SSB_TEST_DIR := ./test/ssb_test
 SSB_SCHEMA := $(SSB_TEST_DIR)/ssb.schema
-TPCH_SCHEMA := $(SSB_TEST_DIR)/tpch.schema
+TPCH_TEST_DIR := ./test/tpch_test
+TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
 
