@@ -88,9 +88,12 @@ __device__ static float calMathExp(char **content, struct mathExp exp, int pos){
     if(exp.op == NOOP){
         if (exp.opType == CONS)
             res = exp.opValue;
-        else{
+        else if(exp.opType == COLUMN_INTEGER){
             int index = exp.opValue;
             res = ((int *)(content[index]))[pos];
+        }else if(exp.opType == COLUMN_DECIMAL){
+            int index = exp.opValue;
+            res = ((float *)(content[index]))[pos];
         }
     
     }else if(exp.op == PLUS ){

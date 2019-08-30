@@ -661,7 +661,7 @@ class mathExp:
     def addOp(self, exp):
 
         if isinstance(exp,ystree.YRawColExp):
-            self.opName = "COLUMN"
+            self.opName = "COLUMN_" + exp.column_type
             self.value = exp.column_name
         elif isinstance(exp,ystree.YConsExp):
             self.opName = "CONS"
@@ -685,6 +685,18 @@ def printMathFunc(fo,prefix, mathFunc):
         print >>fo, prefix + ".opNum = 1;"
         print >>fo, prefix + ".exp = 0;"
         print >>fo, prefix + ".opType = COLUMN;"
+        print >>fo, prefix + ".opValue = " + str(mathFunc.value) + ";"
+    elif mathFunc.opName == "COLUMN_DECIMAL":
+        print >>fo, prefix + ".op = NOOP;"
+        print >>fo, prefix + ".opNum = 1;"
+        print >>fo, prefix + ".exp = 0;"
+        print >>fo, prefix + ".opType = COLUMN_DECIMAL;"
+        print >>fo, prefix + ".opValue = " + str(mathFunc.value) + ";"
+    elif mathFunc.opName == "COLUMN_INTEGER":
+        print >>fo, prefix + ".op = NOOP;"
+        print >>fo, prefix + ".opNum = 1;"
+        print >>fo, prefix + ".exp = 0;"
+        print >>fo, prefix + ".opType = COLUMN_INTEGER;"
         print >>fo, prefix + ".opValue = " + str(mathFunc.value) + ";"
     elif mathFunc.opName == "CONS":
         print >>fo, prefix + ".op = NOOP;"

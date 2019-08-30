@@ -91,6 +91,8 @@ enum {
 
 /* op type for mathExp */
     COLUMN,
+    COLUMN_DECIMAL,
+    COLUMN_INTEGER,
     CONS,
 
 /* data position */
