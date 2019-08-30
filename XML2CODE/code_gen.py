@@ -1582,7 +1582,6 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
                     print >>fo, indent + baseIndent + "float tmp = " + conList[i] + ";"
                     print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(float));"
                     print >>fo, indent + "}"
-                    print 1/0
                 else:
                     if isinstance(conList[i], ystree.YRawColExp):
                         con_value = "_" + conList[i].table_name + "_" + str(conList[i].column_name)
