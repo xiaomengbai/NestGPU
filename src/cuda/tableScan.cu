@@ -1942,7 +1942,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
         int format = sn->tn->dataFormat[index];
         int prevFormat = format;
 
-        if( (where->exp[0].relation == EQ_VEC || where->exp[0].relation == GTH_VEC || where->exp[0].relation == LTH_VEC || where->exp[0].relation == GEQ_VEC || where->exp[0].relation == LEQ_VEC) &&
+        if( (where->exp[0].relation == EQ_VEC || where->exp[0].relation == NOT_EQ_VEC || where->exp[0].relation == GTH_VEC || where->exp[0].relation == LTH_VEC || where->exp[0].relation == GEQ_VEC || where->exp[0].relation == LEQ_VEC) &&
             (where->exp[0].dataPos == MEM || where->exp[0].dataPos == MMAP || where->exp[0].dataPos == PINNED) )
         {
             char vec_addr_g[32];
@@ -2019,7 +2019,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             if(sn->tn->attrType[index] == INT){
                 int whereValue;
                 float *whereVec;
-                if(rel == EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
+                if(rel == EQ || rel == NOT_EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
                     whereValue = *((int*) where->exp[0].content);
                 else
                     whereVec = *((float **) where->exp[0].content);
@@ -2038,6 +2038,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     genScanFilter_init_int_leq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                 else if (rel == EQ_VEC)
                     genScanFilter_init_int_eq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
+                else if (rel == NOT_EQ_VEC)
+                    genScanFilter_init_int_neq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if (rel == GTH_VEC)
                     genScanFilter_init_int_gth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if (rel == LTH_VEC)
@@ -2049,13 +2051,15 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
             }else if (sn->tn->attrType[index] == FLOAT){
                 float whereValue, *whereVec;
-                if(rel == EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
+                if(rel == EQ || rel == NOT_EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
                     whereValue = *((float*) where->exp[0].content);
                 else
                     whereVec = *((float **) where->exp[0].content);
 
                 if(rel==EQ)
                     genScanFilter_init_float_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
+                else if(rel==NOT_EQ)
+                    genScanFilter_init_float_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                 else if(rel == GTH)
                     genScanFilter_init_float_gth<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                 else if(rel == LTH)
@@ -2066,6 +2070,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     genScanFilter_init_float_leq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                 else if(rel==EQ_VEC)
                     genScanFilter_init_float_eq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
+                else if(rel==NOT_EQ_VEC)
+                    genScanFilter_init_float_neq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if(rel == GTH_VEC)
                     genScanFilter_init_float_gth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if(rel == LTH_VEC)
@@ -2079,6 +2085,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             }else{
                 if(rel == EQ)
                     genScanFilter_init_eq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
+                else if(rel == NOT_EQ)
+                    genScanFilter_init_neq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                 else if (rel == GTH)
                     genScanFilter_init_gth<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                 else if (rel == LTH)
@@ -2089,6 +2097,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     genScanFilter_init_leq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                 else if(rel == EQ_VEC)
                     genScanFilter_init_eq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
+                else if(rel == NOT_EQ_VEC)
+                    genScanFilter_init_neq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                 else if (rel == GTH_VEC)
                     genScanFilter_init_gth_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                 else if (rel == LTH_VEC)
@@ -2147,7 +2157,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             index = sn->whereIndex[whereIndex];
             format = sn->tn->dataFormat[index];
 
-            if( (where->exp[i].relation == EQ_VEC || where->exp[i].relation == GTH_VEC || where->exp[i].relation == LTH_VEC || where->exp[i].relation == GEQ_VEC || where->exp[i].relation == LEQ_VEC) &&
+            if( (where->exp[i].relation == EQ_VEC || where->exp[i].relation == NOT_EQ_VEC || where->exp[i].relation == GTH_VEC || where->exp[i].relation == LTH_VEC || where->exp[i].relation == GEQ_VEC || where->exp[i].relation == LEQ_VEC) &&
                 (where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED) )
             {
                 char vec_addr_g[32];
@@ -2221,7 +2231,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                 if(sn->tn->attrType[index] == INT){
                     int whereValue;
                     float *whereVec;
-                    if(rel == EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
+                    if(rel == EQ || rel == NOT_EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
                         whereValue = *((int*) where->exp[i].content);
                     else
                         whereVec = *((float **) where->exp[i].content);
@@ -2229,6 +2239,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     if(where->andOr == AND){
                         if(rel==EQ)
                             genScanFilter_and_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
+                        else if(rel==NOT_EQ)
+                            genScanFilter_and_int_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel == GTH)
                             genScanFilter_and_int_gth<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel == LTH)
@@ -2239,6 +2251,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             genScanFilter_and_int_leq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel==EQ_VEC)
                             genScanFilter_and_int_eq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
+                        else if(rel==NOT_EQ_VEC)
+                            genScanFilter_and_int_neq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                         else if(rel == GTH_VEC)
                             genScanFilter_and_int_gth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                         else if(rel == LTH_VEC)
@@ -2250,6 +2264,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     }else{
                         if(rel==EQ)
                             genScanFilter_or_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
+                        else if(rel==NOT_EQ)
+                            genScanFilter_or_int_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel == GTH)
                             genScanFilter_or_int_gth<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel == LTH)
@@ -2260,6 +2276,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             genScanFilter_or_int_leq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel==EQ_VEC)
                             genScanFilter_or_int_eq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
+                        else if(rel==NOT_EQ_VEC)
+                            genScanFilter_or_int_neq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                         else if(rel == GTH_VEC)
                             genScanFilter_or_int_gth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                         else if(rel == LTH_VEC)
@@ -2273,7 +2291,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
                 } else if (sn->tn->attrType[index] == FLOAT){
                     float whereValue, *whereVec;
-                    if(rel == EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
+                    if(rel == EQ || rel == NOT_EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
                         whereValue = *((float*) where->exp[i].content);
                     else
                         whereVec = *((float**) where->exp[i].content);
@@ -2281,6 +2299,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     if(where->andOr == AND){
                         if(rel==EQ)
                             genScanFilter_and_float_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
+                        else if(rel==NOT_EQ)
+                            genScanFilter_and_float_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel == GTH)
                             genScanFilter_and_float_gth<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel == LTH)
@@ -2291,6 +2311,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             genScanFilter_and_float_leq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel==EQ_VEC)
                             genScanFilter_and_float_eq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
+                        else if(rel==NOT_EQ_VEC)
+                            genScanFilter_and_float_neq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);    
                         else if(rel == GTH_VEC)
                             genScanFilter_and_float_gth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                         else if(rel == LTH_VEC)
@@ -2303,6 +2325,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     }else{
                         if(rel==EQ)
                             genScanFilter_or_float_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
+                        else if(rel==NOT_EQ)
+                            genScanFilter_or_float_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel == GTH)
                             genScanFilter_or_float_gth<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel == LTH)
@@ -2313,6 +2337,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             genScanFilter_or_float_leq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                         else if(rel==EQ_VEC)
                             genScanFilter_or_float_eq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
+                        else if(rel==NOT_EQ_VEC)
+                            genScanFilter_or_float_neq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                         else if(rel == GTH_VEC)
                             genScanFilter_or_float_gth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                         else if(rel == LTH_VEC)
@@ -2327,6 +2353,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     if(where->andOr == AND){
                         if (rel == EQ)
                             genScanFilter_and_eq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
+                        else if (rel == NOT_EQ)
+                            genScanFilter_and_neq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == GTH)
                             genScanFilter_and_gth<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == LTH)
@@ -2337,6 +2365,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             genScanFilter_and_leq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == EQ_VEC)
                             genScanFilter_and_eq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
+                        else if (rel == NOT_EQ_VEC)
+                            genScanFilter_and_neq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == GTH_VEC)
                             genScanFilter_and_gth_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == LTH_VEC)
@@ -2354,6 +2384,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                     }else{
                         if (rel == EQ)
                             genScanFilter_or_eq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
+                        else if (rel == NOT_EQ)
+                            genScanFilter_or_neq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == GTH)
                             genScanFilter_or_gth<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == LTH)
@@ -2364,6 +2396,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             genScanFilter_or_leq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == EQ_VEC)
                             genScanFilter_or_eq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
+                        else if (rel == NOT_EQ_VEC)
+                            genScanFilter_or_neq_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == GTH_VEC)
                             genScanFilter_or_gth_vec<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
                         else if (rel == LTH_VEC)
