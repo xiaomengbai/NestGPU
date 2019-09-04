@@ -1472,6 +1472,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
     resName =  tn.table_name.lower()[0:2] if table_abbr[tn.table_name.lower()] == None else table_abbr[tn.table_name.lower()]
     tnName = tn.table_name.lower() + "Table"
+    var_subqRes = "subqRes" + str(lvl)
     print >>fo, indent + "// Load columns from the table " + tn.table_name.upper()
     print >>fo, indent + "struct tableNode *" + resName + ";"
 
@@ -1697,7 +1698,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 else:
                     con_value = conList[i]
                 print >>fo, indent + "{"
-                print >>fo, indent + baseIndent + "int tmp = " + conList[i] + ";"
+                print >>fo, indent + baseIndent + "int tmp = " + con_value + ";"
                 print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(int));"
                 print >>fo, indent + "}"
             elif ctype == "FLOAT":
@@ -1706,7 +1707,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 else:
                     con_value = conList[i]
                 print >>fo, indent + "{"
-                print >>fo, indent + baseIndent + "float tmp = " + conList[i] + ";"
+                print >>fo, indent + baseIndent + "float tmp = " + con_value + ";"
                 print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(float));"
                 print >>fo, indent + "}"
             else:

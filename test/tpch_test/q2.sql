@@ -40,13 +40,13 @@ where
               )
 ;
 
-select t1_supplycost, t1_partkey, p_name
-from (select max(ps_supplycost) as t1_supplycost, ps_partkey as t1_partkey
-     from partsupp, supplier
-     where ps_suppkey = s_suppkey
-     group by ps_partkey) t1, part
-where t1_partkey = p_partkey
-;
+-- select t1_supplycost, t1_partkey, p_name
+-- from (select max(ps_supplycost) as t1_supplycost, ps_partkey as t1_partkey
+--      from partsupp, supplier
+--      where ps_suppkey = s_suppkey
+--      group by ps_partkey) t1, part
+-- where t1_partkey = p_partkey
+-- ;
 
 
 -- select max(ps_supplycost), ps_partkey
@@ -68,7 +68,48 @@ where t1_partkey = p_partkey
 -- group by ps_partkey;
 
 
-
+select
+  s_acctbal,
+  s_name,
+  n_name,
+  p_partkey,
+  p_mfgr,
+  s_address,
+  s_phone,
+  s_comment
+from
+  part,
+  partsupp,
+  supplier,
+  nation,
+  region
+where
+  p_partkey = ps_partkey
+  and s_suppkey = ps_suppkey
+  and p_size = 20
+  and p_type like 'MEDIUM%'
+  and s_nationkey = n_nationkey
+  and n_regionkey = r_regionkey
+  and r_name = 'ASIA'
+  and ps_supplycost = (
+    select
+      min(ps_supplycost)
+    from
+      partsupp, supplier,
+      nation, region
+    where
+      p_partkey = ps_partkey
+      and s_suppkey = ps_suppkey
+      and s_nationkey = n_nationkey
+      and n_regionkey = r_regionkey
+      and r_name = 'ASIA'
+    )
+order by
+  s_acctbal,
+  n_name,
+  s_name,
+  p_partkey
+;
 
 --TPC-H Q2 (Type JA)
 -- select

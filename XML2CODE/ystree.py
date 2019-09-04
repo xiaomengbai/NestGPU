@@ -4765,7 +4765,7 @@ def process_the_plan_tree(tree):
 
     gen_project_list(tree)
 
-    search_external_cols(tree)
+    search_external_cols(tree, tree)
 
     if check_schema(tree) == -1:
         tree = None
@@ -4796,49 +4796,57 @@ def __traverse_exp_map__(exp, map_func):
     if isinstance(exp, YFuncExp):
         map(lambda par : __traverse_exp_map__(par, map_func), exp.parameter_list)
 
-def search_external_cols(tree):
+def search_external_cols(tree, root):
 
-    # We call this just after generating the initial query plan tree, so no groupby or orderby node
-    if tree.where_condition is None:
-        return
+    if isinstance(tree, GroupByNode) or isinstance(tree, OrderByNode) or isinstance(tree, SelectProjectNode):
+        search_external_cols(tree.child, root)
 
-    exp = tree.where_condition.where_condition_exp
-    table_list = list(set().union(tree.table_list, tree.table_alias_dict.keys()))
-    other_table_list = filter(lambda t : t not in table_list, global_table_dict.keys())
+    elif isinstance(tree, TwoJoinNode) or isinstance(tree, TableNode):
 
-    all_column_exps = []
+        if isinstance(tree, TwoJoinNode):
+            search_external_cols(tree.left_child, root)
+            search_external_cols(tree.right_child, root)
 
-    __traverse_exp_filter__(exp, all_column_exps, lambda e : isinstance(e, YRawColExp))
-
-    # external columns are columns not in the table list
-    external_cols = filter(lambda e : all( not column_in_table(e.column_name, t) for t in table_list), all_column_exps)
-
-    for col in external_cols:
-        external_table_found = False
-        for t in other_table_list:
-            if column_in_table(col.column_name, t):
-                col.table_name = t
-                col.column_type = global_table_dict[t].get_column_type_by_name(col.column_name)
-                external_table_found = True
-        if not external_table_found:
-            print "ERROR: Unknown column " + col.column_name
-            exit(99)
-
-    # setup in a dictionary at the root node
-    for col in external_cols:
-        tree.dynamic_values[col.column_name] = col
-
-    def replace_cols_in_a_func_exp(_func_exp):
-        if not isinstance(_func_exp, YFuncExp):
+        if tree.where_condition is None:
             return
-        for par in _func_exp.parameter_list:
-            if par in external_cols:
-                cons = YConsExp(None, par.column_type)
-                cons.ref_col = par
-                _func_exp.replace(par, cons)
 
-    # replace all exteranl colexp with consexp
-    __traverse_exp_map__(exp, lambda e : replace_cols_in_a_func_exp(e))
+        exp = tree.where_condition.where_condition_exp
+        table_list = list(set().union(tree.table_list, tree.table_alias_dict.keys()))
+        other_table_list = filter(lambda t : t not in table_list, global_table_dict.keys())
+
+        all_column_exps = []
+
+        __traverse_exp_filter__(exp, all_column_exps, lambda e : isinstance(e, YRawColExp))
+
+        # external columns are columns not in the table list
+        external_cols = filter(lambda e : all( not column_in_table(e.column_name, t) for t in table_list), all_column_exps)
+
+        for col in external_cols:
+            external_table_found = False
+            for t in other_table_list:
+                if column_in_table(col.column_name, t):
+                    col.table_name = t
+                    col.column_type = global_table_dict[t].get_column_type_by_name(col.column_name)
+                    external_table_found = True
+            if not external_table_found:
+                print "ERROR: Unknown column " + col.column_name
+                exit(99)
+
+        # setup in a dictionary at the root node
+        for col in external_cols:
+            root.dynamic_values[col.column_name] = col
+
+        def replace_cols_in_a_func_exp(_func_exp):
+            if not isinstance(_func_exp, YFuncExp):
+                return
+            for par in _func_exp.parameter_list:
+                if par in external_cols:
+                    cons = YConsExp(None, par.column_type)
+                    cons.ref_col = par
+                    _func_exp.replace(par, cons)
+
+        # replace all exteranl colexp with consexp
+        __traverse_exp_map__(exp, lambda e : replace_cols_in_a_func_exp(e))
 
 def ysmart_tree_gen(schema,xml_file):
 
