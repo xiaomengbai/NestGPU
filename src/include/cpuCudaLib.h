@@ -50,7 +50,7 @@ static void mergeIntoTable(struct tableNode *dst, struct tableNode * src, struct
 
     assert(dst != NULL);
     assert(src != NULL);
-    dst->totalAttr = src->totalAttr; 
+    dst->totalAttr = src->totalAttr;
     dst->tupleSize = src->tupleSize;
     dst->tupleNum += src->tupleNum;
 
@@ -199,19 +199,19 @@ static void printCol(char *col, int size, int type,int tupleNum,int pos){
         }
     }else if (pos == MEM){
         if(type == INT){
-            int * cpuCol = (int*)col; 
+            int * cpuCol = (int*)col;
             for(int i=0;i<tupleNum;i++){
                 printf("%d\n", ((int*)cpuCol)[i]);
             }
 
         }else if (type == FLOAT){
 
-            float * cpuCol = (float*)col; 
+            float * cpuCol = (float*)col;
             for(int i=0;i<tupleNum;i++){
                 printf("%f\n", ((float*)cpuCol)[i]);
             }
         }else if (type == STRING){
-            char * cpuCol = col; 
+            char * cpuCol = col;
             for(int i=0;i<tupleNum;i++){
                 char tbuf[128] = {0};
                 memset(tbuf,0,sizeof(tbuf));
@@ -223,4 +223,29 @@ static void printCol(char *col, int size, int type,int tupleNum,int pos){
     }
 }
 
+static void printMaterializedTable(struct materializeNode &mn, char *table)
+{
+    for(int i = 0; i < mn.table->tupleNum; i++){
+        size_t tuple_off = 0;
+        printf("Tuple %d: ", i);
+        for(int j = 0; j < mn.table->totalAttr; j++){
+            switch(mn.table->attrType[j]){
+            case INT:
+                printf("(int) %d, ", *(int *)(table + i * mn.table->tupleSize + tuple_off)); break;
+            case FLOAT:
+                printf("(float) %f, ", *(float *)(table + i * mn.table->tupleSize + tuple_off)); break;
+            case STRING:
+                size_t strlen = mn.table->attrSize[j];
+                char *strout = (char *)malloc(strlen + 1);
+                strout[strlen] = '\0';
+                memcpy(strout, table + i * mn.table->tupleSize + tuple_off, strlen);
+                printf("(string) %s, ", strout);
+                free(strout);
+                break;
+            }
+            tuple_off += mn.table->attrSize[j];
+        }
+        printf("\n");
+    }
+}
 #endif

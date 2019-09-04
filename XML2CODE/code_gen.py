@@ -921,7 +921,7 @@ def generate_code(tree):
     print >>fo, indent + "struct statistic pp;"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
 
-    generate_code_for_a_tree(fo, tree, 0, True)
+    generate_code_for_a_tree(fo, tree, 0)
 
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &end);"
     print >>fo, indent + "double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;"
@@ -957,7 +957,7 @@ def get_subqueries(tree, subq_list):
         return
 
 
-def generate_code_for_a_tree(fo, tree, lvl, out_f):
+def generate_code_for_a_tree(fo, tree, lvl):
 
     global baseIndent
     indent_this_level = (lvl * 3 + 1) * baseIndent
@@ -980,1351 +980,9 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
     print >>fo, indent + "initTable(" + resultNode + ");"
     print >>fo, indent + "char * " + var_subqRes + ";\n"
 
-    """
-    Scan all the dimension tables first.
-    """
+    tree_result = generate_code_for_a_node(fo, indent, lvl, tree)
 
-    print >>fo, indent + "// dimension tables: " + str(map(lambda tn: tn.table_name.upper(), joinAttr.dimTables))
-    for tn in joinAttr.dimTables:
-        print >>fo, indent + "struct tableNode *" + tn.table_name.lower() +"Table;"
-
-    print >>fo, indent + "int outFd;"
-    print >>fo, indent + "long outSize;"
-    print >>fo, indent + "char *outTable;"
-    print >>fo, indent + "long offset, tupleOffset;"
-    print >>fo, indent + "int blockTotal;"
-    print >>fo, indent + "struct columnHeader header;\n"
-
-    for tn in joinAttr.dimTables:
-
-        resName = tn.table_name.lower() + "Res"
-        tnName = tn.table_name.lower() + "Table"
-        print >>fo, indent + "// Load columns from the table " + tn.table_name.upper()
-
-        indexList = []
-        colList = []
-        generate_col_list(tn, indexList, colList)
-
-        totalAttr = len(indexList)
-        setTupleNum = 0
-        tupleSize = "0"
-
-        selectList = tn.select_list.tmp_exp_list
-
-        for i in range(0,totalAttr):
-            col = colList[i]
-            ctype = to_ctype(col.column_type)
-            colIndex = int(col.column_name)
-            colLen = type_length(tn.table_name, colIndex, col.column_type)
-            tupleSize += " + " + colLen
-
-            print >>fo, indent + "outFd = open(\""+tn.table_name+str(colIndex)+"\", O_RDONLY);"
-            print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
-
-            if setTupleNum == 0:
-                setTupleNum = 1
-                print >>fo, indent + "blockTotal = header.blockTotal;"
-                print >>fo, indent + "close(outFd);"
-                break
-
-        print >>fo, indent + "offset = 0;"
-        print >>fo, indent + "tupleOffset = 0;"
-        print >>fo, indent + "struct tableNode *" + resName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
-        print >>fo, indent + "CHECK_POINTER("+ resName + ");"
-        print >>fo, indent + "initTable(" + resName + ");"
-        print >>fo, indent + "for(int i = 0; i < blockTotal; i++){\n"
-
-        indent = indent_this_level + baseIndent
-
-        print >>fo, indent + "// Table initialization"
-        print >>fo, indent + tnName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + ");"
-        print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
-        print >>fo, indent + tnName + "->attrType = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrType);"
-        print >>fo, indent + tnName + "->attrSize = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrSize);"
-        print >>fo, indent + tnName + "->attrIndex = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrIndex);"
-        print >>fo, indent + tnName + "->attrTotalSize = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrTotalSize);"
-        print >>fo, indent + tnName + "->dataPos = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataPos);"
-        print >>fo, indent + tnName + "->dataFormat = (int *) malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataFormat);"
-        print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
-
-        for i in range(0,totalAttr):
-            col = colList[i]
-            ctype = to_ctype(col.column_type)
-            colIndex = int(col.column_name)
-            colLen = type_length(tn.table_name, colIndex, col.column_type)
-            tupleSize += " + " + colLen
-
-            print >>fo, indent + "// Load column " + str(colIndex) + ", type: " + col.column_type
-            print >>fo, indent + tnName + "->attrSize[" + str(i) + "] = " + colLen + ";"
-            print >>fo, indent + tnName + "->attrIndex["+ str(i) + "] = " + str(colIndex) + ";"
-            print >>fo, indent + tnName + "->attrType[" + str(i) + "] = " + ctype + ";"
-
-            if POS == 0:
-                print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MEM;"
-            elif POS == 1:
-                print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = PINNED;"
-            elif POS == 2:
-                print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = UVA;"
-            elif POS == 3:
-                print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MMAP;"
-            else:
-                print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MEM;"
-
-            print >>fo, indent + "outFd = open(\"" + tn.table_name + str(colIndex) + "\", O_RDONLY);"
-            print >>fo, indent + "offset = i * sizeof(struct columnHeader) + tupleOffset * " + str(colLen) + ";"
-            print >>fo, indent + "lseek(outFd, offset, SEEK_SET);"
-            print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
-            print >>fo, indent + "offset += sizeof(struct columnHeader);"
-            print >>fo, indent + tnName + "->dataFormat[" + str(i) + "] = header.format;"
-
-            print >>fo, indent + "outSize = header.tupleNum * " + colLen + ";"
-            print >>fo, indent + tnName + "->attrTotalSize[" + str(i) + "] = outSize;\n"
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-            print >>fo, indent + "outTable =(char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
-
-            if CODETYPE == 0:
-                if POS == 1:
-                    print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void **)&" + tnName + "->content[" + str(i) + "], outSize));"
-                    print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
-                elif POS == 2:
-                    print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void **)&" + tnName+"->content["+str(i)+"], outSize));"
-                    print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
-                elif POS == 3:
-                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
-                else:
-                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)memalign(256, outSize);"
-                    print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
-
-            else:
-                if POS == 0:
-                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)memalign(256, outSize);"
-                    print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
-                elif POS == 3:
-                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
-                else:
-                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)clCreateBuffer(context.context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, outSize, NULL, 0);"
-                    print >>fo, indent + "clTmp = clEnqueueMapBuffer(context.queue,(cl_mem)" + tnName + "->content[" + str(i) + "],CL_TRUE,CL_MAP_WRITE,0,outSize,0,0,0,0);"
-                    print >>fo, indent + "memcpy(clTmp,outTable,outSize);"
-                    print >>fo, indent + "clEnqueueUnmapMemObject(context.queue,(cl_mem)" + tnName + "->content[" + str(i) + "],clTmp,0,0,0);"
-
-
-            print >>fo, indent + "munmap(outTable, outSize);"
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-
-            print >>fo, indent + "close(outFd);\n"
-
-        print >>fo, indent + tnName + "->tupleSize = " + tupleSize + ";"
-        print >>fo, indent + tnName + "->tupleNum = header.tupleNum;\n"
-
-        if tn.where_condition is not None:
-            whereList = []
-            relList = []
-            conList = []
-
-            get_where_attr(tn.where_condition.where_condition_exp, whereList, relList, conList)
-            newWhereList = []
-            whereLen = count_whereList(whereList, newWhereList)
-            nested = count_whereNested(tn.where_condition.where_condition_exp)
-
-            if nested != 0:
-                print "Not supported yet: the where expression is too complicated"
-                print 1/0
-
-            relName = tn.table_name.lower() + "Rel"
-            print >>fo, indent + "// Where conditions: " + tn.where_condition.where_condition_exp.evaluate()
-            print >>fo, indent + "struct scanNode " + relName + ";"
-            print >>fo, indent + relName + ".tn = " + tnName + ";"
-            print >>fo, indent + relName + ".hasWhere = 1;"
-            print >>fo, indent + relName + ".whereAttrNum = " + str(whereLen) + ";"
-            print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int)*" + str(len(whereList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
-            print >>fo, indent + relName + ".outputNum = " + str(len(selectList)) + ";"
-            print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
-
-            for i in range(0,len(selectList)):
-                colIndex = selectList[i].column_name
-                outputIndex = indexList.index(colIndex)
-                print >>fo, indent + relName + ".outputIndex[" + str(i) + "] = " + str(outputIndex) + ";"
-
-            for i in range(0,len(newWhereList)):
-                colIndex = indexList.index(newWhereList[i].column_name)
-                print >>fo, indent + relName + ".whereIndex["+str(i) + "] = " + str(colIndex) + ";"
-
-            if keepInGpu ==0:
-                print >>fo, indent + relName + ".KeepInGpu = 0;"
-            else:
-                print >>fo, indent + relName + ".keepInGpu = 1;"
-
-            print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
-
-            print >>fo, indent + "(" + relName + ".filter)->nested = 0;"
-            print >>fo, indent + "(" + relName + ".filter)->expNum = " + str(len(whereList)) + ";"
-            print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *" + str(len(whereList)) + ");"
-            print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
-
-            if tn.where_condition.where_condition_exp.func_name in ["AND","OR"]:
-                print >>fo, indent + "(" + relName + ".filter)->andOr = " + tn.where_condition.where_condition_exp.func_name + ";"
-
-            else:
-                print >>fo, indent + "(" + relName + ".filter)->andOr = EXP;"
-
-            for i in range(0,len(whereList)):
-                colIndex = -1
-                for j in range(0,len(newWhereList)):
-                    if newWhereList[j].compare(whereList[i]) is True:
-                        colIndex = j
-                        break
-
-                if colIndex <0:
-                    print 1/0
-
-                colType = whereList[i].column_type
-                ctype = to_ctype(colType)
-
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
-                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
-                elif relList[i] == "IN" and isinstance(conList[i], basestring):# in ("MOROCCO")
-                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EQ;"
-                else:
-                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
-
-                # Get subquery result here
-                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                    generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], indexList)
-
-
-                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                    print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
-                elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "LIST":
-                    vec_len = len(conList[i].parameter_list)
-                    vec_item_len = type_length(whereList[i].table_name, whereList[i].column_name, whereList[i].column_type)
-                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].vlen  = " + str(vec_len) + ";"
-                    print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ");"
-                    print >>fo, indent + baseIndent + "memset(vec, 0, " + vec_item_len + " * " + str(vec_len) + ");"
-                    for idx in range(0, vec_len):
-                        item = conList[i].parameter_list[idx]
-                        print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &vec, sizeof(char **));"
-                    print >>fo, indent + "}"
-                elif ctype == "INT":
-                    if isinstance(conList[i], ystree.YRawColExp):
-                        con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
-                    else:
-                        con_value = conList[i]
-                    print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "int tmp = " + conList[i] + ";"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(int));"
-                    print >>fo, indent + "}"
-                elif ctype == "FLOAT":
-                    if isinstance(conList[i], ystree.YRawColExp):
-                        con_value = "*(float *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
-                    else:
-                        con_value = conList[i]
-                    print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "float tmp = " + conList[i] + ";"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(float));"
-                    print >>fo, indent + "}"
-                    print 1/0
-                else:
-                    if isinstance(conList[i], ystree.YRawColExp):
-                        con_value = "_" + conList[i].table_name + "_" + str(conList[i].column_name)
-                    else:
-                        con_value = conList[i]
-                    print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + con_value + ");\n"
-
-            if CODETYPE == 0:
-                print >>fo, indent + "struct tableNode *tmp = tableScan(&" + relName + ", &pp);"
-            else:
-                print >>fo, indent + "struct tableNode *tmp = tableScan(&" + relName + ", &context, &pp);"
-
-            print >>fo, indent + "if(blockTotal != 1){"
-
-            if CODETYPE == 0:
-                print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + ", tmp, &pp);"
-            else:
-                print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + ", tmp, &context, &pp);"
-
-            print >>fo, indent + "}else{"
-            print >>fo, indent + baseIndent + "free(" + resName + ");"
-            print >>fo, indent + baseIndent + resName + " = tmp;"
-            print >>fo, indent + "}"
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
-            print >>fo, indent + "freeScan(&" + relName + ");\n"
-            if CODETYPE == 1:
-                print >>fo, indent + "clFinish(context.queue);"
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-
-            ############## end of wherecondition not none
-
-        else:
-            print >>fo, indent + "if(blockTotal != 1){"
-
-            indent = indent_this_level + 2 * baseIndent
-            if CODETYPE == 0:
-                print >>fo, indent + "mergeIntoTable(" + resName + "," + tnName +", &pp);"
-            else:
-                print >>fo, indent + "mergeIntoTable(" + resName + "," + tnName +", &context, &pp);"
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
-            print >>fo, indent + "freeTable(" + tnName + ");"
-            if CODETYPE == 1:
-                print >>fo, indent + "clFinish(context.queue);"
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-            indent = indent_this_level + baseIndent
-            print >>fo, indent + "}else{"
-            indent = indent_this_level + 2 * baseIndent
-            print >>fo, indent + "free(" + resName + ");"
-            print >>fo, indent + resName + " = " + tnName + ";"
-            indent = indent_this_level + baseIndent
-            print >>fo, indent + "}"
-
-        indent = indent_this_level + baseIndent
-        print >>fo, indent + "tupleOffset += header.tupleNum;"
-        indent = indent_this_level
-        print >>fo, indent + "}\n"
-
-
-    intent = indent_this_level
-    if joinType == 0:
-        """
-        Generate the codes for star schema joins.
-        0 represents normal hash join and 1 represents invisible join.
-        """
-
-        selectOnly = len(joinAttr.dimTables) == 0
-        hasWhere = 0
-        factName = joinAttr.factTables[0].table_name.lower() + "Table"
-        resName = joinAttr.factTables[0].table_name.lower() + "Res"
-        setTupleNum = 0
-        factTN = joinAttr.factTables[0]
-
-        selectList = joinAttr.factTables[0].select_list.tmp_exp_list
-
-        indexList = []
-        colList = []
-        generate_col_list(joinAttr.factTables[0], indexList, colList)
-        totalAttr = len(indexList)
-        print >>fo, indent + "// Load the fact table: " + joinAttr.factTables[0].table_name.upper()
-
-        print "fact table: ", joinAttr.factTables[0].table_name
-        print "  select list: ", map(lambda c : c.evaluate(), selectList)
-        print "  index list: ", indexList
-        print "  column list: ", map(lambda c : c.evaluate(), colList)
-
-        for i in range(0,totalAttr):
-            col = colList[i]
-            if isinstance(col, ystree.YRawColExp):
-                colType = col.column_type
-                colIndex = col.column_name
-                ctype = to_ctype(colType)
-                colLen = type_length(joinAttr.factTables[0].table_name, colIndex, colType)
-            elif isinstance(col, ystree.YConsExp):
-                colType = col.cons_type
-                ctype = to_ctype(colType)
-                if cons_type == "INTEGER":
-                    colLen = "sizeof(int)"
-                elif cons_type == "FLOAT":
-                    colLen = "sizeof(float)"
-                else:
-                    colLen = str(len(col.cons_value))
-            elif isinstance(col, ystree.YFuncExp):
-                print 1/0
-
-            if setTupleNum == 0:
-                setTupleNum = 1
-                print >>fo, indent + "outFd = open(\"" + joinAttr.factTables[0].table_name + str(colIndex) + "\", O_RDONLY);"
-                print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
-                print >>fo, indent + "blockTotal = header.blockTotal;"
-                print >>fo, indent + "close(outFd);"
-                break
-
-        print >>fo, indent + "offset = 0;"
-        print >>fo, indent + "long blockSize["+str(totalAttr) + "];"
-        print >>fo, indent + "for(int i = 0; i < " + str(totalAttr) + "; i++)"
-        print >>fo, indent + baseIndent + "blockSize[i] = 0;"
-        print >>fo, indent + "for(int i = 0; i < blockTotal; i++){\n"
-
-        indent = indent_this_level + baseIndent
-        print >>fo, indent + "// Table node initialization"
-        print >>fo, indent + "struct tableNode *" + factName + " = (struct tableNode*)malloc(sizeof(struct tableNode));"
-        print >>fo, indent + "CHECK_POINTER(" + factName + ");"
-        print >>fo, indent + factName + "->totalAttr = " + str(totalAttr) + ";"
-        print >>fo, indent + factName + "->attrType = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->attrType);"
-        print >>fo, indent + factName + "->attrSize = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->attrSize);"
-        print >>fo, indent + factName + "->attrIndex = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->attrIndex);"
-        print >>fo, indent + factName + "->attrTotalSize = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->attrTotalSize);"
-        print >>fo, indent + factName + "->dataPos = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->dataPos);"
-        print >>fo, indent + factName + "->dataFormat = (int *)malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->dataFormat);"
-        print >>fo, indent + factName + "->content = (char **)malloc(sizeof(char *)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->content);\n"
-
-        tupleSize = "0"
-        for i in range(0, totalAttr):
-            col = colList[i]
-            if isinstance(col, ystree.YRawColExp):
-                colType = col.column_type
-                colIndex = col.column_name
-                ctype = to_ctype(colType)
-                colLen = type_length(joinAttr.factTables[0].table_name, colIndex, colType)
-            elif isinstance(col, ystree.YConsExp):
-                colType = col.cons_type
-                ctype = to_ctype(colType)
-                if cons_type == "INTEGER":
-                    colLen = "sizeof(int)"
-                elif cons_type == "FLOAT":
-                    colLen = "sizeof(float)"
-                else:
-                    colLen = str(len(col.cons_value))
-            elif isinstance(col, ystree.YFuncExp):
-                print 1/0
-
-            tupleSize += " + " + colLen
-            print >>fo, indent + "// Load the column " + str(colIndex) + ", type: " + ctype
-            print >>fo, indent + factName + "->attrType[" + str(i) + "] = " + ctype + ";"
-            print >>fo, indent + factName + "->attrSize[" + str(i) + "] = " + colLen + ";"
-            print >>fo, indent + factName + "->attrIndex[" + str(i) + "] = " + str(colIndex) + ";"
-
-            if POS == 0:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = MEM;"
-            elif POS == 1:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = PINNED;"
-            elif POS == 2:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = UVA;"
-            elif POS == 3:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = MMAP;"
-            else:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = MEM;"
-
-            print >>fo, indent + "outFd = open(\"" + joinAttr.factTables[0].table_name + str(colIndex) + "\", O_RDONLY);"
-            print >>fo, indent + "offset = i * sizeof(struct columnHeader) + blockSize[" + str(i) + "];"
-            print >>fo, indent + "lseek(outFd, offset, SEEK_SET);"
-            print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
-            print >>fo, indent + "blockSize[" + str(i) + "] += header.blockSize;"
-            print >>fo, indent + "offset += sizeof(struct columnHeader);"
-            print >>fo, indent + factName + "->dataFormat[" + str(i) + "] = header.format;"
-            print >>fo, indent + "outSize = header.blockSize;\n"
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
-            print >>fo, indent + "outTable = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
-
-            if CODETYPE == 0:
-                if POS == 0:
-                    print >>fo, indent + factName + "->content[" + str(i) + "] = (char *)malloc(outSize);"
-                    print >>fo, indent + "CHECK_POINTER(" + factName + "->content[" + str(i) + "]);"
-                    print >>fo, indent + "memcpy("+factName+"->content[" + str(i) + "], outTable, outSize);"
-                elif POS == 1:
-                    print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void**)&" + factName + "->content[" + str(i) + "], outSize));"
-                    print >>fo, indent + "memcpy(" + factName + "->content[" + str(i) + "], outTable, outSize);"
-                elif POS == 2:
-                    print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void**)&"+factName+"->content[" + str(i) + "], outSize));"
-                    print >>fo, indent + "memcpy(" + factName + "->content[" + str(i) + "], outTable, outSize);"
-                elif POS == 3:
-                    print >>fo, indent + factName + "->content[" + str(i) + "] = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
-                else:
-                    print >>fo, indent + factName + "->content[" + str(i) + "] = (char*)memalign(256, outSize);"
-                    print >>fo, indent + "memcpy(" + factName + "->content[" + str(i) + "], outTable, outSize);"
-
-            else:
-                if POS == 0:
-                    print >>fo, indent + factName + "->content[" + str(i) + "] = (char *)memalign(256, outSize);"
-                    print >>fo, indent + "memcpy(" + factName + "->content[" + str(i) + "], outTable, outSize);"
-                elif POS == 3:
-                    print >>fo, indent + factName + "->content[" + str(i) + "] = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
-                else:
-                    print >>fo, indent + factName + "->content["+str(i)+"] = (char *)clCreateBuffer(context.context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, outSize, NULL, 0);"
-                    print >>fo, indent + "clTmp = clEnqueueMapBuffer(context.queue,(cl_mem)"+factName+"->content["+str(i)+"], CL_TRUE, CL_MAP_WRITE, 0, outSize, 0, 0, 0, 0);"
-                    print >>fo, indent + "memcpy(clTmp,outTable,outSize);"
-                    print >>fo, indent + "clEnqueueUnmapMemObject(context.queue, (cl_mem)"+factName+"->content["+str(i)+"], clTmp, 0, 0, 0);"
-
-
-            print >>fo, indent + "munmap(outTable, outSize);"
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec) * BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-            print >>fo, indent + "close(outFd);"
-            print >>fo, indent + factName + "->attrTotalSize[" + str(i) + "] = outSize;\n"
-
-        print >>fo, indent + factName + "->tupleSize = " + tupleSize + ";"
-
-        print >>fo, indent + factName + "->tupleNum = header.tupleNum;\n"
-
-        ################# end of reading the needed attributes of fact table from disk ###############
-
-        if joinAttr.factTables[0].where_condition is not None:
-            hasWhere = 1
-            whereExp = joinAttr.factTables[0].where_condition.where_condition_exp
-            whereList = []
-            relList = []
-            conList = []
-
-            get_where_attr(whereExp, whereList, relList, conList)
-            newWhereList = []
-            whereLen = count_whereList(whereList, newWhereList)
-            nested = count_whereNested(whereExp)
-
-            print "whereList: ", whereList
-            print "relList: ", relList
-            print "conList: ", conList
-
-            if nested !=0:
-                print "Not supported yet: the where expression is too complicated"
-                print 1/0
-
-            relName = joinAttr.factTables[0].table_name.lower() + "Rel"
-            print >>fo, indent + "// WHERE condition: " + whereExp.evaluate()
-            print >>fo, indent + "struct scanNode " + relName + ";"
-            print >>fo, indent + relName + ".tn = " + factName + ";"
-            print >>fo, indent + relName + ".hasWhere = 1;"
-            print >>fo, indent + relName + ".whereAttrNum = " + str(whereLen) + ";"
-            print >>fo, indent + relName + ".outputNum = " + str(len(selectList)) + ";"
-            print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int) * " + str(whereLen) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
-            print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
-
-            for i in range(0,len(newWhereList)):
-                colIndex = indexList.index(newWhereList[i].column_name)
-                print >>fo, indent + relName + ".whereIndex["+str(i) + "] = " + str(colIndex) + ";"
-
-            for i in range(0,len(selectList)):
-                colIndex = selectList[i].column_name
-                outputIndex = indexList.index(colIndex)
-                print >>fo, indent + relName + ".outputIndex[" + str(i) + "] = " + str(outputIndex) + ";"
-
-            if keepInGpu == 0:
-                print >>fo, indent + relName + ".keepInGpu = 0;"
-            else:
-                print >>fo, indent + relName + ".keepInGpu = 1;"
-
-            print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
-
-            print >>fo, indent + "(" + relName + ".filter)->nested = 0;"
-            print >>fo, indent + "(" + relName + ".filter)->expNum = " + str(len(whereList)) + ";"
-            print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) * " + str(len(whereList)) + ");"
-            print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
-
-            if joinAttr.factTables[0].where_condition.where_condition_exp.func_name in ["AND","OR"]:
-                print >>fo, indent + "(" + relName + ".filter)->andOr = " + joinAttr.factTables[0].where_condition.where_condition_exp.func_name + ";"
-
-            else:
-                print >>fo, indent + "(" + relName + ".filter)->andOr = EXP;"
-
-            for i in range(0,len(whereList)):
-                colIndex = -1
-                for j in range(0,len(newWhereList)):
-                    if newWhereList[j].compare(whereList[i]) is True:
-                        colIndex = j
-                        break
-
-                if colIndex < 0:
-                    print 1/0
-
-                colType = whereList[i].column_type
-                ctype = to_ctype(colType)
-
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
-
-                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
-                elif relList[i] == "IN" and isinstance(conList[i], basestring):
-                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EQ;"
-                else:
-                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
-
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
-
-                # Get subquery result here
-                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                    generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], indexList)
-
-                if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                    print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
-                elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "LIST":
-                    vec_len = len(conList[i].parameter_list)
-                    vec_item_len = type_length(whereList[i].table_name, whereList[i].column_name, whereList[i].column_type)
-                    print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].vlen  = " + str(vec_len) + ";"
-                    print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ");"
-                    print >>fo, indent + baseIndent + "memset(vec, 0, " + vec_item_len + " * " + str(vec_len) + ");"
-                    for idx in range(0, vec_len):
-                        item = conList[i].parameter_list[idx]
-                        print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &vec, sizeof(char **));"
-                    print >>fo, indent + "}"
-                elif ctype == "INT":
-                    if isinstance(conList[i], ystree.YRawColExp):
-                        con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
-                    else:
-                        con_value = conList[i]
-                    print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "int tmp = " + conList[i] + ";"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(int));"
-                    print >>fo, indent + "}"
-                elif ctype == "FLOAT":
-                    if isinstance(conList[i], ystree.YRawColExp):
-                        con_value = "*(float *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
-                    else:
-                        con_value = conList[i]
-                    print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "float tmp = " + conList[i] + ";"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(float));"
-                    print >>fo, indent + "}"
-                else:
-                    if isinstance(conList[i], ystree.YRawColExp):
-                        con_value = "_" + conList[i].table_name + "_" + str(conList[i].column_name)
-                    else:
-                        con_value = conList[i]
-                    print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + con_value + ");\n"
-
-            if CODETYPE == 0:
-                print >>fo, indent + "struct tableNode * " + resName + " = tableScan(&" + relName + ", &pp);"
-            else:
-                print >>fo, indent + "struct tableNode * " + resName + " = tableScan(&" + relName + ", &context, &pp);"
-
-            if selectOnly == 0:
-                print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
-                print >>fo, indent + "freeScan(&" + relName + ");\n"
-                if CODETYPE == 1:
-                    print >>fo, indent + "clFinish(context.queue);"
-                    print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-                    print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-
-        else:
-            hasWhere = 0
-            print >>fo, indent + "struct tableNode * " + resName + " = " + factName + ";"
-
-        factName = resName
-        for i in range(0,len(joinAttr.dimTables)):
-            jName = "jNode" + str(i)
-            dimName = joinAttr.dimTables[i].table_name.lower() + "Res"
-            print >>fo, indent + "struct joinNode " + jName + ";"
-            print >>fo, indent + jName + ".leftTable = " + factName + ";"
-            print >>fo, indent + jName + ".rightTable = " + dimName + ";"
-
-            lOutList = joinAttr.outIndex[i][0]
-            rOutList = joinAttr.outIndex[i][1]
-
-            lPosList = joinAttr.outPos[i][0]
-            rPosList = joinAttr.outPos[i][1]
-
-            lAttrList = joinAttr.outAttr[i][0]
-            rAttrList = joinAttr.outAttr[i][1]
-
-            print >>fo, indent + jName + ".totalAttr = " + str(len(rOutList) + len(lOutList)) + ";"
-            print >>fo, indent + jName + ".keepInGpu = (int *) malloc(sizeof(int) * " + str(len(rOutList) + len(lOutList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + jName + ".keepInGpu);"
-
-            if keepInGpu == 0:
-                print >>fo, indent + "for(int k=0; k<" + str(len(rOutList) + len(lOutList))  + "; k++)"
-                print >>fo, indent + baseIndent + jName + ".keepInGpu[k] = 0;"
-            else:
-                print >>fo, indent + "for(int k=0; k<" + str(len(rOutList) + len(lOutList))  + "; k++)"
-                print >>fo, indent + baseIndent + jName + ".keepInGpu[k] = 1;"
-
-            print >>fo, indent + jName + ".rightOutputAttrNum = " + str(len(rOutList)) + ";"
-            print >>fo, indent + jName + ".leftOutputAttrNum = " + str(len(lOutList)) + ";"
-            print >>fo, indent + jName + ".leftOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputAttrType);"
-            print >>fo, indent + jName + ".leftOutputIndex = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputIndex);"
-            print >>fo, indent + jName + ".leftPos = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + jName + ".leftPos);"
-            print >>fo, indent + jName + ".tupleSize = 0;"
-            for j in range(0,len(lOutList)):
-                ctype = to_ctype(lAttrList[j].type)
-                print >>fo, indent + jName + ".leftOutputIndex[" + str(j) + "] = " + str(lOutList[j]) + ";"
-                print >>fo, indent + jName + ".leftOutputAttrType[" + str(j) + "] = " + ctype + ";"
-                print >>fo, indent + jName + ".leftPos[" + str(j) + "] = " + str(lPosList[j]) + ";"
-                print >>fo, indent + jName + ".tupleSize += " + factName + "->attrSize[" + str(lOutList[j]) + "];"
-
-            print >>fo, indent + jName + ".rightOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + jName + ".rightOutputAttrType);"
-            print >>fo, indent + jName + ".rightOutputIndex = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + jName + ".rightOutputIndex);"
-            print >>fo, indent + jName + ".rightPos = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + jName + ".rightPos);"
-            for j in range(0,len(rOutList)):
-                ctype = to_ctype(rAttrList[j].type)
-                print >>fo, indent + jName + ".rightOutputIndex[" + str(j) + "] = " + str(rOutList[j]) + ";"
-                print >>fo, indent + jName + ".rightOutputAttrType[" + str(j) + "] = " + ctype + ";"
-                print >>fo, indent + jName + ".rightPos[" + str(j) + "] = " + str(rPosList[j]) + ";"
-                print >>fo, indent + jName + ".tupleSize += " + dimName + "->attrSize[" + str(rOutList[j]) + "];"
-
-            print >>fo, indent + jName + ".rightKeyIndex = " + str(joinAttr.dimIndex[i]) + ";"
-            print >>fo, indent + jName + ".leftKeyIndex = " + str(joinAttr.factIndex[i]) + ";"
-
-            if CODETYPE == 0:
-                print >>fo, indent + "struct tableNode *join" + str(i) + " = hashJoin(&" + jName + ",&pp);\n"
-            else:
-                print >>fo, indent + "struct tableNode *join" + str(i) + " = hashJoin(&" + jName + ", &context, &pp);\n"
-
-            factName = "join" + str(i)
-
-        if selectOnly == 0:
-            print >>fo, indent + "if(blockTotal != 1){"
-
-            indent = indent_this_level + 2 * baseIndent
-            if CODETYPE == 0:
-                print >>fo, indent + "mergeIntoTable("+resultNode+",join" + str(i) + ", &pp);"
-            else:
-                print >>fo, indent + "mergeIntoTable("+resultNode+",join" + str(i) + ", &context, &pp);"
-
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-            for i in range(0,len(joinAttr.dimTables)):
-                jName = "join" + str(i)
-                print >>fo, indent + "freeTable(" + jName + ");"
-
-            if CODETYPE == 1:
-                print >>fo, indent + "clFinish(context.queue);"
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-
-            indent = indent_this_level + baseIndent
-            print >>fo, indent + "}else{"
-            indent = indent_this_level + 2 * baseIndent
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-            print >>fo, indent + "freeTable(" +resultNode + ");"
-            print >>fo, indent + resultNode+" = join" + str(i) + ";"
-            for i in range(0,len(joinAttr.dimTables)-1):
-                jName = "join" + str(i)
-                print >>fo, indent + "freeTable(" + jName + ");"
-
-            if CODETYPE == 1:
-                print >>fo, indent + "clFinish(context.queue);"
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-            indent = indent_this_level + baseIndent
-            print >>fo, indent + "}"
-
-        else:
-            indent = indent_this_level + baseIndent
-            print >>fo, indent + "if(blockTotal != 1){"
-
-            if CODETYPE == 0:
-                print >>fo, indent + baseIndent + "mergeIntoTable("+resultNode+"," + resName + ",&pp);"
-            else:
-                print >>fo, indent + baseIndent + "mergeIntoTable("+resultNode+"," + resName + ", &context, &pp);"
-
-            print >>fo, indent + "}else{"
-            indent = indent_this_level + 2 * baseIndent
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-            print >>fo, indent + "freeTable(" +resultNode + ");"
-            print >>fo, indent + resultNode + " = " + resName + ";"
-
-            if CODETYPE == 1:
-                print >>fo, indent + "clFinish(context.queue);"
-
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-
-            indent = indent_this_level + baseIndent
-            print >>fo, indent + "}"
-
-            if hasWhere != 0:
-                indent = indent_this_level + baseIndent
-                print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-                print >>fo, indent + "freeScan(&" + relName + ");\n"
-
-                if CODETYPE == 1:
-                    print >>fo, indent + "clFinish(context.queue);"
-
-                print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-                print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-
-        indent = indent_this_level
-        print >>fo, indent + "}\n"
-
-
-    elif joinType == 1:
-        """
-        Generating codes for invisible join.
-        """
-
-        factName = joinAttr.factTables[0].table_name.lower() + "Table"
-        resName = joinAttr.factTables[0].table_name.lower() + "Res"
-        selectOnly = len(joinAttr.dimTables) == 0
-        hasWhere = 0
-        setTupleNum = 0
-
-        selectList = joinAttr.factTables[0].select_list.tmp_exp_list
-
-        indexList = []
-        colList = []
-        generate_col_list(joinAttr.factTables[0],indexList,colList)
-        totalAttr = len(indexList)
-
-        for i in range(0,totalAttr):
-            col = colList[i]
-            if isinstance(col, ystree.YRawColExp):
-                colType = col.column_type
-                colIndex = col.column_name
-                ctype = to_ctype(colType)
-                colLen = type_length(joinAttr.factTables[0].table_name, colIndex, colType)
-            elif isinstance(col, ystree.YConsExp):
-                colType = col.cons_type
-                ctype = to_ctype(colType)
-                if cons_type == "INTEGER":
-                    colLen = "sizeof(int)"
-                elif cons_type == "FLOAT":
-                    colLen = "sizeof(float)"
-                else:
-                    colLen = str(len(col.cons_value))
-            elif isinstance(col, ystree.YFuncExp):
-                print 1/0
-
-            if setTupleNum == 0:
-                setTupleNum = 1
-                print >>fo, indent + "outFd = open(\"" + joinAttr.factTables[0].table_name + str(colIndex) + "\",O_RDONLY);"
-                print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
-                print >>fo, indent + "blockTotal = header.blockTotal;"
-                print >>fo, indent + "close(outFd);"
-
-        factIndex = []
-        factInputList = joinAttr.factTables[0].select_list.tmp_exp_list
-        dimNum = len(joinAttr.dimTables)
-        outputList = joinAttr.joinNode[dimNum-1].select_list.tmp_exp_list
-        outputNum =  len(outputList)
-
-        jName = "jNode"
-        print >>fo, indent + "struct joinNode " + jName + ";"
-        print >>fo, indent + jName + ".dimNum = " + str(dimNum) + ";"
-        print >>fo, indent + jName + ".dimTable = (struct tableNode **) malloc(sizeof(struct tableNode) * " + jName + ".dimNum);"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".dimTable);"
-        print >>fo, indent + jName + ".factIndex = (int *) malloc(sizeof(int) * " + jName + ".dimNum);"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".factIndex);"
-        print >>fo, indent + jName + ".dimIndex = (int *) malloc(sizeof(int) * " + jName + ".dimNum);\n"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".dimIndex);"
-
-        for i in joinAttr.factIndex:
-            for j in range(0, len(factInputList)):
-                if i == factInputList[j].column_name:
-                    break
-                factIndex.append(j)
-
-        for i in range(0, dimNum):
-            print >>fo, indent + jName + ".dimIndex[" + str(i) + "] = " + str(joinAttr.dimIndex[i]) + ";"
-            print >>fo, indent + jName + ".factIndex[" + str(i) + "] = " + str(factIndex[i]) + ";"
-            dimName = joinAttr.dimTables[i].table_name.lower() + "Res"
-            print >>fo, indent + jName + ".dimTable["+str(i) + "] = " + dimName + ";\n"
-
-        print >>fo, indent + jName + ".totalAttr = " + str(outputNum) + ";"
-        print >>fo, indent + jName + ".keepInGpu = (int *) malloc(sizeof(int) * " + str(outputNum) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".keepInGpu);"
-
-        if keepInGpu == 0:
-            print >>fo, indent + "for(int k = 0; k < " + str(outputNum)  + "; k++)"
-            print >>fo, indent + baseIndent + jName + ".keepInGpu[k] = 0;\n"
-        else:
-            print >>fo, indent + "for(int k=0;k<" + str(outputNum)  + ";k++)"
-            print >>fo, indent + baseIndent + jName + ".keepInGpu[k] = 1;\n"
-
-        print >>fo, indent + jName +".attrType = (int *) (malloc(sizeof(int) * "+ jName + ".totalAttr));"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".attrType);"
-        print >>fo, indent + jName +".attrSize = (int *) (malloc(sizeof(int) * "+ jName + ".totalAttr));"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".attrSize);"
-
-        tupleSize = "0"
-
-        for i in range(0, outputNum):
-            colType = outputList[i].column_type
-            ctype = to_ctype(colType)
-            newExp = ystree.__trace_to_leaf__(joinAttr.joinNode[dimNum-1], outputList[i], False)
-            colLen = type_length(newExp.table_name,newExp.column_name,colType)
-            tupleSize = tupleSize + "+" + colLen
-            print >>fo, indent + jName + ".attrType[" + str(i) + "] = " + ctype + ";"
-            print >>fo, indent + jName + ".attrSize[" + str(i) + "] = " + str(colLen) + ";"
-
-        print >>fo, indent + jName + ".tupleSize = " + tupleSize + ";\n"
-
-        factOutputNum = 0
-        factOutputIndex = []
-        dimOutputExp = []
-        factOutputPos = []
-        dimPos = []
-
-        for i in range(0, outputNum):
-            newExp = ystree.__trace_to_leaf__(joinAttr.joinNode[dimNum-1], outputList[i], False)
-            if newExp.table_name == joinAttr.factTables[0].table_name:
-                factOutputNum +=1
-                for j in range(0, len(factInputList)):
-                    if newExp.column_name == factInputList[j].column_name:
-                        break
-                    factOutputIndex.append(j)
-                    factOutputPos.append(i)
-
-            else:
-                dimOutputExp.append(newExp)
-                dimPos.append(i)
-
-
-        print >>fo, indent + jName + ".factOutputNum = " + str(factOutputNum) + ";"
-        print >>fo, indent + jName + ".factOutputIndex = (int *) malloc(" + jName + ".factOutputNum * sizeof(int));"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".factOutputIndex);"
-        print >>fo, indent + jName + ".factOutputPos = (int *) malloc(" + jName + ".factOutputNum * sizeof(int));"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".factOutputpos);"
-        for i in range(0, factOutputNum):
-            print >>fo, indent + jName + ".factOutputIndex[" + str(i) + "] = " + str(factOutputIndex[i]) + ";"
-            print >>fo, indent + jName + ".factOutputPos[" + str(i) + "] = " + str(factOutputPos[i]) + ";"
-
-        dimOutputTotal = outputNum - factOutputNum
-
-        print >>fo, indent + jName + ".dimOutputTotal = " + str(dimOutputTotal) + ";"
-        print >>fo, indent + jName + ".dimOutputNum = (int *) malloc( sizeof(int) * " + jName + ".dimNum);"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".dimOutputNum);"
-        print >>fo, indent + jName + ".dimOutputIndex = (int **) malloc( sizeof(int*) * " + jName + ".dimNum);"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".dimOutputIndex);"
-        print >>fo, indent + jName + ".dimOutputPos = (int *) malloc( sizeof(int) * " + jName + ".dimOutputTotal);"
-        print >>fo, indent + "CHECK_POINTER(" + jName + ".dimOutputPos);"
-
-        dimOutputPos = []
-        for i in range(0, len(joinAttr.dimTables)):
-
-            dimOutputNum = len(joinAttr.outIndex[i][1])
-            print >>fo, indent + jName + ".dimOutputNum[" + str(i) + "] = " + str(dimOutputNum) + ";"
-
-            if dimOutputNum >0:
-                print >>fo, indent + jName + ".dimOutputIndex[" + str(i) + "] = (int *) malloc(sizeof(int) *" +str(dimOutputNum) + ");"
-                print >>fo, indent + "CHECK_POINTER(" + jName + ".dimOutputIndex);"
-                dimTableName = joinAttr.dimTables[i].table_name
-                dimExp = []
-                for exp in dimOutputExp:
-                    if exp.table_name == dimTableName:
-                        dimExp.append(exp)
-                        pos = dimPos[dimOutputExp.index(exp)]
-                        dimOutputPos.append(pos)
-
-                for exp in dimExp:
-                    tmpList = joinAttr.dimTables[i].select_list.tmp_exp_list
-                    for j in range(0, len(tmpList)):
-                        if tmpList[j].column_name == exp.column_name:
-                            print >>fo, indent + jName + ".dimOutputIndex[" + str(i) + "][" + str(dimExp.index(exp)) + "] = " + str(j) + ";"
-                            break
-
-        for i in range(0, dimOutputTotal):
-            print >>fo, indent + jName + ".dimOutputPos[" + str(i) + "] = " + str(dimOutputPos[i]) + ";"
-
-        totalAttr = len(colList)
-        print >>fo, indent + "long blockSize["+str(totalAttr) + "];"
-        print >>fo, indent + "for(int i = 0; i < " + str(totalAttr) + "; i++)"
-        print >>fo, indent + baseIndent + "blockSize[i] = 0;"
-        print >>fo, indent + "offset = 0;\n"
-
-        print >>fo, indent + "for(int i = 0; i < blockTotal; i++){\n"
-
-        indent = indent_this_level + baseIndent
-        print >>fo, indent + "struct tableNode *" + factName + " = (struct tableNode*)malloc(sizeof(struct tableNode));"
-        print >>fo, "\t\tCHECK_POINTER(" + factName + ");"
-        print >>fo, indent + factName + "->totalAttr = " + str(totalAttr) + ";"
-        print >>fo, indent + factName + "->attrType = (int *) malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->attrType);"
-        print >>fo, indent + factName + "->attrSize = (int *) malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->attrSize);"
-        print >>fo, indent + factName + "->attrIndex = (int *) malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->attrIndex);"
-        print >>fo, indent + factName + "->attrTotalSize = (int *) malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->attrTotalSize);"
-        print >>fo, indent + factName + "->dataPos = (int *) malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->dataPos);"
-        print >>fo, indent + factName + "->dataFormat = (int *) malloc(sizeof(int)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->dataFormat);"
-        print >>fo, indent + factName + "->content = (char **) malloc(sizeof(char *)*" + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + factName + "->content);"
-
-        tupleSize = "0"
-        for i in range(0,totalAttr):
-            col = colList[i]
-            if isinstance(col, ystree.YRawColExp):
-                colType = col.column_type
-                colIndex = col.column_name
-                ctype = to_ctype(colType)
-                colLen = type_length(joinAttr.factTables[0].table_name, colIndex, colType)
-            elif isinstance(col, ystree.YConsExp):
-                colType = col.cons_type
-                ctype = to_ctype(colType)
-                if cons_type == "INTEGER":
-                    colLen = "sizeof(int)"
-                elif cons_type == "FLOAT":
-                    colLen = "sizeof(float)"
-                else:
-                    colLen = str(len(col.cons_value))
-            elif isinstance(col, ystree.YFuncExp):
-                print 1/0
-
-            tupleSize += " + " + colLen
-            print >>fo, indent + factName + "->attrType[" + str(i) + "] = " + ctype + ";"
-            print >>fo, indent + factName + "->attrSize[" + str(i) + "] = " + colLen + ";"
-            print >>fo, indent + factName + "->attrIndex[" + str(i) + "] = " + str(colIndex) + ";"
-
-            if POS == 0:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = MEM;"
-            elif POS == 1:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = PINNED;"
-            elif POS == 2:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = UVA;"
-            elif POS == 3:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = MMAP;"
-            else:
-                print >>fo, indent + factName + "->dataPos[" + str(i) + "] = MEM;"
-
-        tupleSize += ";\n"
-        print >>fo, indent + factName + "->tupleSize = " + tupleSize
-
-        for i in range(0,totalAttr):
-            col = colList[i]
-            colType = col.column_type
-            colIndex =  col.column_name
-            colLen = type_length(joinAttr.factTables[0].table_name, colIndex, colType)
-
-            print >>fo, indent + "outFd = open(\"" + joinAttr.factTables[0].table_name + str(colIndex) + "\", O_RDONLY);"
-            print >>fo, indent + "offset = i*sizeof(struct columnHeader) + blockSize["+str(i)+"];"
-            print >>fo, indent + "lseek(outFd,offset,SEEK_SET);"
-            print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
-            print >>fo, indent + "blockSize[" + str(i) + "] += header.blockSize;"
-            print >>fo, indent + "offset += sizeof(struct columnHeader);"
-            print >>fo, indent + factName + "->dataFormat[" + str(i) + "] = header.format;"
-            print >>fo, indent + "outSize = header.blockSize;"
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-            print >>fo, indent + "outTable = (char *)mmap(0,outSize,PROT_READ,MAP_SHARED,outFd,offset);"
-
-            if CODETYPE == 0:
-                if POS == 0:
-                    print >>fo, indent + factName + "->content[" + str(i) + "] = (char*)malloc(outSize);\n"
-                    print >>fo, indent + "CHECK_POINTER(" + factName + "->content[" + str(i) + "];"
-                elif POS == 1:
-                    print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void**)&"+factName+"->content["+str(i)+"],outSize));"
-                elif POS == 2:
-                    print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void**)&"+factName+"->content["+str(i)+"],outSize));"
-                elif POS == 3:
-                    print >>fo, indent + factName + "->content["+str(i)+"] = (char *)mmap(0,outSize,PROT_READ,MAP_SHARED,outFd,offset);"
-                else:
-                    print >>fo, indent + factName + "->content[" + str(i) + "] = (char *)memalign(256,outSize);\n"
-
-                print >>fo, indent + "memcpy("+factName+"->content["+str(i)+"],outTable,outSize);"
-
-            else:
-                if POS == 0:
-                    print >>fo, indent + factName+"->content["+str(i)+"] = (char *)memalign(256,outSize);"
-                    print >>fo, indent + "memcpy("+factName+"->content["+str(i)+"],outTable,outSize);"
-                elif POS == 3:
-                    print >>fo, indent + factName+"->content["+str(i)+"] = (char *)mmap(0,outSize,PROT_READ,MAP_SHARED,outFd,offset);"
-                else:
-                    print >>fo, indent + factName+"->content["+str(i)+"] = (char *)clCreateBuffer(context.context,CL_MEM_READ_ONLY|CL_MEM_ALLOC_HOST_PTR,outSize,NULL,0);"
-                    print >>fo, indent + "clTmp = clEnqueueMapBuffer(context.queue,(cl_mem)"+factName+"->content["+str(i)+"],CL_TRUE,CL_MAP_WRITE,0,outSize,0,0,0,0);"
-                    print >>fo, indent + "memcpy(clTmp,outTable,outSize);"
-                    print >>fo, indent + "clEnqueueUnmapMemObject(context.queue,(cl_mem)"+factName+"->content["+str(i)+"],clTmp,0,0,0);"
-
-
-            print >>fo, indent + "munmap(outTable,outSize);"
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-            print >>fo, indent + "close(outFd);"
-            print >>fo, indent + factName + "->attrTotalSize[" + str(i) + "] = outSize;"
-
-        print >>fo, indent + factName + "->tupleNum = header.tupleNum;"
-
-        if joinAttr.factTables[0].where_condition is not None:
-            hasWhere = 1
-            whereExp = joinAttr.factTables[0].where_condition.where_condition_exp
-            whereList = []
-            relList = []
-            conList = []
-
-            get_where_attr(whereExp,whereList,relList,conList)
-            newWhereList = []
-            whereLen = count_whereList(whereList, newWhereList)
-            nested = count_whereNested(whereExp)
-
-            if nested !=0:
-                print "Not supported yet: the where expression is too complicated"
-                print 1/0
-
-            relName = joinAttr.factTables[0].table_name.lower() + "Rel"
-            print >>fo, indent + "struct scanNode " + relName + ";"
-            print >>fo, indent + relName + ".tn = " + factName + ";"
-            print >>fo, indent + relName + ".hasWhere = 1;"
-            print >>fo, indent + relName + ".outputNum = " + str(len(selectList)) + ";"
-            print >>fo, indent + relName + ".whereAttrNum = " + str(whereLen) + ";"
-            print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int)*" + str(whereLen) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
-            print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int)*" + str(len(selectList)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
-
-            if keepInGpu == 0:
-                print >>fo, indent + relName + ".keepInGpu = 0;"
-            else:
-                print >>fo, indent + relName + ".keepInGpu = 1;"
-
-            for i in range(0,len(newWhereList)):
-                colIndex = int(newWhereList[i].column_name)
-                print >>fo, indent + relName + ".whereIndex["+str(i) + "] = " + str(colIndex) + ";"
-
-            for i in range(0,len(selectList)):
-                colIndex = selectList[i].column_name
-                outputIndex = indexList.index(colIndex)
-                print >>fo, indent + relName + ".outputIndex[" + str(i) + " ] = " + str(outputIndex) + ";"
-
-            print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
-            print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
-
-            print >>fo, indent + "(" + relName + ".filter)->nested = 0;"
-            print >>fo, indent + "(" + relName + ".filter)->expNum = " + str(len(whereList)) + ";"
-            print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*) malloc(sizeof(struct whereExp) *" + str(len(whereList)) + ");"
-            print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
-
-            if joinAttr.factTables[0].where_condition.where_condition_exp.func_name in ["AND","OR"]:
-                print >>fo, indent + "(" + relName + ".filter)->andOr = " + joinAttr.factTables[0].where_condition.where_condition_exp.func_name + ";"
-
-            else:
-                print >>fo, indent + "(" + relName + ".filter)->andOr = EXP;"
-
-            for i in range(0,len(whereList)):
-                colIndex = -1
-                for j in range(0,len(newWhereList)):
-                    if newWhereList[j].compare(whereList[i]) is True:
-                        colIndex = j
-                        break
-
-                if colIndex <0:
-                    print 1/0
-
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
-                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM";
-
-                colType = whereList[i].column_type
-                ctype = to_ctype(colType)
-
-                if ctype == "INT":
-                    print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "int tmp = " + conList[i] + ";"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(int));"
-                    print >>fo, indent + "}"
-
-                elif ctype == "FLOAT":
-
-                    print >>fo, indent + "{"
-                    print >>fo, indent + baseIndent + "float tmp = " + conList[i] + ";"
-                    print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp,sizeof(float));"
-                    print >>fo, indent + "}"
-                    print 1/0
-                else:
-                    print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content," + conList[i] + ");\n"
-
-            if CODETYPE == 0:
-                print >>fo, indent + "struct tableNode * " + resName + " = tableScan(&" + relName + ", &pp);"
-            else:
-                print >>fo, indent + "struct tableNode * " + resName + " = tableScan(&" + relName + ", &context,&pp);"
-
-            if selectOnly == 0:
-                print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-                print >>fo, indent + "freeScan(&" + relName + ");\n"
-
-                if CODETYPE == 1:
-                    print >>fo, indent + "clFinish(context.queue);"
-                    print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-                    print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-
-        else:
-            hasWhere = 0
-            print >>fo, indent + "struct tableNode * " + resName + " = " + factName + ";"
-
-        print >>fo, indent + jName + ".factTable = " + resName + ";"
-
-        if CODETYPE == 0:
-            print >>fo, indent + "struct tableNode *join1 = inviJoin(&" + jName + ", &pp);"
-        else:
-            print >>fo, indent + "struct tableNode *join1 = inviJoin(&" + jName + ", &context,&pp);"
-
-        print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-        print >>fo, indent + "freeTable(" + resName + ");"
-
-        if CODETYPE == 1:
-            print >>fo, indent + "clFinish(context.queue);"
-            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-            print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-
-        print >>fo, indent + "if(blockTotal != 1){"
-
-        indent = indent_this_level + 2 * baseIndent
-        if CODETYPE == 0:
-            print >>fo, indent + "mergeIntoTable(" + resultNode + ",join1,&pp);"
-        else:
-            print >>fo, indent + "mergeIntoTable(" + resultNode + ",join1,&context,&pp);"
-
-        print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
-        print >>fo, indent + "freeTable(join1);"
-        if CODETYPE == 1:
-            print >>fo, indent + "clFinish(context.queue);"
-
-        print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskEnd);"
-        print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
-        print >>fo, ((lvl + 1) * baseIndent) + "}else"
-        print >>fo, indent + resultNode + "=join1;"
-
-        indent = indent_this_level
-        print >>fo, indent + "}\n"
-
-
-    if len(aggNode) >0 :
-        """
-        Generate codes for aggregation node.
-        """
-
-        gb_exp_list = aggNode[0].group_by_clause.groupby_exp_list
-        select_list = aggNode[0].select_list.tmp_exp_list
-        selectLen = len(select_list)
-        gbLen = len(gb_exp_list)
-
-        indent = indent_this_level
-        print >>fo, indent + "struct groupByNode * gbNode = (struct groupByNode *) malloc(sizeof(struct groupByNode));"
-        print >>fo, indent + "CHECK_POINTER(gbNode);"
-        print >>fo, indent + "gbNode->table = " +resultNode +";"
-        print >>fo, indent + "gbNode->groupByColNum = " + str(gbLen) + ";"
-        print >>fo, indent + "gbNode->groupByIndex = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
-        print >>fo, indent + "CHECK_POINTER(gbNode->groupByIndex);"
-        print >>fo, indent + "gbNode->groupByType = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
-        print >>fo, indent + "CHECK_POINTER(gbNode->groupByType);"
-        print >>fo, indent + "gbNode->groupBySize = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
-        print >>fo, indent + "CHECK_POINTER(gbNode->groupBySize);"
-
-        for i in range(0,gbLen):
-            exp = gb_exp_list[i]
-            if isinstance(exp, ystree.YRawColExp):
-                print >>fo, indent + "gbNode->groupByIndex[" + str(i) + "] = " + str(exp.column_name) + ";"
-                print >>fo, indent + "gbNode->groupByType[" + str(i) + "] = gbNode->table->attrType[" + str(exp.column_name) + "];"
-                print >>fo, indent + "gbNode->groupBySize[" + str(i) + "] = gbNode->table->attrSize[" + str(exp.column_name) + "];"
-            elif isinstance(exp, ystree.YConsExp):
-                print >>fo, indent + "gbNode->groupByIndex[" + str(i) + "] = -1;"
-                print >>fo, indent + "gbNode->groupByType[" + str(i) + "] = INT;"
-                print >>fo, indent + "gbNode->groupBySize[" + str(i) + "] = sizeof(int);"
-            else:
-                print 1/0
-
-        print >>fo, indent + "gbNode->outputAttrNum = " + str(selectLen) + ";"
-        print >>fo, indent + "gbNode->attrType = (int *) malloc(sizeof(int) *" + str(selectLen) + ");"
-        print >>fo, indent + "CHECK_POINTER(gbNode->attrType);"
-        print >>fo, indent + "gbNode->attrSize = (int *) malloc(sizeof(int) *" + str(selectLen) + ");"
-        print >>fo, indent + "CHECK_POINTER(gbNode->attrSize);"
-        print >>fo, indent + "gbNode->tupleSize = 0;"
-        print >>fo, indent + "gbNode->gbExp = (struct groupByExp *) malloc(sizeof(struct groupByExp) * " + str(selectLen) + ");"
-        print >>fo, indent + "CHECK_POINTER(gbNode->gbExp);"
-
-        for i in range(0,selectLen):
-            exp = select_list[i]
-            if isinstance(exp, ystree.YFuncExp):
-
-                print >>fo, indent + "gbNode->tupleSize += sizeof(float);"
-                print >>fo, indent + "gbNode->attrType[" + str(i) + "] = FLOAT;"
-                print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = sizeof(float);"
-                print >>fo, indent + "gbNode->gbExp["+str(i)+"].func = " + exp.func_name + ";"
-                para = exp.parameter_list[0]
-                mathFunc = mathExp()
-                mathFunc.addOp(para)
-                prefix = indent + "gbNode->gbExp[" + str(i) + "].exp"
-                printMathFunc(fo,prefix, mathFunc)
-
-            elif isinstance(exp, ystree.YRawColExp):
-                colIndex = exp.column_name
-                print >>fo, indent + "gbNode->attrType[" + str(i) + "] = " + resultNode + "->attrType[" + str(colIndex) + "];"
-                print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = " + resultNode + "->attrSize[" + str(colIndex) + "];"
-                print >>fo, indent + "gbNode->tupleSize += "+resultNode + "->attrSize[" + str(colIndex) + "];"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].func = NOOP;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.op = NOOP;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.exp = NULL;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opNum = 1;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opType = COLUMN;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opValue = " + str(exp.column_name) + ";"
-
-            else:
-                if exp.cons_type == "INTEGER":
-                    print >>fo, indent + "gbNode->attrType[" + str(i) + "] = INT;"
-                    print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = sizeof(int);"
-                    print >>fo, indent + "gbNode->tupleSize += sizeof(int);"
-                elif exp.cons_type == "FLOAT":
-                    print >>fo, indent + "gbNode->attrType[" + str(i) + "] = FLOAT;"
-                    print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = sizeof(float);"
-                    print >>fo, indent + "gbNode->tupleSize += sizeof(float);"
-                else:
-                    print 1/0
-
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].func = NOOP;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.op = NOOP;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.exp = NULL;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opNum = 1;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opType = CONS;"
-                print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opValue = " + str(exp.cons_value) + ";"
-
-        resultNode = "gbResult"
-
-        if CODETYPE == 0:
-            print >>fo, indent + "struct tableNode * " + resultNode + " = groupBy(gbNode, &pp);"
-        else:
-            print >>fo, indent + "struct tableNode * " + resultNode + " = groupBy(gbNode, &context,&pp);"
-            print >>fo, indent + "freeGroupByNode(gbNode);\n"
-
-
-    if len(orderbyNode) > 0 :
-        """
-        Generate codes for order by node.
-        """
-
-        indent = indent_this_level
-        orderby_exp_list = orderbyNode[0].order_by_clause.orderby_exp_list
-        odLen = len(orderby_exp_list)
-        print >>fo, indent + "struct orderByNode * odNode = (struct orderByNode *) malloc(sizeof(struct orderByNode));"
-        print >>fo, indent + "CHECK_POINTER(odNode);"
-        print >>fo, indent + "odNode->table = " +resultNode +";"
-        print >>fo, indent + "odNode->orderByNum = " + str(odLen) + ";"
-        print >>fo, indent + "odNode->orderBySeq = (int *) malloc(sizeof(int) * odNode->orderByNum);"
-        print >>fo, indent + "CHECK_POINTER(odNode->orderBySeq);"
-        print >>fo, indent + "odNode->orderByIndex = (int *) malloc(sizeof(int) * odNode->orderByNum);"
-        print >>fo, indent + "CHECK_POINTER(odNode->orderByIndex);"
-
-        for i in range(0,odLen):
-            seq = orderbyNode[0].order_by_clause.order_indicator_list[i]
-            if seq == "ASC":
-                print >>fo, indent + "odNode->orderBySeq[" + str(i) + "] = ASC;"
-            else:
-                print >>fo, indent + "odNode->orderBySeq[" + str(i) + "] = DESC;"
-
-            print >>fo, indent + "odNode->orderByIndex[" + str(i) + "] = " + str(orderby_exp_list[i].column_name) + ";"
-
-        resultNode = "odResult"
-
-        if CODETYPE == 0:
-            print >>fo, indent + "struct tableNode * " + resultNode + " = orderBy(odNode,&pp);"
-        else:
-            print >>fo, indent + "struct tableNode * " + resultNode + " = orderBy(odNode, &context,&pp);"
-
-        print >>fo, indent + "freeOrderByNode(odNode);\n"
+    print >>fo, indent + resultNode + " = " + tree_result + ";"
 
     indent = indent_this_level
     print >>fo, indent + "struct materializeNode mn;"
@@ -2332,33 +990,8 @@ def generate_code_for_a_tree(fo, tree, lvl, out_f):
     if CODETYPE == 0:
         print >>fo, indent + "char *final = materializeCol(&mn, &pp);"
 
-        if lvl == 0 and out_f == True:
-            print >>fo, indent + "for(int i = 0; i < mn.table->tupleNum; i++){"
-            indent = indent_this_level + baseIndent
-            print >>fo, indent + "size_t tuple_off = 0;"
-            print >>fo, indent + "printf(\"Tuple %d: \", i);"
-            print >>fo, indent + "for(int j = 0; j < mn.table->totalAttr; j++){"
-            indent = indent_this_level + baseIndent * 2
-            print >>fo, indent + "switch(mn.table->attrType[j]){"
-            print >>fo, indent + "case INT:"
-            print >>fo, indent + baseIndent + "printf(\"(int) %d, \", *(int *)(final + i * mn.table->tupleSize + tuple_off)); break;"
-            print >>fo, indent + "case FLOAT:"
-            print >>fo, indent + baseIndent + "printf(\"(float) %f, \", *(float *)(final + i * mn.table->tupleSize + tuple_off)); break;"
-            print >>fo, indent + "case STRING:"
-            print >>fo, indent + baseIndent + "size_t strlen = mn.table->attrSize[j];"
-            print >>fo, indent + baseIndent + "char *strout = (char *)malloc(strlen + 1);"
-            print >>fo, indent + baseIndent + "strout[strlen] = '\\0';"
-            print >>fo, indent + baseIndent + "memcpy(strout, final + i * mn.table->tupleSize + tuple_off, strlen);"
-            print >>fo, indent + baseIndent + "printf(\"(string) %s, \", strout);"
-            print >>fo, indent + baseIndent + "free(strout);"
-            print >>fo, indent + baseIndent + "break;"
-            print >>fo, indent + "}"
-            print >>fo, indent + "tuple_off += mn.table->attrSize[j];"
-            indent = indent_this_level + baseIndent
-            print >>fo, indent + "}"
-            print >>fo, indent + "printf(\"\\n\");"
-            indent = indent_this_level
-            print >>fo, indent + "}"
+        if lvl == 0:
+            print >>fo, indent + "printMaterializedTable(mn, final);"
 
     else:
         print >>fo, indent + "materializeCol(&mn, &context,&pp);"
@@ -2427,7 +1060,7 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
 
     print >>fo, indent + baseIndent + "{"
 
-    generate_code_for_a_tree(fo, sub_tree, lvl + 1, False)
+    generate_code_for_a_tree(fo, sub_tree, lvl + 1)
 
     print >>fo, indent + baseIndent * 2 + ""
     if constant_len_res:
@@ -2510,3 +1143,630 @@ def gpudb_code_gen(argv):
         metaFile.close()
 
     os.chdir(pwd)
+
+
+def generate_code_for_a_node(fo, indent, lvl, node):
+    if isinstance(node, ystree.TwoJoinNode):
+        return generate_code_for_a_two_join_node(fo, indent, lvl, node)
+    elif isinstance(node, ystree.GroupByNode):
+        return generate_code_for_a_group_by_node(fo, indent, lvl, node)
+    elif isinstance(node, ystree.OrderByNode):
+        return generate_code_for_a_order_by_node(fo, indent, lvl, node)
+    elif isinstance(node, ystree.TableNode):
+        return generate_code_for_a_table_node(fo, indent, lvl, node)
+
+def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
+
+    inputNode = generate_code_for_a_node(fo, indent, lvl, obn.child)
+
+    orderby_exp_list = obn.order_by_clause.orderby_exp_list
+    odLen = len(orderby_exp_list)
+
+    resultNode = inputNode + "_ob"
+    print >>fo, indent + "struct tableNode * " + resultNode + ";"
+
+    print >>fo, indent + "{\n"
+    indent += baseIndent
+
+    print >>fo, indent + "struct orderByNode * odNode = (struct orderByNode *) malloc(sizeof(struct orderByNode));"
+    print >>fo, indent + "CHECK_POINTER(odNode);"
+    print >>fo, indent + "odNode->table = " + inputNode +";"
+    print >>fo, indent + "odNode->orderByNum = " + str(odLen) + ";"
+    print >>fo, indent + "odNode->orderBySeq = (int *) malloc(sizeof(int) * odNode->orderByNum);"
+    print >>fo, indent + "CHECK_POINTER(odNode->orderBySeq);"
+    print >>fo, indent + "odNode->orderByIndex = (int *) malloc(sizeof(int) * odNode->orderByNum);"
+    print >>fo, indent + "CHECK_POINTER(odNode->orderByIndex);"
+
+    for i in range(0, odLen):
+        seq = obn.order_by_clause.order_indicator_list[i]
+        if seq == "ASC":
+            print >>fo, indent + "odNode->orderBySeq[" + str(i) + "] = ASC;"
+        else:
+            print >>fo, indent + "odNode->orderBySeq[" + str(i) + "] = DESC;"
+
+        print >>fo, indent + "odNode->orderByIndex[" + str(i) + "] = " + str(orderby_exp_list[i].column_name) + ";"
+
+    if CODETYPE == 0:
+        print >>fo, indent + resultNode + " = orderBy(odNode, &pp);"
+    else:
+        print >>fo, indent + resultNode + " = orderBy(odNode, &context, &pp);"
+
+    print >>fo, indent + "freeOrderByNode(odNode);\n"
+
+    indent = indent[:indent.rfind(baseIndent)]
+    print >>fo, indent + "}\n"
+
+    return resultNode
+
+
+def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
+
+    inputNode = generate_code_for_a_node(fo, indent, lvl, gbn.child)
+
+    gb_exp_list = gbn.group_by_clause.groupby_exp_list
+    select_list = gbn.select_list.tmp_exp_list
+    selectLen = len(select_list)
+    gbLen = len(gb_exp_list)
+
+    resultNode = inputNode + "_gb"
+    print >>fo, indent + "struct tableNode * " + resultNode + ";"
+
+    print >>fo, indent + "{\n"
+    indent += baseIndent
+
+    print >>fo, indent + "struct groupByNode * gbNode = (struct groupByNode *) malloc(sizeof(struct groupByNode));"
+    print >>fo, indent + "CHECK_POINTER(gbNode);"
+    print >>fo, indent + "gbNode->table = " + inputNode +";"
+    print >>fo, indent + "gbNode->groupByColNum = " + str(gbLen) + ";"
+    print >>fo, indent + "gbNode->groupByIndex = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
+    print >>fo, indent + "CHECK_POINTER(gbNode->groupByIndex);"
+    print >>fo, indent + "gbNode->groupByType = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
+    print >>fo, indent + "CHECK_POINTER(gbNode->groupByType);"
+    print >>fo, indent + "gbNode->groupBySize = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
+    print >>fo, indent + "CHECK_POINTER(gbNode->groupBySize);"
+
+
+    for i in range(0,gbLen):
+        exp = gb_exp_list[i]
+        if isinstance(exp, ystree.YRawColExp):
+            print >>fo, indent + "gbNode->groupByIndex[" + str(i) + "] = " + str(exp.column_name) + ";"
+            print >>fo, indent + "gbNode->groupByType[" + str(i) + "] = gbNode->table->attrType[" + str(exp.column_name) + "];"
+            print >>fo, indent + "gbNode->groupBySize[" + str(i) + "] = gbNode->table->attrSize[" + str(exp.column_name) + "];"
+        elif isinstance(exp, ystree.YConsExp):
+            print >>fo, indent + "gbNode->groupByIndex[" + str(i) + "] = -1;"
+            print >>fo, indent + "gbNode->groupByType[" + str(i) + "] = INT;"
+            print >>fo, indent + "gbNode->groupBySize[" + str(i) + "] = sizeof(int);"
+        else:
+            print 1/0
+
+
+    print >>fo, indent + "gbNode->outputAttrNum = " + str(selectLen) + ";"
+    print >>fo, indent + "gbNode->attrType = (int *) malloc(sizeof(int) *" + str(selectLen) + ");"
+    print >>fo, indent + "CHECK_POINTER(gbNode->attrType);"
+    print >>fo, indent + "gbNode->attrSize = (int *) malloc(sizeof(int) *" + str(selectLen) + ");"
+    print >>fo, indent + "CHECK_POINTER(gbNode->attrSize);"
+    print >>fo, indent + "gbNode->tupleSize = 0;"
+    print >>fo, indent + "gbNode->gbExp = (struct groupByExp *) malloc(sizeof(struct groupByExp) * " + str(selectLen) + ");"
+
+    for i in range(0,selectLen):
+        exp = select_list[i]
+        if isinstance(exp, ystree.YFuncExp):
+
+            print >>fo, indent + "gbNode->tupleSize += sizeof(float);"
+            print >>fo, indent + "gbNode->attrType[" + str(i) + "] = FLOAT;"
+            print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = sizeof(float);"
+            print >>fo, indent + "gbNode->gbExp["+str(i)+"].func = " + exp.func_name + ";"
+            para = exp.parameter_list[0]
+            mathFunc = mathExp()
+            mathFunc.addOp(para)
+            prefix = indent + "gbNode->gbExp[" + str(i) + "].exp"
+            printMathFunc(fo,prefix, mathFunc)
+
+        elif isinstance(exp, ystree.YRawColExp):
+            colIndex = exp.column_name
+            print >>fo, indent + "gbNode->attrType[" + str(i) + "] = " + inputNode + "->attrType[" + str(colIndex) + "];"
+            print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = " + inputNode + "->attrSize[" + str(colIndex) + "];"
+            print >>fo, indent + "gbNode->tupleSize += "+inputNode + "->attrSize[" + str(colIndex) + "];"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].func = NOOP;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.op = NOOP;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.exp = NULL;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opNum = 1;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opType = COLUMN;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opValue = " + str(exp.column_name) + ";"
+
+        else:
+            if exp.cons_type == "INTEGER":
+                print >>fo, indent + "gbNode->attrType[" + str(i) + "] = INT;"
+                print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = sizeof(int);"
+                print >>fo, indent + "gbNode->tupleSize += sizeof(int);"
+            elif exp.cons_type == "FLOAT":
+                print >>fo, indent + "gbNode->attrType[" + str(i) + "] = FLOAT;"
+                print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = sizeof(float);"
+                print >>fo, indent + "gbNode->tupleSize += sizeof(float);"
+            else:
+                print 1/0
+
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].func = NOOP;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.op = NOOP;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.exp = NULL;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opNum = 1;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opType = CONS;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opValue = " + str(exp.cons_value) + ";"
+
+    if CODETYPE == 0:
+        print >>fo, indent + resultNode + " = groupBy(gbNode, &pp);"
+    else:
+        print >>fo, indent + resultNode + " = groupBy(gbNode, &context, &pp);"
+        print >>fo, indent + "freeGroupByNode(gbNode);\n"
+
+
+    indent = indent[:indent.rfind(baseIndent)]
+    print >>fo, indent + "}\n"
+
+    return resultNode
+
+
+def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
+
+    leftName, rightName = generate_code_for_a_node(fo, indent, lvl, jn.left_child), generate_code_for_a_node(fo, indent, lvl, jn.right_child)
+
+    if leftName is None or rightName is None:
+        print 1/0
+
+    print >>fo, indent + "// Join two tables: " + leftName + ", " + rightName # conditions?
+    resName = leftName + "_" + rightName
+    print >>fo, indent + "struct tableNode *" + resName + ";\n"
+
+    print >>fo, indent + "{\n"
+
+    jName = "jNode"
+    indent += baseIndent
+    print >>fo, indent + "struct joinNode " + jName + ";"
+    print >>fo, indent + jName + ".leftTable = " + leftName + ";"
+    print >>fo, indent + jName + ".rightTable = " + rightName + ";"
+
+    lOutList = []
+    rOutList = []
+
+    lPosList = []
+    rPosList = []
+
+    lAttrList = []
+    rAttrList = []
+
+    for exp in jn.select_list.tmp_exp_list:
+        index = jn.select_list.tmp_exp_list.index(exp)
+        if isinstance(exp, ystree.YRawColExp):
+            colAttr = columnAttr()
+            colAttr.type = exp.column_type
+            if exp.table_name == "LEFT":
+                if joinType == 0:
+                    lOutList.append(exp.column_name)
+                elif joinType == 1:
+                    newExp = ystree.__trace_to_leaf__(jn, exp, False) # Get the real table name
+                    lOutList.append(newExp.column_name)
+
+                lAttrList.append(colAttr)
+                lPosList.append(index)
+
+            elif exp.table_name == "RIGHT":
+                if joinType == 0:
+                    rOutList.append(exp.column_name)
+                elif joinType == 1:
+                    newExp = ystree.__trace_to_leaf__(jn, exp, False)
+                    rOutList.append(newExp.column_name)
+
+                rAttrList.append(colAttr)
+                rPosList.append(index)
+
+    pkList = jn.get_pk()
+
+    if (len(pkList[0]) != len(pkList[1])):
+        print "ERROR: the join indices do not match!"
+        exit(-1)
+
+    leftIndex = None
+    rightIndex = None
+    if joinType == 0:
+        for exp in pkList[0]:
+            leftIndex = 0
+            if isinstance(jn.left_child, ystree.TableNode):
+                leftIndex = -1
+                for tmp in jn.left_child.select_list.tmp_exp_list:
+                    if exp.column_name == tmp.column_name:
+                        leftIndex = jn.left_child.select_list.tmp_exp_list.index(tmp)
+                        break
+                if leftIndex == -1:
+                    print 1/0
+            else:
+                leftIndex = exp.column_name
+
+    elif joinType == 1:
+        for exp in pkList[0]:
+            newExp = ystree.__trace_to_leaf__(jn, exp, True)
+            leftIndex = newExp.column_name
+
+
+    for exp in pkList[1]:
+        rightIndex = 0
+        if isinstance(jn.right_child, ystree.TableNode):
+            rightIndex = -1
+            for tmp in jn.right_child.select_list.tmp_exp_list:
+                if exp.column_name == tmp.column_name:
+                    rightIndex = jn.right_child.select_list.tmp_exp_list.index(tmp)
+                    break
+            if rightIndex == -1:
+                print 1/0
+        else:
+            rightIndex = exp.column_name
+
+    if leftIndex is None or rightIndex is None:
+        print "ERROR: Failed to find join indices for two tables"
+        exit(-1)
+
+    print >>fo, indent + jName + ".totalAttr = " + str(len(rOutList) + len(lOutList)) + ";"
+    print >>fo, indent + jName + ".keepInGpu = (int *) malloc(sizeof(int) * " + str(len(rOutList) + len(lOutList)) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + jName + ".keepInGpu);"
+
+    if keepInGpu == 0:
+        print >>fo, indent + "for(int k=0; k<" + str(len(rOutList) + len(lOutList))  + "; k++)"
+        print >>fo, indent + baseIndent + jName + ".keepInGpu[k] = 0;"
+    else:
+        print >>fo, indent + "for(int k=0; k<" + str(len(rOutList) + len(lOutList))  + "; k++)"
+        print >>fo, indent + baseIndent + jName + ".keepInGpu[k] = 1;"
+
+
+    print >>fo, indent + jName + ".rightOutputAttrNum = " + str(len(rOutList)) + ";"
+    print >>fo, indent + jName + ".leftOutputAttrNum = " + str(len(lOutList)) + ";"
+    print >>fo, indent + jName + ".leftOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputAttrType);"
+    print >>fo, indent + jName + ".leftOutputIndex = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputIndex);"
+    print >>fo, indent + jName + ".leftPos = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + jName + ".leftPos);"
+    print >>fo, indent + jName + ".tupleSize = 0;"
+    for j in range(0,len(lOutList)):
+        ctype = to_ctype(lAttrList[j].type)
+        print >>fo, indent + jName + ".leftOutputIndex[" + str(j) + "] = " + str(lOutList[j]) + ";"
+        print >>fo, indent + jName + ".leftOutputAttrType[" + str(j) + "] = " + ctype + ";"
+        print >>fo, indent + jName + ".leftPos[" + str(j) + "] = " + str(lPosList[j]) + ";"
+        print >>fo, indent + jName + ".tupleSize += " + leftName + "->attrSize[" + str(lOutList[j]) + "];"
+
+    print >>fo, indent + jName + ".rightOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + jName + ".rightOutputAttrType);"
+    print >>fo, indent + jName + ".rightOutputIndex = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + jName + ".rightOutputIndex);"
+    print >>fo, indent + jName + ".rightPos = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + jName + ".rightPos);"
+    for j in range(0,len(rOutList)):
+        ctype = to_ctype(rAttrList[j].type)
+        print >>fo, indent + jName + ".rightOutputIndex[" + str(j) + "] = " + str(rOutList[j]) + ";"
+        print >>fo, indent + jName + ".rightOutputAttrType[" + str(j) + "] = " + ctype + ";"
+        print >>fo, indent + jName + ".rightPos[" + str(j) + "] = " + str(rPosList[j]) + ";"
+        print >>fo, indent + jName + ".tupleSize += " + rightName + "->attrSize[" + str(rOutList[j]) + "];"
+
+    print >>fo, indent + jName + ".leftKeyIndex = " + str(leftIndex) + ";"
+    print >>fo, indent + jName + ".rightKeyIndex = " + str(rightIndex) + ";"
+
+    resName = leftName + "_" + rightName
+    if CODETYPE == 0:
+        print >>fo, indent + resName + " = hashJoin(&" + jName + ",&pp);\n"
+    else:
+        print >>fo, indent + resName + " = hashJoin(&" + jName + ", &context, &pp);\n"
+
+    indent = indent[:indent.rfind(baseIndent)]
+    print >>fo, indent + "}\n"
+
+    return resName
+
+table_abbr = {
+    "part" : "pa",
+    "supplier" : "su",
+    "customer" : "cu",
+    "nation" : "na",
+    "region" : "re",
+    "partsupp" : "ps"
+    }
+
+def generate_code_for_a_table_node(fo, indent, lvl, tn):
+
+    resName =  tn.table_name.lower()[0:2] if table_abbr[tn.table_name.lower()] == None else table_abbr[tn.table_name.lower()]
+    tnName = tn.table_name.lower() + "Table"
+    print >>fo, indent + "// Load columns from the table " + tn.table_name.upper()
+    print >>fo, indent + "struct tableNode *" + resName + ";"
+
+    print >>fo, indent + "{"
+    indent += baseIndent
+    print >>fo, indent + "struct tableNode *" + tnName + ";"
+    print >>fo, indent + "int outFd;"
+    print >>fo, indent + "long outSize;"
+    print >>fo, indent + "char *outTable;"
+    print >>fo, indent + "long offset, tupleOffset;"
+    print >>fo, indent + "int blockTotal;"
+    print >>fo, indent + "struct columnHeader header;\n"
+
+    indexList = []
+    colList = []
+    generate_col_list(tn, indexList, colList)
+
+    totalAttr = len(indexList)
+    if totalAttr <= 0:
+        print "ERROR: Failed to generate code for tableNode " + tn.table_name.lower() + ": no column is specified"
+        exit(-1)
+
+    selectList = tn.select_list.tmp_exp_list
+
+    firstTableFile = tn.table_name + str(colList[0].column_name)
+    print >>fo, indent + "// Retrieve the block number from " + firstTableFile
+    print >>fo, indent + "outFd = open(\"" + firstTableFile + "\", O_RDONLY);"
+    print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
+    print >>fo, indent + "blockTotal = header.blockTotal;"
+    print >>fo, indent + "close(outFd);"
+    print >>fo, indent + "offset = 0;"
+    print >>fo, indent + "tupleOffset = 0;"
+    print >>fo, indent + resName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+    print >>fo, indent + "CHECK_POINTER("+ resName + ");"
+    print >>fo, indent + "initTable(" + resName + ");"
+
+    print >>fo, indent + "for(int i = 0; i < blockTotal; i++){\n"
+    indent += baseIndent
+    print >>fo, indent + "// Table initialization"
+    print >>fo, indent + tnName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + ");"
+    print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
+    print >>fo, indent + tnName + "->attrType = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrType);"
+    print >>fo, indent + tnName + "->attrSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrSize);"
+    print >>fo, indent + tnName + "->attrIndex = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrIndex);"
+    print >>fo, indent + tnName + "->attrTotalSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrTotalSize);"
+    print >>fo, indent + tnName + "->dataPos = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataPos);"
+    print >>fo, indent + tnName + "->dataFormat = (int *) malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataFormat);"
+    print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
+
+    tupleSize = "0"
+    for i in range(0, totalAttr):
+        col = colList[i]
+        ctype = to_ctype(col.column_type)
+        colIndex = int(col.column_name)
+        colLen = type_length(tn.table_name, colIndex, col.column_type)
+        tupleSize += " + " + colLen
+
+        print >>fo, indent + "// Load column " + str(colIndex) + ", type: " + col.column_type
+        print >>fo, indent + tnName + "->attrSize[" + str(i) + "] = " + colLen + ";"
+        print >>fo, indent + tnName + "->attrIndex["+ str(i) + "] = " + str(colIndex) + ";"
+        print >>fo, indent + tnName + "->attrType[" + str(i) + "] = " + ctype + ";"
+
+        if POS == 0:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MEM;"
+        elif POS == 1:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = PINNED;"
+        elif POS == 2:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = UVA;"
+        elif POS == 3:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MMAP;"
+        else:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MEM;"
+
+        print >>fo, indent + "outFd = open(\"" + tn.table_name + str(colIndex) + "\", O_RDONLY);"
+        print >>fo, indent + "offset = i * sizeof(struct columnHeader) + tupleOffset * " + str(colLen) + ";"
+        print >>fo, indent + "lseek(outFd, offset, SEEK_SET);"
+        print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
+        print >>fo, indent + "offset += sizeof(struct columnHeader);"
+        print >>fo, indent + tnName + "->dataFormat[" + str(i) + "] = header.format;"
+        print >>fo, indent + "outSize = header.tupleNum * " + colLen + ";"
+        print >>fo, indent + tnName + "->attrTotalSize[" + str(i) + "] = outSize;\n"
+
+        print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
+        print >>fo, indent + "outTable =(char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
+
+        if CODETYPE == 0:
+            if POS == 1:
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void **)&" + tnName + "->content[" + str(i) + "], outSize));"
+                print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
+            elif POS == 2:
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void **)&" + tnName+"->content["+str(i)+"], outSize));"
+                print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
+            elif POS == 3:
+                print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
+            else:
+                print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)memalign(256, outSize);"
+                print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
+        else:
+            if POS == 0:
+                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)memalign(256, outSize);"
+                    print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
+            elif POS == 3:
+                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
+            else:
+                print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)clCreateBuffer(context.context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, outSize, NULL, 0);"
+                print >>fo, indent + "clTmp = clEnqueueMapBuffer(context.queue, (cl_mem)" + tnName + "->content[" + str(i) + "], CL_TRUE,CL_MAP_WRITE,0,outSize, 0, 0, 0, 0);"
+                print >>fo, indent + "memcpy(clTmp, outTable, outSize);"
+                print >>fo, indent + "clEnqueueUnmapMemObject(context.queue, (cl_mem)" + tnName + "->content[" + str(i) + "], clTmp, 0, 0, 0);"
+
+        print >>fo, indent + "munmap(outTable, outSize);"
+        print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
+        print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
+        print >>fo, indent + "close(outFd);\n"
+
+    print >>fo, indent + tnName + "->tupleSize = " + tupleSize + ";"
+    print >>fo, indent + tnName + "->tupleNum = header.tupleNum;\n"
+
+    if tn.where_condition is not None:
+        whereList = []
+        relList = []
+        conList = []
+
+        get_where_attr(tn.where_condition.where_condition_exp, whereList, relList, conList)
+        newWhereList = []
+        whereLen = count_whereList(whereList, newWhereList)
+        nested = count_whereNested(tn.where_condition.where_condition_exp)
+
+        if nested != 0:
+            print "Not supported yet: the where expression is too complicated"
+            print 1/0
+
+        relName = tn.table_name.lower() + "Rel"
+        print >>fo, indent + "// Where conditions: " + tn.where_condition.where_condition_exp.evaluate()
+        print >>fo, indent + "struct scanNode " + relName + ";"
+        print >>fo, indent + relName + ".tn = " + tnName + ";"
+        print >>fo, indent + relName + ".hasWhere = 1;"
+        print >>fo, indent + relName + ".whereAttrNum = " + str(whereLen) + ";"
+        print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int) * " + str(len(whereList)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
+        print >>fo, indent + relName + ".outputNum = " + str(len(selectList)) + ";"
+        print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
+
+        for i in range(0, len(selectList)):
+            colIndex = selectList[i].column_name
+            outputIndex = indexList.index(colIndex)
+            print >>fo, indent + relName + ".outputIndex[" + str(i) + "] = " + str(outputIndex) + ";"
+
+        for i in range(0, len(newWhereList)):
+            colIndex = indexList.index(newWhereList[i].column_name)
+            print >>fo, indent + relName + ".whereIndex["+str(i) + "] = " + str(colIndex) + ";"
+
+        if keepInGpu ==0:
+            print >>fo, indent + relName + ".KeepInGpu = 0;"
+        else:
+            print >>fo, indent + relName + ".keepInGpu = 1;"
+
+        print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
+        print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
+
+        print >>fo, indent + "(" + relName + ".filter)->nested = 0;"
+        print >>fo, indent + "(" + relName + ".filter)->expNum = " + str(len(whereList)) + ";"
+        print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *" + str(len(whereList)) + ");"
+        print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
+
+        if tn.where_condition.where_condition_exp.func_name in ["AND","OR"]:
+            print >>fo, indent + "(" + relName + ".filter)->andOr = " + tn.where_condition.where_condition_exp.func_name + ";"
+        else:
+            print >>fo, indent + "(" + relName + ".filter)->andOr = EXP;"
+
+        for i in range(0, len(whereList)):
+            colIndex = -1
+            for j in range(0, len(newWhereList)):
+                if newWhereList[j].compare(whereList[i]) is True:
+                    colIndex = j
+                    break
+
+            if colIndex < 0:
+                print 1/0
+
+            colType = whereList[i].column_type
+            ctype = to_ctype(colType)
+
+            print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
+
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+            elif relList[i] == "IN" and isinstance(conList[i], basestring):# in ("MOROCCO")
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EQ;"
+            else:
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
+            print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+
+            # Get subquery result here
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], indexList)
+
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
+            elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "LIST":
+                vec_len = len(conList[i].parameter_list)
+                vec_item_len = type_length(whereList[i].table_name, whereList[i].column_name, whereList[i].column_type)
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].vlen  = " + str(vec_len) + ";"
+                print >>fo, indent + "{"
+                print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ");"
+                print >>fo, indent + baseIndent + "memset(vec, 0, " + vec_item_len + " * " + str(vec_len) + ");"
+                for idx in range(0, vec_len):
+                    item = conList[i].parameter_list[idx]
+                    print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
+                print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &vec, sizeof(char **));"
+                print >>fo, indent + "}"
+            elif ctype == "INT":
+                if isinstance(conList[i], ystree.YRawColExp):
+                    con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
+                else:
+                    con_value = conList[i]
+                print >>fo, indent + "{"
+                print >>fo, indent + baseIndent + "int tmp = " + conList[i] + ";"
+                print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(int));"
+                print >>fo, indent + "}"
+            elif ctype == "FLOAT":
+                if isinstance(conList[i], ystree.YRawColExp):
+                    con_value = "*(float *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
+                else:
+                    con_value = conList[i]
+                print >>fo, indent + "{"
+                print >>fo, indent + baseIndent + "float tmp = " + conList[i] + ";"
+                print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(float));"
+                print >>fo, indent + "}"
+            else:
+                if isinstance(conList[i], ystree.YRawColExp):
+                    con_value = "_" + conList[i].table_name + "_" + str(conList[i].column_name)
+                else:
+                    con_value = conList[i]
+                print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + con_value + ");\n"
+
+        if CODETYPE == 0:
+            print >>fo, indent + "struct tableNode *tmp = tableScan(&" + relName + ", &pp);"
+        else:
+            print >>fo, indent + "struct tableNode *tmp = tableScan(&" + relName + ", &context, &pp);"
+
+        print >>fo, indent + "if(blockTotal != 1){"
+
+        if CODETYPE == 0:
+            print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + ", tmp, &pp);"
+        else:
+            print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + ", tmp, &context, &pp);"
+
+        print >>fo, indent + "}else{"
+        print >>fo, indent + baseIndent + "free(" + resName + ");"
+        print >>fo, indent + baseIndent + resName + " = tmp;"
+        print >>fo, indent + "}"
+
+        print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
+        print >>fo, indent + "freeScan(&" + relName + ");\n"
+        if CODETYPE == 1:
+            print >>fo, indent + "clFinish(context.queue);"
+
+        print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
+        print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
+
+        ############## end of wherecondition not none
+
+    else:
+        print >>fo, indent + "if(blockTotal != 1){"
+
+        if CODETYPE == 0:
+            print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + "," + tnName +", &pp);"
+        else:
+            print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + "," + tnName +", &context, &pp);"
+
+        print >>fo, indent + baseIndent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
+        print >>fo, indent + baseIndent + "freeTable(" + tnName + ");"
+        if CODETYPE == 1:
+            print >>fo, indent + baseIndent + "clFinish(context.queue);"
+
+        print >>fo, indent + baseIndent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
+        print >>fo, indent + baseIndent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
+        print >>fo, indent + "}else{"
+        print >>fo, indent + baseIndent + "free(" + resName + ");"
+        print >>fo, indent + baseIndent + resName + " = " + tnName + ";"
+        print >>fo, indent + "}"
+
+    print >>fo, indent + "tupleOffset += header.tupleNum;"
+    indent = indent[:indent.rfind(baseIndent)]
+    print >>fo, indent + "}"
+    indent = indent[:indent.rfind(baseIndent)]
+    print >>fo, indent + "}\n"
+
+    return resName
