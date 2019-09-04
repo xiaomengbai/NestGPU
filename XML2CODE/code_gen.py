@@ -960,8 +960,7 @@ def get_subqueries(tree, subq_list):
 def generate_code_for_a_tree(fo, tree, lvl):
 
     global baseIndent
-    indent_this_level = (lvl * 3 + 1) * baseIndent
-    indent = indent_this_level
+    indent = (lvl * 3 + 1) * baseIndent
 
     var_subqRes = "subqRes" + str(lvl)
 
@@ -969,22 +968,14 @@ def generate_code_for_a_tree(fo, tree, lvl):
     tree.debug(0)
 
     resultNode = "result"
-    joinAttr = JoinTranslation()
-    aggNode = []
-    orderbyNode = []
 
-    get_tables(tree, joinAttr, aggNode, orderbyNode)
-
-    print >>fo, indent + "struct tableNode *" + resultNode + " = (struct tableNode*) malloc(sizeof(struct tableNode));"
-    print >>fo, indent + "CHECK_POINTER(" + resultNode + ");"
-    print >>fo, indent + "initTable(" + resultNode + ");"
+    print >>fo, indent + "struct tableNode *" + resultNode + ";"
     print >>fo, indent + "char * " + var_subqRes + ";\n"
 
     tree_result = generate_code_for_a_node(fo, indent, lvl, tree)
 
     print >>fo, indent + resultNode + " = " + tree_result + ";"
 
-    indent = indent_this_level
     print >>fo, indent + "struct materializeNode mn;"
     print >>fo, indent + "mn.table = "+resultNode + ";"
     if CODETYPE == 0:
@@ -1154,6 +1145,15 @@ def generate_code_for_a_node(fo, indent, lvl, node):
         return generate_code_for_a_order_by_node(fo, indent, lvl, node)
     elif isinstance(node, ystree.TableNode):
         return generate_code_for_a_table_node(fo, indent, lvl, node)
+    elif isinstance(node, ystree.SelectProjectNode):
+        return generate_code_for_a_select_project_node(fo, indent, lvl, node)
+
+
+def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
+
+    inputNode = generate_code_for_a_node(fo, indent, lvl, spn.child)
+
+    return inputNode
 
 def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
 

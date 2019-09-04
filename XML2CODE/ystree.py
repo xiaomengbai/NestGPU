@@ -1127,7 +1127,7 @@ class TwoJoinNode(QueryPlanTreeBase):
                 oc = self.join_condition.join_condition_exp.evaluate()
         else:
             oc = str(None)
-            if self.join_condition.where_condition_exp is not None:
+            if self.join_condition is not None and self.join_condition.where_condition_exp is not None:
                 oc = "[Implicit]: " + self.join_condition.where_condition_exp.evaluate()
 
 
@@ -1582,10 +1582,8 @@ class LRBSelectNode:
         # print "length of self.from_list: ", len(self.from_list)
         # map(lambda x: x.debug(1), self.from_list)
         for a_from_item in self.from_list[1:]:
-#            print a_from_item
 
             tmp_scan_list.append(a_from_item)
-
 
             if isinstance(a_from_item, LRBSTreeNode):
                 if a_from_item.tokenname == 'COMMA':
@@ -2574,8 +2572,6 @@ def build_plan_tree_from_a_select_node(a_query_node):
     r.process_from_list()
 
     t0 = r.convert_to_initial_query_plan_tree()
-
-    search_external_cols(t0)
 
     t1 = t0.release_order_by()
 
@@ -4768,6 +4764,8 @@ def ysmart_get_schema(schema):
 def process_the_plan_tree(tree):
 
     gen_project_list(tree)
+
+    search_external_cols(tree)
 
     if check_schema(tree) == -1:
         tree = None

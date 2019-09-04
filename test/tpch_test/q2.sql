@@ -40,6 +40,14 @@ where
               )
 ;
 
+select t1_supplycost, t1_partkey, p_name
+from (select max(ps_supplycost) as t1_supplycost, ps_partkey as t1_partkey
+     from partsupp, supplier
+     where ps_suppkey = s_suppkey
+     group by ps_partkey) t1, part
+where t1_partkey = p_partkey
+;
+
 
 -- select max(ps_supplycost), ps_partkey
 -- from partsupp, supplier, nation, region
