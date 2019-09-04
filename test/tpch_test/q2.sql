@@ -17,10 +17,11 @@ from
       nation,
       region
 where
-       s_suppkey = ps_suppkey
-       and p_partkey = ps_partkey
-       and p_size = 10
---      and p_type like '%[TYPE]'
+      s_suppkey = ps_suppkey
+      and p_partkey = ps_partkey
+      and p_size = 10
+--    and p_type like '%[TYPE]'
+--    and p_type like 'BURNISHED'
       and s_nationkey = n_nationkey
       and n_regionkey = r_regionkey
       and r_name = 'ASIA'
