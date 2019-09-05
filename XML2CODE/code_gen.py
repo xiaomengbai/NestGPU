@@ -1468,9 +1468,20 @@ table_abbr = {
     "partsupp" : "ps"
     }
 
+table_refs = {
+    "part" : 0,
+    "supplier" : 0,
+    "customer" : 0,
+    "nation" : 0,
+    "region" : 0,
+    "partsupp" : 0
+    }
+
 def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
     resName =  tn.table_name.lower()[0:2] if table_abbr[tn.table_name.lower()] == None else table_abbr[tn.table_name.lower()]
+    resName = resName + str(table_refs[tn.table_name.lower()])
+    table_refs[tn.table_name.lower()] = table_refs[tn.table_name.lower()] + 1
     tnName = tn.table_name.lower() + "Table"
     var_subqRes = "subqRes" + str(lvl)
     print >>fo, indent + "// Load columns from the table " + tn.table_name.upper()
