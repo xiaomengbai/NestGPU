@@ -2169,7 +2169,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                 where->exp[0].dataPos = GPU;
             }
 
-            CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[i], sizeof(struct whereExp), cudaMemcpyHostToDevice));
+            CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
             if(prevIndex != index){
 
