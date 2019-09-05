@@ -1,0 +1,13 @@
+ s_acctbal |          s_name           |          n_name           | p_partkey |          p_mfgr           |                s_address                |     s_phone     |                                     s_comment                                      
+-----------+---------------------------+---------------------------+-----------+---------------------------+-----------------------------------------+-----------------+------------------------------------------------------------------------------------
+   -724.31 | Supplier#000000082        | CHINA                     |        56 | Manufacturer#1            | 5t7gqU1BlZWyZQoeF7X                     | 28-177-572-9691 | fluffily special foxes nag boldly u
+   -224.84 | Supplier#000000075        | CHINA                     |      1496 | Manufacturer#3            | ULXKdX bZFJwii                          | 28-716-704-8686 | packages cajole. fluffily ironic dolphins wake furiously after the even multiplier
+    -40.45 | Supplier#000000080        | VIETNAM                   |      1143 | Manufacturer#2            | PhYej9mhZXAifY4IXnVIVJ9CX011Id73JAD     | 31-646-289-1906 | slyly regular depths eat furiously. carefully even ideas are quickly aga
+   3191.70 | Supplier#000000100        | VIETNAM                   |        24 | Manufacturer#5            | AiFdrGISsw5YYFY FPOusmobWMf             | 31-351-324-5062 | carefully ironic forges nag carefully blithely express de
+   3191.70 | Supplier#000000100        | VIETNAM                   |      1482 | Manufacturer#4            | AiFdrGISsw5YYFY FPOusmobWMf             | 31-351-324-5062 | carefully ironic forges nag carefully blithely express de
+   3191.70 | Supplier#000000100        | VIETNAM                   |      1658 | Manufacturer#3            | AiFdrGISsw5YYFY FPOusmobWMf             | 31-351-324-5062 | carefully ironic forges nag carefully blithely express de
+   3671.34 | Supplier#000000099        | CHINA                     |       766 | Manufacturer#2            | X8uG7kkYSD2 y7,1eD5lSj                  | 28-272-909-1617 | fluffily final packages haggle carefully ab
+   4515.80 | Supplier#000000060        | INDIA                     |       659 | Manufacturer#3            | PP,SDzn7q9DWT4EEpO23y                   | 18-550-360-2464 | slyly regular accounts are final packages. quickly regular ideas hang carefully 
+   7014.50 | Supplier#000000072        | CHINA                     |       640 | Manufacturer#1            | FgBqhDHyQvHYQFA6Wr1mQhXbjYvL2AurqeSAkAZ | 28-113-898-6643 | quickly even platelets haggle alongside of the furiously express pa
+(9 rows)
+
