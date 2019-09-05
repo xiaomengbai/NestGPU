@@ -1311,7 +1311,7 @@ __global__ static void genScanFilter_or_like(char *col, int colSize, long tupleN
             }
             if(!con) break;
         }
-        filter[i] &= con;
+        filter[i] |= con;
     }
 }
 
@@ -2165,11 +2165,48 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                 CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec_size) );
                 CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), *((void **) where->exp[i].content), vec_size, cudaMemcpyHostToDevice) );
 
+                free( *((void **) where->exp[i].content) );
                 memcpy(where->exp[i].content, vec_addr_g, 32);
-                where->exp[0].dataPos = GPU;
+                where->exp[i].dataPos = GPU;
             }
 
-            CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
+            if( (where->exp[i].relation == IN || where->exp[i].relation == LIKE) &&
+                (where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED) )
+            {
+                char vec_addr_g[32];
+                size_t vec_size = sn->tn->attrSize[index] * where->exp[i].vlen;
+                CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec_size) );
+                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), *((void **) where->exp[i].content), vec_size, cudaMemcpyHostToDevice) );
+
+                free( *((void **) where->exp[i].content) );
+                memcpy(where->exp[i].content, vec_addr_g, 32);
+                where->exp[i].dataPos = GPU;
+            }
+
+            if( where->exp[i].relation == IN_VEC &&
+                (where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED) )
+            {
+                char vec_addr_g[32];
+                size_t vec1_size = sizeof(void *) * sn->tn->tupleNum;
+                void **vec1_addrs = (void **)malloc(vec1_size);
+                for(int j = 0; j < sn->tn->tupleNum; j++) {
+                    // [int: vec_len][char *: string1][char *: string2] ...
+                    size_t vec2_size = *((*(int ***)(where->exp[i].content))[j]) * sn->tn->attrSize[index] + sizeof(int);
+                    CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) &vec1_addrs[j], vec2_size) );
+                    CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy( vec1_addrs[j], (*(char ***)where->exp[i].content)[j], vec2_size, cudaMemcpyHostToDevice) );
+                    free( (*(char ***)where->exp[i].content)[j] );
+                }
+                CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) vec_addr_g, vec1_size) );
+                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(*((void **)vec_addr_g), vec1_addrs, vec1_size, cudaMemcpyHostToDevice) );
+                free(vec1_addrs);
+
+                free(*(char ***)where->exp[i].content);
+                memcpy(where->exp[i].content, vec_addr_g, 32);
+                where->exp[i].dataPos = GPU;
+            }
+
+
+            CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[i], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
             if(prevIndex != index){
 
