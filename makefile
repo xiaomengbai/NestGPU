@@ -22,7 +22,6 @@ TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 SCHEMA := $(TPCH_SCHEMA)
 
 # --- Queries ---
-
 # Testing query
 #SQL_FILE := $(TPCH_TEST_DIR)/test.sql
 
@@ -38,9 +37,18 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 
 # TPC-H Q18
 #SQL_FILE := $(TPCH_TEST_DIR)/q18.sql
-
 # ---------------
 
+
+# -- Optimizations --
+
+#Baseline
+#leave empty
+
+#Nested indexes (sort and prefix)
+GPU_OPT := --idx
+
+# ------------------- 
 
 # build test/dbgen/dbgen for generating tables
 DBGEN_DIR := test/dbgen
@@ -95,7 +103,7 @@ $(LOADER): $(LOADER_SRC)
 	$(MAKE) -C $(UTIL_DIR)
 
 $(LOADER_SRC): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP)
-	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA)
+	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA) $(GPU_OPT)
 
 
 # target: load-columns
@@ -116,7 +124,7 @@ TRANSLATE_PY := translate.py
 CUDA_DRIVER_DEP := XML2CODE/code_gen.py XML2CODE/ystree.py
 
 $(CUDA_DRIVER): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP)
-	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA)
+	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA) $(GPU_OPT)
 
 $(CUDA_GPUDB): $(CUDA_DRIVER)
 	$(MAKE) -C $(CUDA_DIR)
