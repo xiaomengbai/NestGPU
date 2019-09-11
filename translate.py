@@ -42,25 +42,35 @@ def genXMLTree(queryFile, tmpFilePath):
         with open(tmpFilePath, "w") as outputFile:
             outputFile.write(xmlStr)
 
-def genGPUCode(schemaFile, tmpFilePath):
+def genGPUCode(schemaFile, tmpFilePath, optimization):
+    
     #print 'TODO: call job generation program in ./bin/'
     os.chdir(CURRENT_DIR)
-    if tmpFilePath is None:
-        cmd = 'python XML2CODE/main.py ' + schemaFile
+
+    if optimization is None:
+        if tmpFilePath is None:
+            cmd = 'python XML2CODE/main.py ' + schemaFile + ''
+        else:
+            cmd = 'python XML2CODE/main.py ' + schemaFile + ' ' + tmpFilePath + ''
     else:
-        cmd = 'python XML2CODE/main.py ' + schemaFile + ' ' + tmpFilePath 
+            #Need to fix this one
+            cmd = 'python XML2CODE/main.py ' + schemaFile + ' ' + tmpFilePath 
+            #cmd = 'python XML2CODE/main.py ' + schemaFile + ' ' + tmpFilePath + ' ' + optimization
+    
     subprocess.check_call(cmd, shell=True)
 
 def print_usage():
     print 'usage 1: ./translate.py <schema-file>.schema'
     print 'usage 2: ./translate.py <query-file>.sql <schema-file>.schema'
+    print 'usage 3: ./translate.py <query-file>.sql <schema-file>.schema --idx'
 
 def main():
-    if (len(sys.argv) != 2 and len(sys.argv) != 3):
+
+    if (len(sys.argv) != 2 and len(sys.argv) != 3 and len(sys.argv) != 4):
         print_usage()
         sys.exit(0)
 
-    if len(sys.argv) == 3:
+    if len(sys.argv) == 3 or len(sys.argv) == 4:
         queryFile = sys.argv[1]
         schemaFile = sys.argv[2]
         tmpFile = str(datetime.datetime.now()).replace(' ', '_') + '.xml'
@@ -70,13 +80,19 @@ def main():
         print 'Generating XML tree (' + tmpFilePath + ')...'
         genXMLTree(queryFile, tmpFilePath)
 
-        print 'Generating GPU Codes ...'
-        genGPUCode(schemaFile, tmpFilePath)
+        #Pass down optimization flag
+        if len(sys.argv) == 4:
+            optimization = sys.argv[3]
+            print 'Generating optimized GPU Codes with options ['+optimization+']...'
+            genGPUCode(schemaFile, tmpFilePath, optimization)
+        else:
+            print 'Generating GPU Codes ...'
+            genGPUCode(schemaFile, tmpFilePath, None)
 
     else:
         queryFile = None
         schemaFile = sys.argv[1]
-        genGPUCode(schemaFile, None)
+        genGPUCode(schemaFile, None, None)
 
     print 'Done'
     print '--------------------------------------------------------------------'

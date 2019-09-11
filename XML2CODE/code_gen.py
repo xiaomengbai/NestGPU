@@ -1086,6 +1086,8 @@ def gpudb_code_gen(argv):
     includeDir = "./include"
     schemaFile = None
 
+    print "SOFOKLIS MPIKA!!!!"
+
     if len(sys.argv) == 3:
         tree_node = ystree.ysmart_tree_gen(argv[1],argv[2])
 
