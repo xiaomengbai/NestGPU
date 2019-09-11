@@ -21,9 +21,25 @@ TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
 
-# Add tpch queries
+# --- Queries ---
+
+# Testing query
 #SQL_FILE := $(TPCH_TEST_DIR)/test.sql
+
+# TPC-H Q2
 SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
+
+# TPC-H Q4
+#SQL_FILE := $(TPCH_TEST_DIR)/q4.sql
+
+# TPC-H Q16
+#SQL_FILE := $(TPCH_TEST_DIR)/q16.sql
+
+# TPC-H Q18
+#SQL_FILE := $(TPCH_TEST_DIR)/q18.sql
+
+# ---------------
 
 
 # build test/dbgen/dbgen for generating tables
