@@ -339,6 +339,35 @@ __global__ static void genScanFilter_and_in_vec(char *col, int colSize, long tup
     }
 }
 
+__global__ static void genScanFilter_and_nin(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+    int vlen = where->vlen;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        con = 0;
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, *(char **)where->content + colSize * j, colSize) == 0);
+        filter[i] &= (~con);
+    }
+}
+
+__global__ static void genScanFilter_and_nin_vec(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int vlen = *((*(int ***)where->content)[i]);
+        char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        con = 0;
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
+        filter[i] &= (~con);
+    }
+}
+
 __global__ static void genScanFilter_and_like(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -368,6 +397,43 @@ __global__ static void genScanFilter_and_like(char *col, int colSize, long tuple
             }else{
                 res = stringFind(str1, str2, len1, len2, pos);
                 con &= (res != -1);
+                pos = res + len2;
+            }
+            if(!con) break;
+        }
+        filter[i] &= con;
+    }
+}
+
+__global__ static void genScanFilter_and_nlike(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 1;
+    int vlen = where->vlen;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int pos = 0, res;
+        con = 1;
+        for(long j = 0; j < vlen; j++){
+            const char *str1 = col + colSize * i;
+            const char *str2 = *(char **)where->content + colSize * j;
+            int len1 = stringLen(str1);
+            int len2 = stringLen(str2);
+            len1 = len1 < colSize ? len1 : colSize;
+            len2 = len2 < colSize ? len2 : colSize;
+
+            if(j == 0){
+                if(!len2) continue;
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= (res == -1);
+                pos += len2;
+            }else if(j == vlen - 1){
+                if(!len2) continue;
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= !(res + len2 == len1);
+            }else{
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= (res == -1);
                 pos = res + len2;
             }
             if(!con) break;
@@ -1073,6 +1139,36 @@ __global__ static void genScanFilter_init_in_vec(char *col, int colSize, long tu
     }
 }
 
+
+__global__ static void genScanFilter_init_nin(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+    int vlen = where->vlen;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        con = 0;
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, *(char **)where->content + colSize * j, colSize) == 0);
+        filter[i] = ~con;
+    }
+}
+
+__global__ static void genScanFilter_init_nin_vec(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int vlen = *((*(int ***)where->content)[i]);
+        char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        con = 0;
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
+        filter[i] = ~con;
+    }
+}
+
 __global__ static void genScanFilter_init_like(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1110,6 +1206,42 @@ __global__ static void genScanFilter_init_like(char *col, int colSize, long tupl
     }
 }
 
+__global__ static void genScanFilter_init_nlike(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 1;
+    int vlen = where->vlen;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int pos = 0, res;
+        con = 1;
+        for(long j = 0; j < vlen; j++){
+            const char *str1 = col + colSize * i;
+            const char *str2 = *(char **)where->content + colSize * j;
+            int len1 = stringLen(str1);
+            int len2 = stringLen(str2);
+            len1 = len1 < colSize ? len1 : colSize;
+            len2 = len2 < colSize ? len2 : colSize;
+
+            if(j == 0){
+                if(!len2) continue;
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= (res == -1);
+                pos += len2;
+            }else if(j == vlen - 1){
+                if(!len2) continue;
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= !(res + len2 == len1);
+            }else{
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= (res == -1);
+                pos = res + len2;
+            }
+            if(!con) break;
+        }
+        filter[i] = con;
+    }
+}
 
 __global__ static void genScanFilter_init_eq(char *col, int colSize,long tupleNum, struct whereExp * where, int * filter){
     int stride = blockDim.x * gridDim.x;
@@ -1278,6 +1410,35 @@ __global__ static void genScanFilter_or_in_vec(char *col, int colSize, long tupl
     }
 }
 
+__global__ static void genScanFilter_or_nin(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+    int vlen = where->vlen;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        con = 0;
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, *(char **)where->content + colSize * j, colSize) == 0);
+        filter[i] |= ~con;
+    }
+}
+
+__global__ static void genScanFilter_or_nin_vec(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int vlen = *((*(int ***)where->content)[i]);
+        char *str_st = (*(char ***)where->content)[i] + sizeof(int);
+        con = 0;
+        for(long j = 0; j < vlen; j++)
+            con |= (stringCmp(col + colSize * i, str_st + colSize * j, colSize) == 0);
+        filter[i] |= ~con;
+    }
+}
+
 __global__ static void genScanFilter_or_like(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1307,6 +1468,43 @@ __global__ static void genScanFilter_or_like(char *col, int colSize, long tupleN
             }else{
                 res = stringFind(str1, str2, len1, len2, pos);
                 con &= (res != -1);
+                pos = res + len2;
+            }
+            if(!con) break;
+        }
+        filter[i] |= con;
+    }
+}
+
+__global__ static void genScanFilter_or_nlike(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 1;
+    int vlen = where->vlen;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int pos = 0, res;
+        con = 1;
+        for(long j = 0; j < vlen; j++){
+            const char *str1 = col + colSize * i;
+            const char *str2 = *(char **)where->content + colSize * j;
+            int len1 = stringLen(str1);
+            int len2 = stringLen(str2);
+            len1 = len1 < colSize ? len1 : colSize;
+            len2 = len2 < colSize ? len2 : colSize;
+
+            if(j == 0){
+                if(!len2) continue;
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= (res == -1);
+                pos += len2;
+            }else if(j == vlen - 1){
+                if(!len2) continue;
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= !(res + len2 == len1);
+            }else{
+                res = stringFind(str1, str2, len1, len2, pos);
+                con &= (res == -1);
                 pos = res + len2;
             }
             if(!con) break;
