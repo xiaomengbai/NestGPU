@@ -537,24 +537,24 @@ __global__ static void genScanFilter_init_int_neq(char *col, long tupleNum, int 
     }
 }
 
-__global__ static void genScanFilter_init_int_eq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_init_int_eq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) == where[i];
+        con = ((int*)col)[i] == where[i];
         filter[i] = con;
     }
 }
 
-__global__ static void genScanFilter_init_int_neq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_init_int_neq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) != where[i];
+        con = ((int*)col)[i] != where[i];
         filter[i] = con;
     }
 }
@@ -614,13 +614,13 @@ __global__ static void genScanFilter_init_int_gth(char *col, long tupleNum, int 
     }
 }
 
-__global__ static void genScanFilter_init_int_gth_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_init_int_gth_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) > where[i];
+        con = ((int*)col)[i] > where[i];
         filter[i] = con;
     }
 }
@@ -658,13 +658,13 @@ __global__ static void genScanFilter_init_int_lth(char *col, long tupleNum, int 
     }
 }
 
-__global__ static void genScanFilter_init_int_lth_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_init_int_lth_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) < where[i];
+        con = ((int*)col)[i] < where[i];
         filter[i] = con;
     }
 }
@@ -702,13 +702,13 @@ __global__ static void genScanFilter_init_int_geq(char *col, long tupleNum, int 
     }
 }
 
-__global__ static void genScanFilter_init_int_geq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_init_int_geq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) >= where[i];
+        con = ((int*)col)[i] >= where[i];
         filter[i] = con;
     }
 }
@@ -746,13 +746,13 @@ __global__ static void genScanFilter_init_int_leq(char *col, long tupleNum, int 
     }
 }
 
-__global__ static void genScanFilter_init_int_leq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_init_int_leq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) <= where[i];
+        con = ((int*)col)[i] <= where[i];
         filter[i] = con;
     }
 }
@@ -801,24 +801,24 @@ __global__ static void genScanFilter_and_int_neq(char *col, long tupleNum, int w
     }
 }
 
-__global__ static void genScanFilter_and_int_eq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_and_int_eq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con = __int2float_rz( ((int*)col)[i] ) == where[i];
+        con = ((int*)col)[i] == where[i];
         filter[i] &= con;
     }
 }
 
-__global__ static void genScanFilter_and_int_neq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_and_int_neq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con = __int2float_rz( ((int*)col)[i] ) != where[i];
+        con = ((int*)col)[i] != where[i];
         filter[i] &= con;
     }
 }
@@ -879,13 +879,13 @@ __global__ static void genScanFilter_and_int_geq(char *col, long tupleNum, int w
     }
 }
 
-__global__ static void genScanFilter_and_int_geq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_and_int_geq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con = __int2float_rz( ((int*)col)[i] ) >= where[i];
+        con = ((int*)col)[i] >= where[i];
         filter[i] &= con;
     }
 }
@@ -923,13 +923,13 @@ __global__ static void genScanFilter_and_int_leq(char *col, long tupleNum, int w
     }
 }
 
-__global__ static void genScanFilter_and_int_leq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_and_int_leq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) <= where[i];
+        con = ((int*)col)[i] <= where[i];
         filter[i] &= con;
     }
 }
@@ -967,13 +967,13 @@ __global__ static void genScanFilter_and_int_gth(char *col, long tupleNum, int w
     }
 }
 
-__global__ static void genScanFilter_and_int_gth_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_and_int_gth_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con = __int2float_rz( ((int*)col)[i] ) > where[i];
+        con = ((int*)col)[i] > where[i];
         filter[i] &= con;
     }
 }
@@ -1011,13 +1011,13 @@ __global__ static void genScanFilter_and_int_lth(char *col, long tupleNum, int w
     }
 }
 
-__global__ static void genScanFilter_and_int_lth_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_and_int_lth_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con = __int2float_rz( ((int*)col)[i] ) < where[i];
+        con = ((int*)col)[i] < where[i];
         filter[i] &= con;
     }
 }
@@ -1476,24 +1476,24 @@ __global__ static void genScanFilter_or_int_neq(char *col, long tupleNum, int wh
     }
 }
 
-__global__ static void genScanFilter_or_int_eq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_or_int_eq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) == where[i];
+        con = ((int*)col)[i] == where[i];
         filter[i] |= con;
     }
 }
 
-__global__ static void genScanFilter_or_int_neq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_or_int_neq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) != where[i];
+        con = ((int*)col)[i] != where[i];
         filter[i] |= con;
     }
 }
@@ -1553,13 +1553,13 @@ __global__ static void genScanFilter_or_int_gth(char *col, long tupleNum, int wh
     }
 }
 
-__global__ static void genScanFilter_or_int_gth_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_or_int_gth_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) > where[i];
+        con = ((int*)col)[i] > where[i];
         filter[i] |= con;
     }
 }
@@ -1597,13 +1597,13 @@ __global__ static void genScanFilter_or_int_lth(char *col, long tupleNum, int wh
     }
 }
 
-__global__ static void genScanFilter_or_int_lth_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_or_int_lth_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) < where[i];
+        con = ((int*)col)[i] < where[i];
         filter[i] |= con;
     }
 }
@@ -1641,13 +1641,13 @@ __global__ static void genScanFilter_or_int_geq(char *col, long tupleNum, int wh
     }
 }
 
-__global__ static void genScanFilter_or_int_geq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_or_int_geq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) >= where[i];
+        con = ((int*)col)[i] >= where[i];
         filter[i] |= con;
     }
 }
@@ -1685,13 +1685,13 @@ __global__ static void genScanFilter_or_int_leq(char *col, long tupleNum, int wh
     }
 }
 
-__global__ static void genScanFilter_or_int_leq_vec(char *col, long tupleNum, float *where, int * filter){
+__global__ static void genScanFilter_or_int_leq_vec(char *col, long tupleNum, int *where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con =  __int2float_rz( ((int*)col)[i] ) <= where[i];
+        con = ((int*)col)[i] <= where[i];
         filter[i] |= con;
     }
 }
@@ -2018,11 +2018,11 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             int rel = where->exp[0].relation;
             if(sn->tn->attrType[index] == INT){
                 int whereValue;
-                float *whereVec;
+                int *whereVec;
                 if(rel == EQ || rel == NOT_EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
                     whereValue = *((int*) where->exp[0].content);
                 else
-                    whereVec = *((float **) where->exp[0].content);
+                    whereVec = *((int **) where->exp[0].content);
 
                 if(rel==EQ)
                     genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
@@ -2267,11 +2267,11 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                 int rel = where->exp[i].relation;
                 if(sn->tn->attrType[index] == INT){
                     int whereValue;
-                    float *whereVec;
+                    int *whereVec;
                     if(rel == EQ || rel == NOT_EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
                         whereValue = *((int*) where->exp[i].content);
                     else
-                        whereVec = *((float **) where->exp[i].content);
+                        whereVec = *((int **) where->exp[i].content);
 
                     if(where->andOr == AND){
                         if(rel==EQ)

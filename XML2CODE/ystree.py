@@ -3920,7 +3920,6 @@ def gen_column_index(tree):
             right_exp = tree.right_child.select_list.tmp_exp_list
 
 
-
             if join_exp is not None:
                 col_list = []
                 __get_func_para__(join_exp,col_list)
@@ -4414,7 +4413,9 @@ def column_filtering(tree):
         elif tree.join_condition is not None:
             __add_func_to_select__(tree.join_condition.where_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
             __add_func_to_select__(tree.join_condition.where_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
-
+            if tree.where_condition is not None and tree.where_condition.where_condition_exp is not None:
+                __add_func_to_select__(tree.where_condition.where_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
+                __add_func_to_select__(tree.where_condition.where_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
 
         if tree.left_child.select_list is None:
             tree.left_child.select_list = FirstStepSelectList(None)
@@ -4843,7 +4844,9 @@ def search_external_cols(tree, root):
                 if par in external_cols:
                     cons = YConsExp(None, par.column_type)
                     cons.ref_col = par
+                    parent_func = _func_exp.func_obj
                     _func_exp.replace(par, cons)
+                    _func_exp.func_obj = parent_func
 
         # replace all exteranl colexp with consexp
         __traverse_exp_map__(exp, lambda e : replace_cols_in_a_func_exp(e))
@@ -4859,12 +4862,7 @@ def ysmart_tree_gen(schema,xml_file):
 
     node = build_plan_tree_from_a_select_node(thenode)
 
-    print "The outest query:"
-    node.debug(0)
-
-    print "\n  subqueries: "
-    for subq in subqueries:
-        print "  external cols: ", subq.dynamic_values
-        subq.debug(2)
-
     return node
+
+def eval_exp_list(exp_list):
+    return map(lambda exp: exp.evaluate(), exp_list)

@@ -768,7 +768,7 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2,&gpu_resPsum[threadNum-1],sizeof(int),cudaMemcpyDeviceToHost));
 
     res->tupleNum = tmp1 + tmp2;
-    printf("[INFO]Number of join results: %d\n",res->tupleNum);
+    //printf("[INFO]Number of join results: %d\n",res->tupleNum);
 
     CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&JRes,res->tupleNum * sizeof(int)));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(JRes,0,res->tupleNum * sizeof(int)));
@@ -987,7 +987,7 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
 
     clock_gettime(CLOCK_REALTIME,&end);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    printf("HashJoin Time: %lf\n", timeE/(1000*1000));
+    //printf("HashJoin Time: %lf\n", timeE/(1000*1000));
 
     return res;
 

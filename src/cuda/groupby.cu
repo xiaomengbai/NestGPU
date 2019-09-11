@@ -138,8 +138,15 @@ __global__ static void agg_cal_cons(char ** content, int colNum, struct groupByE
     int stride = blockDim.x * gridDim.x;
     int index = blockIdx.x * blockDim.x + threadIdx.x;
     float buf[32];
-    for(int i=0;i<32;i++)
-        buf[i] = 0;
+    for(int i = 0; i < colNum; i++){
+        int func = exp[i].func;
+        if(func == MAX)
+            buf[i] = FLOAT_MIN;
+        else if(func == MIN)
+            buf[i] = FLOAT_MAX;
+        else
+            buf[i] = 0;
+    }
 
     for(int i=index;i<tupleNum;i+=stride){
         for(int j=0;j<colNum;j++){
@@ -368,7 +375,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
     else
         res->tupleNum = gbCount;
 
-    printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
+    //printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
 
     char ** gpuResult = NULL;
     char ** result = NULL;
@@ -433,7 +440,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
 
     clock_gettime(CLOCK_REALTIME,&end);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    printf("GroupBy Time: %lf\n", timeE/(1000*1000));
+    //printf("GroupBy Time: %lf\n", timeE/(1000*1000));
 
     return res;
 }

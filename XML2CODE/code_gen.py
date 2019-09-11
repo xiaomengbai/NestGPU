@@ -993,7 +993,7 @@ def generate_code_for_a_tree(fo, tree, lvl):
         print >>fo, indent + "clReleaseContext(context.context);"
         print >>fo, indent + "clReleaseProgram(context.program);\n"
 
-def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
+def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
     indent = (lvl * 3 + 2) * baseIndent
     var_subqRes = "subqRes" + str(lvl)
@@ -1001,10 +1001,6 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
     subq_id = con.parameter_list[0].cons_value
     pass_in_cols = con.parameter_list[1:]
     sub_tree = ystree.subqueries[subq_id]
-
-    print "the subquery: "
-    sub_tree.debug(0)
-    print "the pass in cols: ", map(lambda c: c.evaluate(), pass_in_cols)
 
     subq_select_list = sub_tree.select_list.tmp_exp_list
     if len(subq_select_list) > 1:
@@ -1020,7 +1016,7 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
     elif isinstance(selectItem, ystree.YRawColExp):
         subq_res_col = selectItem
     else:
-        print "ERROR: Unknown select column type in a subquery: ", selectItem.evaluate
+        print "ERROR: Unknown select column type in a subquery: ", selectItem.evaluate()
         print 1/0
 
     if rel in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
@@ -1033,21 +1029,31 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, indexList):
 
     print >>fo, ""
     print >>fo, indent + "// Process the subquery"
+
+    if isinstance(currentNode, ystree.TwoJoinNode):
+        pass_in_cols = map(lambda c: ystree.__trace_to_leaf__(currentNode, c, False), pass_in_cols)
+
     for col in pass_in_cols:
         colLen = type_length(col.table_name, col.column_name, col.column_type)
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
         print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
         print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
 
-    print >>fo, indent + var_subqRes + " = (char *)malloc(" + (subq_res_size if constant_len_res else "sizeof(char *)") + " * header.tupleNum);"
+    print >>fo, indent + var_subqRes + " = (char *)malloc(" + (subq_res_size if constant_len_res else "sizeof(char *)") + " * " + tupleNum + ");"
     print >>fo, indent + "CHECK_POINTER(" + var_subqRes + ");\n"
 
-    print >>fo, indent + "for(int tupleid = 0; tupleid < header.tupleNum; tupleid++){"
+    print >>fo, indent + "for(int tupleid = 0; tupleid < " + tupleNum + "; tupleid++){"
 
     for col in pass_in_cols:
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
         colLen = type_length(col.table_name, col.column_name, col.column_type)
-        print >>fo, indent + baseIndent + "memcpy(" + pass_in_var + ", (char *)(" + col.table_name.lower() + "Table->content[" +  str(indexList.index(col.column_name)) + "]) + tupleid * " + colLen + ", " + colLen + ");"
+        if passInPos == "MEM":
+            print >>fo, indent + baseIndent + "memcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" +  str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ");"
+        elif passInPos == "GPU":
+            print >>fo, indent + baseIndent + "CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" + str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ", cudaMemcpyDeviceToHost) );"
+        else:
+            print "ERROR: Unknown pass in value position: ", passInPos
+            exit(99)
 
     print >>fo, indent + baseIndent + "{"
 
@@ -1311,6 +1317,7 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
     leftName, rightName = generate_code_for_a_node(fo, indent, lvl, jn.left_child), generate_code_for_a_node(fo, indent, lvl, jn.right_child)
+    var_subqRes = "subqRes" + str(lvl)
 
     if leftName is None or rightName is None:
         print 1/0
@@ -1336,6 +1343,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
     lAttrList = []
     rAttrList = []
 
+    selectList = jn.select_list.tmp_exp_list
     for exp in jn.select_list.tmp_exp_list:
         index = jn.select_list.tmp_exp_list.index(exp)
         if isinstance(exp, ystree.YRawColExp):
@@ -1360,6 +1368,66 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
                 rAttrList.append(colAttr)
                 rPosList.append(index)
+
+    if jn.where_condition is not None:
+        whereList = []
+        relList = []
+        conList = []
+        get_where_attr(jn.where_condition.where_condition_exp, whereList, relList, conList)
+        index = len(lPosList) + len(rPosList)
+        for col in whereList:
+            if (col.table_name == "LEFT" and col.column_name in lOutList) or (col.table_name == "RIGHT" and col.column_name in rOutList):
+                continue
+
+            colAttr = columnAttr()
+            colAttr.type = col.column_type
+            if col.table_name == "LEFT":
+                if joinType == 0:
+                    lOutList.append(col.column_name)
+                elif joinType == 1:
+                    newExp = ystree.__trace_to_leaf__(jn, col, False)
+                    lOutList.append(newExp.column_name)
+                lAttrList.append(colAttr)
+                lPosList.append(index)
+                index = index + 1
+            elif col.table_name == "RIGHT":
+                if joinType == 0:
+                    rOutList.append(col.column_name)
+                elif joinType == 1:
+                    newExp = ystree.__trace_to_leaf__(jn, col, False)
+                    rOutList.append(newExp.column_name)
+                rAttrList.append(colAttr)
+                rPosList.append(index)
+                index = index + 1
+
+        for con in conList:
+            if isinstance(con, ystree.YFuncExp) and con.func_name == "SUBQ":
+                for par in con.parameter_list:
+                    if isinstance(par, ystree.YRawColExp):
+                        if (par.table_name == "LEFT" and par.column_name in lOutList) or (par.table_name == "RIGHT" and par.column_name in rOutList):
+                            continue
+
+                        col = par
+                        colAttr = columnAttr()
+                        colAttr.type = col.column_type
+                        if col.table_name == "LEFT":
+                            if joinType == 0:
+                                lOutList.append(col.column_name)
+                            elif joinType == 1:
+                                newExp = ystree.__trace_to_leaf__(jn, col, False)
+                                lOutList.append(newExp.column_name)
+                            lAttrList.append(colAttr)
+                            lPosList.append(index)
+                            index = index + 1
+                        elif col.table_name == "RIGHT":
+                            if joinType == 0:
+                                rOutList.append(col.column_name)
+                            elif joinType == 1:
+                                newExp = ystree.__trace_to_leaf__(jn, col, False)
+                                rOutList.append(newExp.column_name)
+                            rAttrList.append(colAttr)
+                            rPosList.append(index)
+                            index = index + 1
 
     pkList = jn.get_pk()
 
@@ -1417,9 +1485,9 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         print >>fo, indent + "for(int k=0; k<" + str(len(rOutList) + len(lOutList))  + "; k++)"
         print >>fo, indent + baseIndent + jName + ".keepInGpu[k] = 1;"
 
-
-    print >>fo, indent + jName + ".rightOutputAttrNum = " + str(len(rOutList)) + ";"
     print >>fo, indent + jName + ".leftOutputAttrNum = " + str(len(lOutList)) + ";"
+    print >>fo, indent + jName + ".rightOutputAttrNum = " + str(len(rOutList)) + ";"
+
     print >>fo, indent + jName + ".leftOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
     print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputAttrType);"
     print >>fo, indent + jName + ".leftOutputIndex = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
@@ -1450,12 +1518,132 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
     print >>fo, indent + jName + ".leftKeyIndex = " + str(leftIndex) + ";"
     print >>fo, indent + jName + ".rightKeyIndex = " + str(rightIndex) + ";"
 
-    resName = leftName + "_" + rightName
+    print >>fo, indent + "struct tableNode *joinRes;"
     if CODETYPE == 0:
-        print >>fo, indent + resName + " = hashJoin(&" + jName + ",&pp);\n"
+        print >>fo, indent + "joinRes = hashJoin(&" + jName + ",&pp);\n"
     else:
-        print >>fo, indent + resName + " = hashJoin(&" + jName + ", &context, &pp);\n"
+        print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &context, &pp);\n"
 
+    if jn.where_condition is not None and not jn.where_condition.where_condition_exp.compare(jn.join_condition.where_condition_exp):
+        expList = []
+        def get_join_exps(exp, expList):
+            if isinstance(exp, ystree.YFuncExp):
+                if exp.func_name in ["AND", "OR"]:
+                    for x in exp.parameter_list:
+                        if isinstance(x, ystree.YFuncExp):
+                            get_join_exps(x, expList)
+                else:
+                    expList.append(exp)
+
+        get_join_exps(jn.where_condition.where_condition_exp, expList)
+
+        relName = "joinRel"
+        print >>fo, indent + "// Where conditions: " + jn.where_condition.where_condition_exp.evaluate()
+        print >>fo, indent + "struct scanNode " + relName + ";"
+        print >>fo, indent + relName + ".tn = joinRes;"
+        print >>fo, indent + relName + ".hasWhere = 1;"
+        print >>fo, indent + relName + ".whereAttrNum = " + str(len(expList)) + ";"
+        print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int) * " + str(len(expList)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
+        print >>fo, indent + relName + ".outputNum = " + str(len(selectList)) + ";"
+        print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
+
+
+        for i in range(0, len(selectList)):
+            print >>fo, indent + relName + ".outputIndex[" + str(i) + "] = " + str(i) + ";"
+
+
+        def col2index_in_joinRes(col):
+            if col.table_name == "LEFT":
+                return lPosList[lOutList.index(col.column_name)]
+            elif col.table_name == "RIGHT":
+                return rPosList[rOutList.index(col.column_name)]
+
+        where_col_dict = {}
+        for i in range(0, len(expList)):
+            exp = expList[i]
+            if not isinstance(exp, ystree.YFuncExp) or len(exp.parameter_list) != 2:
+                print "ERROR: doesn't support join condition: ", exp.evaluate()
+                exit(99)
+
+            left_col = exp.parameter_list[0]
+            right_col = exp.parameter_list[1]
+            if not isinstance(left_col, ystree.YRawColExp):
+                print "ERROR: the left side of join must be a column!: ", left_col.evaluate()
+                exit(99)
+
+            if not isinstance(right_col, ystree.YRawColExp) and not (isinstance(right_col, ystree.YFuncExp) and right_col.func_name == "SUBQ"):
+                print "ERROR: the right side of join must be a column or a subquery!: ", right_col.evaluate()
+                exit(99)
+
+            if left_col.evaluate() not in where_col_dict.keys():
+                print >>fo, indent + relName + ".whereIndex[" + str(i) + "] = " + str(col2index_in_joinRes(left_col)) + ";"
+                where_col_dict[left_col.evaluate()] = i
+
+        if keepInGpu == 0:
+            print >>fo, indent + relName + ".KeepInGpu = 0;"
+        else:
+            print >>fo, indent + relName + ".keepInGpu = 1;"
+
+        print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
+        print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
+
+        print >>fo, indent + "(" + relName + ".filter)->nested = 0;"
+        print >>fo, indent + "(" + relName + ".filter)->expNum = " + str(len(expList)) + ";"
+        print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *" + str(len(expList)) + ");"
+        print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
+
+        if jn.where_condition.where_condition_exp.func_name in ["AND","OR"]:
+            print >>fo, indent + "(" + relName + ".filter)->andOr = " + jn.where_condition.where_condition_exp.func_name + ";"
+        else:
+            print >>fo, indent + "(" + relName + ".filter)->andOr = EXP;"
+
+        for i in range(0, len(expList)):
+            exp = expList[i]
+            left_col = exp.parameter_list[0]
+            right_col = exp.parameter_list[1]
+
+            colType = left_col.column_type
+            ctype = to_ctype(colType)
+
+            print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(where_col_dict[left_col.evaluate()]) + ";"
+
+            print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + exp.func_name + "_VEC;"
+
+            if isinstance(right_col, ystree.YRawColExp):
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = GPU;"
+                print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &joinRes->content[" + str(col2index_in_joinRes(right_col)) + "], sizeof(void *));"
+            else:
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+
+                indexDict = {}
+                for j in range(0, len(lOutList)):
+                    col = ystree.YRawColExp("LEFT", "")
+                    col.column_name = lOutList[j]
+                    indexDict[ystree.__trace_to_leaf__(jn, col, False).evaluate()] = lPosList[j]
+                for j in range(0, len(rOutList)):
+                    col = ystree.YRawColExp("RIGHT", "")
+                    col.column_name = rOutList[j]
+                    indexDict[ystree.__trace_to_leaf__(jn, col, False).evaluate()] = rPosList[j]
+
+                generate_code_for_a_subquery(fo, lvl, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU")
+
+                print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
+
+        if CODETYPE == 0:
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
+        else:
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
+
+        print >>fo, indent + "freeScan(&" + relName + ");\n"
+
+        if CODETYPE == 1:
+            print >>fo, indent + "clFinish(context.queue);"
+
+    else:
+        print >>fo, indent + resName + " = joinRes;"
+    
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}\n"
 
@@ -1689,7 +1877,10 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
             # Get subquery result here
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
-                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], indexList)
+                indexDict = {}
+                for j in range(0, len(indexList)):
+                    indexDict[ tn.table_name + "." + str(indexList[j])] = j
+                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], "header.tupleNum", tnName, indexDict, tn, "MEM")
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"

@@ -746,7 +746,7 @@ struct tableNode * orderBy(struct orderByNode * odNode, struct statistic *pp){
 
     clock_gettime(CLOCK_REALTIME,&end);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    printf("OrderBy Time: %lf\n", timeE/(1000*1000));
+    //printf("OrderBy Time: %lf\n", timeE/(1000*1000));
 
     return res;
 }
