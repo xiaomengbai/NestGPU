@@ -743,8 +743,6 @@ def generate_col_list(tn,indexList, colList):
                         colList.append(par)
 
 
-
-
 """
 generate_code generates CUDA/OpenCL codes from the query plan tree.
 Currently we only generate CUDA/OpenCL codes for star schema queries.
@@ -765,7 +763,7 @@ Several configurable variables (in config.py):
     mapped to host memory.
 """
 
-def generate_code(tree):
+def generate_code(tree, optimization):
 
     global baseIndent
     """
@@ -921,7 +919,7 @@ def generate_code(tree):
     print >>fo, indent + "struct statistic pp;"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
 
-    generate_code_for_a_tree(fo, tree, 0)
+    generate_code_for_a_tree(fo, tree, 0, optimization)
 
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &end);"
     print >>fo, indent + "double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;"
@@ -932,7 +930,6 @@ def generate_code(tree):
     print >>fo, "}\n"
 
     fo.close()
-
 
 def get_subqueries(tree, subq_list):
 
@@ -956,8 +953,7 @@ def get_subqueries(tree, subq_list):
         __get_subqueries__(where_exp, subq_list)
         return
 
-
-def generate_code_for_a_tree(fo, tree, lvl):
+def generate_code_for_a_tree(fo, tree, lvl, optimization):
 
     global baseIndent
     indent = (lvl * 3 + 1) * baseIndent
@@ -972,7 +968,7 @@ def generate_code_for_a_tree(fo, tree, lvl):
     print >>fo, indent + "struct tableNode *" + resultNode + ";"
     print >>fo, indent + "char * " + var_subqRes + ";\n"
 
-    tree_result = generate_code_for_a_node(fo, indent, lvl, tree)
+    tree_result = generate_code_for_a_node(fo, indent, lvl, tree, optimization)
 
     print >>fo, indent + resultNode + " = " + tree_result + ";"
 
@@ -993,7 +989,14 @@ def generate_code_for_a_tree(fo, tree, lvl):
         print >>fo, indent + "clReleaseContext(context.context);"
         print >>fo, indent + "clReleaseProgram(context.program);\n"
 
-def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
+def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
+
+    #Sofoklis current
+    if optimization is not None:
+        print "===================="
+        print " Enable opt - INSIDE SUBQUERY"
+        print optimization
+        print "===================="
 
     indent = (lvl * 3 + 2) * baseIndent
     var_subqRes = "subqRes" + str(lvl)
@@ -1057,7 +1060,7 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
 
     print >>fo, indent + baseIndent + "{"
 
-    generate_code_for_a_tree(fo, sub_tree, lvl + 1)
+    generate_code_for_a_tree(fo, sub_tree, lvl + 1, optimization)
 
     print >>fo, indent + baseIndent * 2 + ""
     if constant_len_res:
@@ -1092,15 +1095,16 @@ def gpudb_code_gen(argv):
     includeDir = "./include"
     schemaFile = None
 
-    print "SOFOKLIS MPIKA!!!!"
-
-    if len(sys.argv) == 3:
+    #Exec query
+    if len(sys.argv) == 3 or len(sys.argv) == 4:
         tree_node = ystree.ysmart_tree_gen(argv[1],argv[2])
-
+    
+    #Data loading 
     elif len(sys.argv) == 2:
         schemaFile = ystree.ysmart_get_schema(argv[1])
 
-    if len(sys.argv) == 3 and tree_node is None:
+    #Need a parsing tree to execute queries
+    if len(sys.argv) == 3 or len(sys.argv) == 4 and tree_node is None:
         exit(-1)
 
     if os.path.exists(resultDir) is False:
@@ -1130,7 +1134,11 @@ def gpudb_code_gen(argv):
     os.chdir(codeDir)
 
     if len(sys.argv) == 3:
-        generate_code(tree_node)
+        generate_code(tree_node, None)
+    
+    #Pass optimization
+    elif len(sys.argv) == 4:
+        generate_code(tree_node, argv[3])
 
     os.chdir(pwd)
     os.chdir(resultDir)
@@ -1143,29 +1151,28 @@ def gpudb_code_gen(argv):
 
     os.chdir(pwd)
 
-
-def generate_code_for_a_node(fo, indent, lvl, node):
+def generate_code_for_a_node(fo, indent, lvl, node, optimization):
+    
     if isinstance(node, ystree.TwoJoinNode):
-        return generate_code_for_a_two_join_node(fo, indent, lvl, node)
+        return generate_code_for_a_two_join_node(fo, indent, lvl, node, optimization)
     elif isinstance(node, ystree.GroupByNode):
-        return generate_code_for_a_group_by_node(fo, indent, lvl, node)
+        return generate_code_for_a_group_by_node(fo, indent, lvl, node, optimization)
     elif isinstance(node, ystree.OrderByNode):
-        return generate_code_for_a_order_by_node(fo, indent, lvl, node)
+        return generate_code_for_a_order_by_node(fo, indent, lvl, node, optimization)
     elif isinstance(node, ystree.TableNode):
-        return generate_code_for_a_table_node(fo, indent, lvl, node)
+        return generate_code_for_a_table_node(fo, indent, lvl, node, optimization)
     elif isinstance(node, ystree.SelectProjectNode):
-        return generate_code_for_a_select_project_node(fo, indent, lvl, node)
+        return generate_code_for_a_select_project_node(fo, indent, lvl, node, optimization)
 
+def generate_code_for_a_select_project_node(fo, indent, lvl, spn, optimization):
 
-def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
-
-    inputNode = generate_code_for_a_node(fo, indent, lvl, spn.child)
+    inputNode = generate_code_for_a_node(fo, indent, lvl, spn.child, optimization)
 
     return inputNode
 
-def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
+def generate_code_for_a_order_by_node(fo, indent, lvl, obn, optimization):
 
-    inputNode = generate_code_for_a_node(fo, indent, lvl, obn.child)
+    inputNode = generate_code_for_a_node(fo, indent, lvl, obn.child, optimization )
 
     orderby_exp_list = obn.order_by_clause.orderby_exp_list
     odLen = len(orderby_exp_list)
@@ -1206,10 +1213,9 @@ def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
 
     return resultNode
 
+def generate_code_for_a_group_by_node(fo, indent, lvl, gbn, optimization):
 
-def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
-
-    inputNode = generate_code_for_a_node(fo, indent, lvl, gbn.child)
+    inputNode = generate_code_for_a_node(fo, indent, lvl, gbn.child, optimization)
 
     gb_exp_list = gbn.group_by_clause.groupby_exp_list
     select_list = gbn.select_list.tmp_exp_list
@@ -1313,10 +1319,9 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 
     return resultNode
 
+def generate_code_for_a_two_join_node(fo, indent, lvl, jn, optimization):
 
-def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
-
-    leftName, rightName = generate_code_for_a_node(fo, indent, lvl, jn.left_child), generate_code_for_a_node(fo, indent, lvl, jn.right_child)
+    leftName, rightName = generate_code_for_a_node(fo, indent, lvl, jn.left_child, optimization), generate_code_for_a_node(fo, indent, lvl, jn.right_child, optimization)
     var_subqRes = "subqRes" + str(lvl)
 
     if leftName is None or rightName is None:
@@ -1627,7 +1632,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
                     col.column_name = rOutList[j]
                     indexDict[ystree.__trace_to_leaf__(jn, col, False).evaluate()] = rPosList[j]
 
-                generate_code_for_a_subquery(fo, lvl, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU")
+                generate_code_for_a_subquery(fo, lvl, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU", optimization)
 
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
 
@@ -1667,7 +1672,7 @@ table_refs = {
     "partsupp" : 0
     }
 
-def generate_code_for_a_table_node(fo, indent, lvl, tn):
+def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
 
     resName =  tn.table_name.lower()[0:2] if table_abbr[tn.table_name.lower()] == None else table_abbr[tn.table_name.lower()]
     resName = resName + str(table_refs[tn.table_name.lower()])
@@ -1880,7 +1885,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 indexDict = {}
                 for j in range(0, len(indexList)):
                     indexDict[ tn.table_name + "." + str(indexList[j])] = j
-                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], "header.tupleNum", tnName, indexDict, tn, "MEM")
+                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], "header.tupleNum", tnName, indexDict, tn, "MEM", optimization)
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"

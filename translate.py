@@ -53,9 +53,7 @@ def genGPUCode(schemaFile, tmpFilePath, optimization):
         else:
             cmd = 'python XML2CODE/main.py ' + schemaFile + ' ' + tmpFilePath + ''
     else:
-            #Need to fix this one
-            cmd = 'python XML2CODE/main.py ' + schemaFile + ' ' + tmpFilePath 
-            #cmd = 'python XML2CODE/main.py ' + schemaFile + ' ' + tmpFilePath + ' ' + optimization
+            cmd = 'python XML2CODE/main.py ' + schemaFile + ' ' + tmpFilePath + ' ' + optimization
     
     subprocess.check_call(cmd, shell=True)
 
