@@ -989,14 +989,8 @@ def generate_code_for_a_tree(fo, tree, lvl, optimization):
         print >>fo, indent + "clReleaseContext(context.context);"
         print >>fo, indent + "clReleaseProgram(context.program);\n"
 
-def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
-
-    #Sofoklis current
-    if optimization is not None:
-        print "===================="
-        print " Enable opt - INSIDE SUBQUERY"
-        print optimization
-        print "===================="
+#Baseline subquery execution
+def generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
 
     indent = (lvl * 3 + 2) * baseIndent
     var_subqRes = "subqRes" + str(lvl)
@@ -1077,6 +1071,33 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
         print >>fo, indent + "free(" + pass_in_var + ");"
     print >>fo, ""
+
+#Indexed subquery execution
+def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
+
+    print "!!!!NESTED INDEX UNDER CONSTRUCTION!!!!"
+
+#Base function that re-directs the execution
+def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
+
+    #Baseline execution
+    if optimization == "--base":
+        print "================================================================================================="
+        print "[INFO]: Executing nested block using baseline algorithms (i.e. nested loops)"
+        print "================================================================================================="
+        generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization)
+    
+    # Sort linking predicate and index
+    elif optimization == "--idx":
+        print "================================================================================================="
+        print "[INFO]: Executing nested block using sorting and indexing (i.e. sort linking predicate and index)"
+        print "================================================================================================="
+        generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization)
+    
+    #Error 
+    else:
+        print "[ERROR]: Unknown optimization techniques for nested block evaluation!"
+        exit(-1)
 
 """
 gpudb_code_gen: entry point for code generation.
