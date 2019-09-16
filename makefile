@@ -43,7 +43,7 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # -- Optimizations --
 
 #Baseline
-#leave empty
+#GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
 GPU_OPT := --idx
