@@ -1091,7 +1091,6 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         sub_tree.debug(0)
         exit(-1)
 
-    #Get result column from the nested block
     selectItem = subq_select_list[0]
     subq_res_size = 0
     if isinstance(selectItem, ystree.YFuncExp):
@@ -1125,7 +1124,7 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         #Get column len
         colLen = type_length(col.table_name, col.column_name, col.column_type)
         
-        #Get variable
+        #Get correlated variable
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
         
         #Allocate memory for the column
@@ -1170,6 +1169,28 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
     # Steps 3 - Binary search on the prefix -> return bitmap and materialize after that
     #-----------------------------------------------------------------------------------
 
+    # #Get result column from the nested block
+    
+    # Add ordering through a non-functional re-write
+    # print "-----------------------------"
+    # print sub_tree.debug(0)
+    
+    # #Explore all the nested block
+    # currNode = sub_tree
+    # count = 0
+    # while currNode is not None:
+    #     if isinstance(currNode, ystree.TwoJoinNode):
+    #         print currNode.right_child.debug(0)
+    #         count = count + 1
+    #     elif isinstance(node, ystree.GroupByNode):
+    #         currNode = currNode.
+    #         count = count + 1
+            
+    #         isinstance(node, ystree.OrderByNode):
+    #         isinstance(node, ystree.TableNode):
+    #         isinstance(node, ystree.SelectProjectNode):
+    # print "-----------------------------"
+
     #Generate code for the nested blcok
     generate_code_for_a_tree(fo, sub_tree, lvl + 1, optimization)
 
@@ -1182,7 +1203,6 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
         print >>fo, indent + baseIndent * 2 + "*(int *)(((char **)" + var_subqRes + ")[tupleid]) = mn.table->tupleNum;"
         print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
-    
     #Sofoklis Debug
     print >>fo, indent + baseIndent + "//===========End SUB-QUERY processing==========="
     

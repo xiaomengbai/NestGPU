@@ -11,11 +11,16 @@
 -- select * from nation;
 
 -- SIMPLE TPC-H query (WORKS)
-select * from region;
+-- select * from region;
 
 -- SIMPLE TPC-H query (WORKS)
 -- select * from partsupp;
 
+
+-- Testing order by
+select c_custkey
+from customer
+order by c_custkey;
 
 -- Testing "FILTER"
 -- select *
