@@ -555,6 +555,7 @@ struct tableNode * orderBy(struct orderByNode * odNode, struct statistic *pp){
 
     clock_gettime(CLOCK_REALTIME,&start);
 
+    //Sofoklis comment: not sure why we need to have only 1024 tuple
     assert(odNode->table->tupleNum < SHARED_SIZE_LIMIT);
 
     res = (struct tableNode *)malloc(sizeof(struct tableNode));

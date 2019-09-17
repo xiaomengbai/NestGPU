@@ -23,10 +23,10 @@ SCHEMA := $(TPCH_SCHEMA)
 
 # --- Queries ---
 # Testing query
-#SQL_FILE := $(TPCH_TEST_DIR)/test.sql
+SQL_FILE := $(TPCH_TEST_DIR)/test.sql
 
 # TPC-H Q2
-SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 # TPC-H Q4
@@ -54,7 +54,7 @@ GPU_OPT := --idx
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 0.01
+TABLE_SCALE := 0.001
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
