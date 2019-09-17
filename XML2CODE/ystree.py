@@ -2332,22 +2332,22 @@ class FirstStepOrderBy:
 
         return return_exp_list
 
+    #Add default constructor
+    def __init__(self, input_order_by = None):
 
-
-
-    def __init__(self, input_order_by):
-        self.source = input_order_by
-
-        #self.converted_str = self.utility_convert_order_by_to_str(self.source)
-
-
-        self.order_indicator_list = []
-        self.orderby_exp_list = self.utility_convert_order_by_to_exp_list(self.source)
-
-        #self.converted_exp_str = self.utility_convert_exp_list_to_str(self.orderby_exp_list)
-
-
-
+        #Default constructor
+        if input_order_by is None:
+            self.source = None
+            self.order_indicator_list = None
+            self.orderby_exp_list = None
+        
+        #GPU-DB constructor (No idea what they are doing)
+        else:
+            self.source = input_order_by
+            #self.converted_str = self.utility_convert_order_by_to_str(self.source)
+            self.order_indicator_list = []
+            self.orderby_exp_list = self.utility_convert_order_by_to_exp_list(self.source)
+            #self.converted_exp_str = self.utility_convert_exp_list_to_str(self.orderby_exp_list)
 
 def convert_a_select_tree(a_s_select_node):
 

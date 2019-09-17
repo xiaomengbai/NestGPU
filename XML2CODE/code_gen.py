@@ -1075,6 +1075,9 @@ def generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName
 #Indexed subquery execution
 def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
 
+    print "================================================================================================="
+    print "[INFO]: Executing nested block using sorting and indexing (i.e. sort linking predicate and index)"
+
     #Add indent
     indent = (lvl * 3 + 2) * baseIndent
     var_subqRes = "subqRes" + str(lvl)
@@ -1158,38 +1161,125 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
     print >>fo, indent + baseIndent + "{"
 
     #Sofoklis Debug
-    print >>fo, indent + baseIndent + "//==========Start SUB-QUERY processing=========="
+    print >>fo, indent + baseIndent + "//==========Start SUB-QUERY processing (with indexing)=========="
 
     # Sofoklis Comments for indexing implemenation
     #-----------------------------------------------------------------------------------
-    # Here we need to sort the results and then istead of scan use lookUp
-    #
-    # Steps 1 - See how to short
-    # Steps 2 - Build prefix (based on previous code)
-    # Steps 3 - Binary search on the prefix -> return bitmap and materialize after that
+    # Step 1 - Search for linking predicates
+    # Step 2 - Order them if you found them
+    # Step 3 - Build prefix based on the ordering (Not commited yet)
+    # Step 4 - Replace scan with binary search (Not commited yet)
     #-----------------------------------------------------------------------------------
 
-    # #Get result column from the nested block
-    
-    # Add ordering through a non-functional re-write
-    # print "-----------------------------"
-    # print sub_tree.debug(0)
-    
-    # #Explore all the nested block
-    # currNode = sub_tree
-    # count = 0
-    # while currNode is not None:
-    #     if isinstance(currNode, ystree.TwoJoinNode):
-    #         print currNode.right_child.debug(0)
-    #         count = count + 1
-    #     elif isinstance(node, ystree.GroupByNode):
-    #         currNode = currNode.
-    #         count = count + 1
+    #Explore all the nested block
+    nodesToExplore = []
+    nodesHierarchy = {} #Key = Parent, Value = [Child1, Child2]
+    nodesToExplore.append(sub_tree)
+    while len(nodesToExplore) != 0: 
+
+        #Get next node
+        currNode = nodesToExplore.pop()            
+
+        #Add left and right nodes from joins
+        if isinstance(currNode, ystree.TwoJoinNode):            
             
-    #         isinstance(node, ystree.OrderByNode):
-    #         isinstance(node, ystree.TableNode):
-    #         isinstance(node, ystree.SelectProjectNode):
-    # print "-----------------------------"
+            #Explore right and left childs
+            nodesToExplore.append(currNode.left_child)
+            nodesToExplore.append(currNode.right_child)
+
+            #Keep Hierarchy 
+            chList = []
+            chList.append(currNode.left_child)
+            chList.append(currNode.right_child)
+            nodesHierarchy[currNode] = chList
+
+        #Found leafs (i.e. tables)
+        elif isinstance(currNode, ystree.TableNode):
+
+            #Check if there is a where condition
+            if currNode.where_condition is not None:
+
+                #Keep colunms that need to be ordered
+                columnsToShort = []  
+
+                #Analyze where condition
+                whereList = []
+                relList = []
+                conList = []
+                get_where_attr(currNode.where_condition.where_condition_exp, whereList, relList, conList)
+
+                #Check if it filters a linking predicate
+                for col in conList:
+                    if isinstance(col, ystree.YRawColExp): 
+
+                        #Mark all columns that need to be sorted 
+                        for linkingPredicate in pass_in_cols:
+                            if col.table_name == linkingPredicate.table_name and col.column_name == linkingPredicate.column_name:
+        
+                                print "[INFO]: Found linking predicate column: "+linkingPredicate.table_name+"."+str(linkingPredicate.column_name)
+                                
+                                #Add to the list of columns that need to be sorted
+                                columnsToShort.append(col)
+                
+                #Check if we have to short this table
+                if len(columnsToShort) != 0:
+
+                    #Postpone linking predicate scan
+                    linkingPredicate_scan = currNode.where_condition
+                    currNode.where_condition = None
+                    
+                    #Create new orderBy node 
+                    orderBy_Node = ystree.OrderByNode()
+                    orderBy_Clause = ystree.FirstStepOrderBy()
+                    orderBy_expr = []
+                    orderBy_indicator = []
+
+                    #Add all the linking predicates
+                    for col in columnsToShort: 
+                        print "[INFO]: Creating orderBy query node for linking predicates:"
+                        orderBy_expr.append(col)
+                        orderBy_indicator.append('ASC') 
+
+                    #Construct orderBy clause
+                    orderBy_Clause.orderby_exp_list = orderBy_expr
+                    orderBy_Clause.order_indicator_list = orderBy_indicator
+                    orderBy_Node.order_by_clause = orderBy_Clause
+                    orderBy_Node.child = currNode
+                    orderBy_Node.debug(0)
+
+                    #Create an index scan for the linking predicate on top of the shorting
+                    indexScanNode = orderBy_Node #Do not import code yet as it breaks the implementation
+
+                    #Get parent of the current node
+                    for parent in nodesHierarchy:
+                        
+                        #Used to find left or right child relation
+                        childNum = 0 
+                        if len(nodesHierarchy[parent]) != 1:
+                            childNum = 1
+
+                        #Update child of parrent
+                        for child in nodesHierarchy[parent]:
+                            if currNode is child: 
+                                print "[INFO]: Adding new linking predicate to the query plan"
+                                if childNum == 0:
+                                    parent.child = indexScanNode
+                                elif childNum == 1:
+                                    parent.left_child = indexScanNode
+                                elif childNum == 2:
+                                    parent.right_child = indexScanNode
+                            childNum = childNum+1
+        else:
+
+            #If this is anything else (order, group by etc) we move one
+            nodesToExplore.append(currNode.child)
+
+            #Keep Hierarchy 
+            chList = []
+            chList.append(currNode.child)
+            nodesHierarchy[currNode] = chList
+
+    print "================================================================================================="
 
     #Generate code for the nested blcok
     generate_code_for_a_tree(fo, sub_tree, lvl + 1, optimization)
@@ -1226,11 +1316,8 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     
     # Sort linking predicate and index
     elif optimization == "--idx":
-        print "================================================================================================="
-        print "[INFO]: Executing nested block using sorting and indexing (i.e. sort linking predicate and index)"
-        print "================================================================================================="
         generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization)
-    
+
     #Error 
     else:
         print "[ERROR]: Unknown optimization techniques for nested block evaluation!"
