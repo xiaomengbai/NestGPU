@@ -1939,6 +1939,19 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
     print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
     print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
 
+    # Generate indexing code
+    if tn.indexCols is not None:
+        print >>fo, indent + tnName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
+        print >>fo, indent + tnName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->colIdx);"
+        
+        count = 0 
+        for col in tn.indexCols:
+            print >>fo, indent + tnName + "->colIdx["+str(count)+"] = "+str(col.column_name)+";"
+            count = count + 1
+    else:
+        print >>fo, indent + tnName + "->colIdxNum = 0;"
+
     tupleSize = "0"
     for i in range(0, totalAttr):
         col = colList[i]
