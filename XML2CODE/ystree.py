@@ -932,6 +932,7 @@ class TableNode(QueryPlanTreeBase):
     composite = None
     table_name = None
     table_alias = None
+    indexCols = None
 
     def __init__(self):
         super(TableNode, self).__init__()
@@ -974,8 +975,14 @@ class TableNode(QueryPlanTreeBase):
         tmp_str_select_list = "[" + sscs + "]"
         tmp_str_where_condition = "[" + str(swc) + "]"
 
+        strIdx=""
+        if self.indexCols is not None:
+            strIdx = " << Idx: "
+            for col in self.indexCols:
+                strIdx += col.table_name+"."+str(col.column_name)+" "
+            strIdx += ">>"
 
-        print pb, "TableNode", self.table_name, "{" + self.table_alias + "}", tmp_str_select_list, tmp_str_where_condition
+        print pb, "TableNode", self.table_name, "{" + self.table_alias + "}", tmp_str_select_list, tmp_str_where_condition + strIdx
 
 
 class TwoJoinNode(QueryPlanTreeBase):

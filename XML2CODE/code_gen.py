@@ -1224,51 +1224,9 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
                 #Check if we have to short this table
                 if len(columnsToShort) != 0:
 
-                    #Postpone linking predicate scan
-                    linkingPredicate_scan = currNode.where_condition
-                    currNode.where_condition = None
-                    
-                    #Create new orderBy node 
-                    orderBy_Node = ystree.OrderByNode()
-                    orderBy_Clause = ystree.FirstStepOrderBy()
-                    orderBy_expr = []
-                    orderBy_indicator = []
+                    #Add columns to create index
+                    currNode.indexCols = columnsToShort
 
-                    #Add all the linking predicates
-                    for col in columnsToShort: 
-                        print "[INFO]: Creating orderBy query node for linking predicates:"
-                        orderBy_expr.append(col)
-                        orderBy_indicator.append('ASC') 
-
-                    #Construct orderBy clause
-                    orderBy_Clause.orderby_exp_list = orderBy_expr
-                    orderBy_Clause.order_indicator_list = orderBy_indicator
-                    orderBy_Node.order_by_clause = orderBy_Clause
-                    orderBy_Node.child = currNode
-                    orderBy_Node.debug(0)
-
-                    #Create an index scan for the linking predicate on top of the shorting
-                    indexScanNode = orderBy_Node #Do not import code yet as it breaks the implementation
-
-                    #Get parent of the current node
-                    for parent in nodesHierarchy:
-                        
-                        #Used to find left or right child relation
-                        childNum = 0 
-                        if len(nodesHierarchy[parent]) != 1:
-                            childNum = 1
-
-                        #Update child of parrent
-                        for child in nodesHierarchy[parent]:
-                            if currNode is child: 
-                                print "[INFO]: Adding new linking predicate to the query plan"
-                                if childNum == 0:
-                                    parent.child = indexScanNode
-                                elif childNum == 1:
-                                    parent.left_child = indexScanNode
-                                elif childNum == 2:
-                                    parent.right_child = indexScanNode
-                            childNum = childNum+1
         else:
 
             #If this is anything else (order, group by etc) we move one
