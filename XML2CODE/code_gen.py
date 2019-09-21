@@ -1941,16 +1941,20 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
 
     # Generate indexing code
     if tn.indexCols is not None:
+        print >>fo, indent + "// Indexing initialization"
         print >>fo, indent + tnName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
         print >>fo, indent + tnName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + tnName + "->colIdx);"
-        
-        count = 0 
-        for col in tn.indexCols:
-            print >>fo, indent + tnName + "->colIdx["+str(count)+"] = "+str(col.column_name)+";"
-            count = count + 1
+        print >>fo, indent + tnName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->contentIdx);"
+        print >>fo, indent + tnName + "->posIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->posIdx);\n"
+
+        #Count indexed column pos in colIdx
+        colIdx_count = 0 
     else:
-        print >>fo, indent + tnName + "->colIdxNum = 0;"
+        print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
+        print >>fo, indent + tnName + "->colIdxNum = 0;\n"
 
     tupleSize = "0"
     for i in range(0, totalAttr):
@@ -2016,6 +2020,15 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
         print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
         print >>fo, indent + "close(outFd);\n"
+
+        # Generate indexing code
+        if tn.indexCols is not None:
+            for idxCol in tn.indexCols:
+                if idxCol.column_name == col.column_name:
+                    print >>fo, indent + "// Create index for column " + str(colIndex) + ", type: " + col.column_type
+                    print >>fo, indent + tnName + "->colIdx["+str(colIdx_count)+"] = "+str(colIndex)+";"
+                    print >>fo, indent + "// createNestedIndex("+tnName+"->content["+str(colIndex)+"],"+tnName+"->contentIdx["+str(colIdx_count)+"],"+tnName+"->posIdx["+str(colIdx_count)+"]);\n"
+                    colIdx_count = colIdx_count + 1 #Go to the next indexed column
 
     print >>fo, indent + tnName + "->tupleSize = " + tupleSize + ";"
     print >>fo, indent + tnName + "->tupleNum = header.tupleNum;\n"

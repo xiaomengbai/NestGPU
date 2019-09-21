@@ -212,9 +212,9 @@ struct tableNode{
 
     /* Indexing */
     int colIdxNum;          /* the total number of sorted indexed columns */
-    int *colIdx;             /* the list with all the sorted indexed columns */
+    int *colIdx;            /* the list with all the sorted indexed columns */
     char **contentIdx;      /* the values sorted (col1, col2 etc) */
-    char **posIdx ;         /* the possition of each value in the original table (col1, col2 etc) */
+    char **posIdx;          /* the possition of each value in the original table (col1, col2 etc) */
 };
 
 struct groupByExp{
