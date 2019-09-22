@@ -103,7 +103,7 @@ static void mergeIntoTable(struct tableNode *dst, struct tableNode * src, struct
 
 static void freeTable(struct tableNode * tn){
     int i;
-
+    
     for(i=0;i<tn->totalAttr;i++){
         if(tn->dataPos[i] == MEM)
             free(tn->content[i]);
@@ -127,6 +127,24 @@ static void freeTable(struct tableNode * tn){
     tn->dataPos = NULL;
     free(tn->content);
     tn->content = NULL;
+
+    //Free indexed data
+    if (tn->colIdxNum > 0){
+        free(tn->colIdx);
+        tn->colIdx = NULL;
+        for(i=0;i<tn->colIdxNum;i++){ 
+            free(tn->contentIdx[i]);
+            free(tn->posIdx[i]);
+        }
+        free (tn->contentIdx);
+        tn->contentIdx = NULL;
+        free(tn->posIdx);
+        tn->posIdx = NULL;
+    }
+    
+    //Draft
+    //tn->tupleNum;
+
 }
 
 static void freeScan(struct scanNode * rel){

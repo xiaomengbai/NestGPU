@@ -830,8 +830,8 @@ def generate_code(tree, optimization):
     if CODETYPE == 0:
         print >>fo, "#include \"../include/cpuCudaLib.h\""
         print >>fo, "#include \"../include/gpuCudaLib.h\""
-
         print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
+        print >>fo, "extern void createIndex (struct tableNode *, int, int,struct statistic *);"
         if joinType == 0:
             print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);"
         else:
@@ -1166,9 +1166,8 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
     # Sofoklis Comments for indexing implemenation
     #-----------------------------------------------------------------------------------
     # Step 1 - Search for linking predicates
-    # Step 2 - Order them if you found them
-    # Step 3 - Build prefix based on the ordering (Not commited yet)
-    # Step 4 - Replace scan with binary search (Not commited yet)
+    # Step 2 - Create build index (by sorting linking predicate)
+    # Step 3 - If there is an index do binary search instead of scan
     #-----------------------------------------------------------------------------------
 
     #Explore all the nested block
@@ -1223,13 +1222,16 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
                 
                 #Check if we have to short this table
                 if len(columnsToShort) != 0:
-
+                    
                     #Add columns to create index
-                    currNode.indexCols = columnsToShort
+                    currNode.indexCols = copy.deepcopy(columnsToShort)   
+
+                    #No need to filter
+                    currNode.where_condition = None
 
         else:
 
-            #If this is anything else (order, group by etc) we move one
+            #If this is anything else (order, group by etc) we move to the next one
             nodesToExplore.append(currNode.child)
 
             #Keep Hierarchy 
@@ -1251,7 +1253,7 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
         print >>fo, indent + baseIndent * 2 + "*(int *)(((char **)" + var_subqRes + ")[tupleid]) = mn.table->tupleNum;"
         print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
-    #Sofoklis Debug
+
     print >>fo, indent + baseIndent + "//===========End SUB-QUERY processing==========="
     
     print >>fo, indent + baseIndent + "}"
@@ -1939,23 +1941,6 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
     print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
     print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
 
-    # Generate indexing code
-    if tn.indexCols is not None:
-        print >>fo, indent + "// Indexing initialization"
-        print >>fo, indent + tnName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
-        print >>fo, indent + tnName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->colIdx);"
-        print >>fo, indent + tnName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->contentIdx);"
-        print >>fo, indent + tnName + "->posIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->posIdx);\n"
-
-        #Count indexed column pos in colIdx
-        colIdx_count = 0 
-    else:
-        print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
-        print >>fo, indent + tnName + "->colIdxNum = 0;\n"
-
     tupleSize = "0"
     for i in range(0, totalAttr):
         col = colList[i]
@@ -2020,15 +2005,6 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
         print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
         print >>fo, indent + "close(outFd);\n"
-
-        # Generate indexing code
-        if tn.indexCols is not None:
-            for idxCol in tn.indexCols:
-                if idxCol.column_name == col.column_name:
-                    print >>fo, indent + "// Create index for column " + str(colIndex) + ", type: " + col.column_type
-                    print >>fo, indent + tnName + "->colIdx["+str(colIdx_count)+"] = "+str(colIndex)+";"
-                    print >>fo, indent + "// createNestedIndex("+tnName+"->content["+str(colIndex)+"],"+tnName+"->contentIdx["+str(colIdx_count)+"],"+tnName+"->posIdx["+str(colIdx_count)+"]);\n"
-                    colIdx_count = colIdx_count + 1 #Go to the next indexed column
 
     print >>fo, indent + tnName + "->tupleSize = " + tupleSize + ";"
     print >>fo, indent + tnName + "->tupleNum = header.tupleNum;\n"
@@ -2183,6 +2159,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         ############## end of wherecondition not none
 
     else:
+        
         print >>fo, indent + "if(blockTotal != 1){"
 
         if CODETYPE == 0:
@@ -2202,7 +2179,29 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         print >>fo, indent + baseIndent + resName + " = " + tnName + ";"
         print >>fo, indent + "}"
 
-    print >>fo, indent + "tupleOffset += header.tupleNum;"
+    print >>fo, indent + "tupleOffset += header.tupleNum;\n"
+
+    # Generate indexing code
+    if tn.indexCols is not None:
+        print >>fo, indent + "// Indexing initialization"
+        print >>fo, indent + resName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
+        print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
+        print >>fo, indent + resName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
+        print >>fo, indent + resName + "->posIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
+        count = 0
+        for idxCol in tn.indexCols:
+            print >>fo, indent + "// Create index for column " + str(idxCol.column_name) + ", type: " + idxCol.column_type
+            print >>fo, indent + resName + "->colIdx["+str(count)+"] = "+str(idxCol.column_name)+";"
+            print >>fo, indent + "createIndex("+resName+","+str(count)+","+str(idxCol.column_name)+",&pp);\n"
+            count = count + 1
+    else:
+        print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
+        print >>fo, indent + resName + "->colIdxNum = 0;\n"
+        
+
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}"
     indent = indent[:indent.rfind(baseIndent)]

@@ -2112,9 +2112,9 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     struct whereCondition *where = sn->filter;
 
-/*
- * The first step is to evaluate the selection predicates and generate a vetor to form the final results.
- */
+    /*
+     * The first step is to evaluate the selection predicates and generate a vetor to form the final results.
+    */
 
     if(1){
 
@@ -2122,15 +2122,15 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuExp, sizeof(struct whereExp)));
         //CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
-/*
- * Currently we evaluate the predicate one by one.
- * When consecutive predicates are accessing the same column, we don't release the GPU device memory
- * that store the accessed column until all these predicates have been evaluated. Otherwise the device
- * memory will be released immediately after the corresponding predicate has been evaluated.
- *
- * (@whereIndex, @prevWhere), (@index,  @prevIndex), (@format, @prevFormat) are used to decide
- * whether two consecutive predicates access the same column with the same format.
- */
+        /*
+         * Currently we evaluate the predicate one by one.
+         * When consecutive predicates are accessing the same column, we don't release the GPU device memory
+         * that store the accessed column until all these predicates have been evaluated. Otherwise the device
+         * memory will be released immediately after the corresponding predicate has been evaluated.
+         *
+         * (@whereIndex, @prevWhere), (@index,  @prevIndex), (@format, @prevFormat) are used to decide
+         * whether two consecutive predicates access the same column with the same format.
+         */
 
         int whereIndex = where->exp[0].index;
         int index = sn->whereIndex[whereIndex];
@@ -2192,17 +2192,17 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
 
-/*
- * @dNum, @byteNum and @gpuDictFilter are for predicates that need to access dictionary-compressed columns.
- */
+       /*   
+         * @dNum, @byteNum and @gpuDictFilter are for predicates that need to access dictionary-compressed columns.
+         */
         int dNum;
         int byteNum;
         int *gpuDictFilter = NULL;
 
-/*
- * We will allocate GPU device memory for a column if it is stored in the host pageable or pinned memory.
- * If it is configured to utilize the UVA technique, no GPU device memory will be allocated.
- */
+        /*
+         * We will allocate GPU device memory for a column if it is stored in the host pageable or pinned memory.
+         * If it is configured to utilize the UVA technique, no GPU device memory will be allocated.
+         */
 
         if(sn->tn->dataPos[index] == MEM || sn->tn->dataPos[index] == MMAP || sn->tn->dataPos[index] == PINNED)
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &column[whereIndex], sn->tn->attrTotalSize[index]));
@@ -2315,7 +2315,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
         }else if(format == DICT){
 
-/*Data are stored in the host memory for selection*/
+            /*Data are stored in the host memory for selection*/
 
             struct dictHeader * dheader = (struct dictHeader *)sn->tn->content[index];
             dNum = dheader->dictNum;
@@ -2408,7 +2408,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
             if(prevIndex != index){
 
-/*When the two consecutive predicates access different columns*/
+        /*When the two consecutive predicates access different columns*/
 
                 if(prevFormat == DICT){
                     if(dictInit == 1){
@@ -2696,9 +2696,9 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     }
 
 
-/* Count the number of tuples that meets the predicats for each thread
- * and calculate the prefix sum.
- */
+    /* Count the number of tuples that meets the predicats for each thread
+    * and calculate the prefix sum.
+    */
     countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
     scanImpl(gpuCount,threadNum,gpuPsum, pp);
 
@@ -2834,5 +2834,28 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     // printf("TableScan Time: %lf\n", timeE/(1000*1000));
 
     return res;
+
+}
+
+/*
+ * Creates sorted index for the selected column
+ * 
+ * --Input--
+ * tn -> Table node
+ * columnPos -> Column to be sorted
+ * idxPos -> Position of the indexed column in contentIdx and posIdx
+ *
+ *
+ * --Output--
+ * tn.contentIdx (sorted values)
+ * tn.posIdx (position in the original table )
+ */
+void createIndex (struct tableNode *tn, int columnPos, int idxPos, struct statistic *pp){
+
+    printf("Total columns to be indexed: %d \n", tn->tupleNum);
+
+    //Allocate memory for the index
+    tn->contentIdx[idxPos] = (char *)malloc(sizeof(char *) *  tn->tupleNum); 
+    tn->posIdx[idxPos] = (char *)malloc(sizeof(char *) *  tn->tupleNum); 
 
 }
