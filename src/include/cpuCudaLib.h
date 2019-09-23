@@ -136,10 +136,10 @@ static void freeTable(struct tableNode * tn){
             free(tn->contentIdx[i]);
             free(tn->posIdx[i]);
         }
-        free (tn->contentIdx);
-        tn->contentIdx = NULL;
         free(tn->posIdx);
         tn->posIdx = NULL;
+        free (tn->contentIdx);
+        tn->contentIdx = NULL;
     }
 }
 

@@ -27,6 +27,9 @@
 #include "../include/common.h"
 #include "../include/gpuCudaLib.h"
 
+#include <thrust/execution_policy.h>
+#include <thrust/system/cuda/execution_policy.h>
+
 #define CHECK_POINTER(p)   do {                     \
     if(p == NULL){                                  \
         perror("Failed to allocate host memory");   \
@@ -2837,6 +2840,18 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
 }
 
+
+/*
+ * Assign numbers 0 to inNum in a buffer using the device. 
+ */
+__global__ static void assign_index(int *col, long  inNum){
+    int stride = blockDim.x * gridDim.x;
+    int offset = blockIdx.x * blockDim.x + threadIdx.x;
+    for (int i = offset; i<inNum; i += stride){
+        col[i] = i;
+    }
+}
+
 /*
  * Creates sorted index for the selected column
  * 
@@ -2852,10 +2867,30 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
  */
 void createIndex (struct tableNode *tn, int columnPos, int idxPos, struct statistic *pp){
 
-    printf("Total columns to be indexed: %d \n", tn->tupleNum);
+    //Define Grid and block size
+    dim3 grid(2048);
+    dim3 block(256);
 
-    //Allocate memory for the index
-    tn->contentIdx[idxPos] = (char *)malloc(sizeof(char *) *  tn->tupleNum); 
-    tn->posIdx[idxPos] = (char *)malloc(sizeof(char *) *  tn->tupleNum); 
+    //Get data size
+    long dataSize = tn->tupleNum * tn->attrSize[columnPos];
+
+    //Allocate memory for the index (in host)
+    tn->contentIdx[idxPos] = (char *)malloc(dataSize); 
+    CHECK_POINTER(tn->contentIdx[idxPos]);
+    tn->posIdx[idxPos] = (int *)malloc(sizeof(int *) *  tn->tupleNum); 
+    CHECK_POINTER(tn->posIdx[idxPos]);
+
+    //Assign index (in device)
+    int* posIdx_d;
+    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, sizeof(int) * tn->tupleNum));
+    assign_index<<<grid,block>>>(posIdx_d, tn->tupleNum);
+
+    //Copy values (in device)
+    char* contentIdx_d;
+    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->content[columnPos], dataSize, cudaMemcpyHostToDevice));
+
+    //Sort columns
+    thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + dataSize , posIdx_d); //thrust inplace sorting
 
 }

@@ -2189,7 +2189,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
         print >>fo, indent + resName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
-        print >>fo, indent + resName + "->posIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
+        print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
         count = 0
         for idxCol in tn.indexCols:
