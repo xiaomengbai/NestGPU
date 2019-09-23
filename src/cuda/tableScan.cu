@@ -29,6 +29,7 @@
 
 #include <thrust/execution_policy.h>
 #include <thrust/system/cuda/execution_policy.h>
+#include <thrust/binary_search.h>
 
 #define CHECK_POINTER(p)   do {                     \
     if(p == NULL){                                  \
@@ -2893,4 +2894,63 @@ void createIndex (struct tableNode *tn, int columnPos, int idxPos, struct statis
     //Sort columns
     thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + dataSize , posIdx_d); //thrust inplace sorting
 
+    //Copy index to host
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->contentIdx[idxPos], contentIdx_d, dataSize, cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->posIdx[idxPos], posIdx_d, sizeof(int) * tn->tupleNum, cudaMemcpyDeviceToHost)); 
+
+    //De-allocate device memory
+    CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
+    CUDA_SAFE_CALL_NO_SYNC(cudaFree(posIdx_d));
+}
+
+/*
+ * Filters using index
+ */
+ void indexScan (struct tableNode *tn, char** col, int colTupleNum, int colAttrSize, int columnPos, int idxPos, struct statistic *pp){
+
+    //Define Grid and block size
+    dim3 grid(2048);
+    dim3 block(256);
+
+    //Get data size
+    long dataSize = tn->tupleNum * tn->attrSize[columnPos];
+
+    //Index pos (in device)
+    int* posIdx_d;
+    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, sizeof(int) * tn->tupleNum));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(posIdx_d, tn->posIdx[columnPos], sizeof(int) * tn->tupleNum, cudaMemcpyHostToDevice));  
+
+    //Copy values (in device)
+    char* contentIdx_d;
+    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(posIdx_d, tn->contentIdx[columnPos], dataSize, cudaMemcpyHostToDevice));  
+
+    //Copy outer table values (in device)
+    char* col_d;
+    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&col_d, colAttrSize * colTupleNum));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(col_d, col, colAttrSize * colTupleNum , cudaMemcpyHostToDevice));  
+
+    //Buffer filter
+    bool * resBitmap_d;
+    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&resBitmap_d, sizeof(bool) * tn->tupleNum));
+
+    //Binary search
+    thrust::binary_search(thrust::device, col_d,col_d + colAttrSize * colTupleNum, contentIdx_d, contentIdx_d + dataSize, resBitmap_d);
+
+    //TODO
+    //Need to convert the index pos to the original pos
+
+    //Copy result to host
+    bool * resBitmap;
+    resBitmap = (bool *)malloc(sizeof(bool) * tn->tupleNum); 
+    CHECK_POINTER(resBitmap); 
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(resBitmap, resBitmap_d, sizeof(bool) * tn->tupleNum, cudaMemcpyDeviceToHost));
+
+    //De-allocate device memory
+    CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
+    CUDA_SAFE_CALL_NO_SYNC(cudaFree(posIdx_d));
+    CUDA_SAFE_CALL_NO_SYNC(cudaFree(resBitmap_d));
+
+    //Retun bitmap?
+    //return resBitmap;
 }

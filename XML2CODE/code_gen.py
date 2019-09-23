@@ -1226,7 +1226,8 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
                     #Add columns to create index
                     currNode.indexCols = copy.deepcopy(columnsToShort)   
 
-                    #No need to filter
+                    #Remove regular scan and add idex scan
+                    currNode.indexScan = copy.deepcopy(currNode.where_condition)   
                     currNode.where_condition = None
 
         else:
@@ -2183,6 +2184,8 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
 
     # Generate indexing code
     if tn.indexCols is not None:
+        
+        #Init index
         print >>fo, indent + "// Indexing initialization"
         print >>fo, indent + resName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
         print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
@@ -2192,11 +2195,37 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
         count = 0
+
+        # Create index
         for idxCol in tn.indexCols:
             print >>fo, indent + "// Create index for column " + str(idxCol.column_name) + ", type: " + idxCol.column_type
             print >>fo, indent + resName + "->colIdx["+str(count)+"] = "+str(idxCol.column_name)+";"
             print >>fo, indent + "createIndex("+resName+","+str(count)+","+str(idxCol.column_name)+",&pp);\n"
             count = count + 1
+
+        # Add scan indexing
+        if tn.indexScan is not None:
+            whereList = []
+            relList = []
+            conList = []
+            get_where_attr(tn.indexScan.where_condition_exp, whereList, relList, conList)
+
+            if len(relList) != 1:
+                print "[ERROR] : Cannot use complicated nested condition with indexing!"
+                exit(-1)
+            if relList[0] != "EQ":
+                print "[ERROR] : Can only use \"EQ\" nested condition with indexing!"
+                exit(-1)             
+        
+            #Part outer
+            for col in whereList:
+                print col.table_name
+                print col.column_name
+
+            #TODO need to fix that to pass the outer table
+            print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate() 
+            print >>fo, indent + "// createIndex("+resName+",&"+var_subqRes+","+str(conList[0].column_name)+",&pp);\n"
+
     else:
         print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
         print >>fo, indent + resName + "->colIdxNum = 0;\n"
