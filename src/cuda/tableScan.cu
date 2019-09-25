@@ -2063,6 +2063,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     CHECK_POINTER(res->dataFormat);
     res->content = (char **) malloc(sizeof(char *) * res->totalAttr);
     CHECK_POINTER(res->content);
+    res->colIdxNum = 0;
+
 
     for(int i=0;i<res->totalAttr;i++){
         int index = sn->outputIndex[i];

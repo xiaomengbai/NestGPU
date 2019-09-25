@@ -35,6 +35,7 @@ static void initTable(struct tableNode * tn){
     tn->dataFormat = NULL;
     tn->dataPos = NULL;
     tn->content = NULL;
+    tn->colIdxNum = 0;
 }
 
 /*

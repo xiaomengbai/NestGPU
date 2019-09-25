@@ -1001,7 +1001,7 @@ def generate_code_for_a_tree(fo, tree, lvl):
         print >>fo, indent + "clReleaseProgram(context.program);\n"
 
 #Baseline subquery execution
-def generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
+def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
     indent = (lvl * 3 + 2) * baseIndent
     var_subqRes = "subqRes" + str(lvl)
@@ -1086,19 +1086,13 @@ def generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName
 #Indexed subquery execution
 def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
-    print "================================================================================================="
-    print "[INFO]: Executing nested block using sorting and indexing (i.e. sort linking predicate and index)"
-
-    #Add indent
     indent = (lvl * 3 + 2) * baseIndent
     var_subqRes = "subqRes" + str(lvl)
 
-    #Get sub-query tree
     subq_id = con.parameter_list[0].cons_value
     pass_in_cols = con.parameter_list[1:]
     sub_tree = ystree.subqueries[subq_id]
 
-    #Check output of nested block
     subq_select_list = sub_tree.select_list.tmp_exp_list
     if len(subq_select_list) > 1:
         print "[ERROR] : more than one column are selected in a subquery!"
@@ -1116,7 +1110,6 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         print "ERROR: Unknown select column type in a subquery: ", selectItem.evaluate()
         exit(-1)
 
-    #Get size of the column from the nested block
     if rel in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
         constant_len_res = True
         subq_res_size = "sizeof(float)"
@@ -1124,42 +1117,26 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         constant_len_res = False
         subq_res_size = type_length(subq_res_col.table_name, subq_res_col.column_name, subq_res_col.column_type)
 
-    # Generate code that process the sub-query
     print >>fo, ""
     print >>fo, indent + "// Process the subquery"
 
-    #Get correlated columns (from join)
     if isinstance(currentNode, ystree.TwoJoinNode):
         pass_in_cols = map(lambda c: ystree.__trace_to_leaf__(currentNode, c, False), pass_in_cols)
 
-    #Go over all columns of the sub-query
     for col in pass_in_cols:
-
-        #Get column len
         colLen = type_length(col.table_name, col.column_name, col.column_type)
-
-        #Get correlated variable
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-
-        #Allocate memory for the column
         print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
         print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
 
-    #Allocate result buffer for the nested block
     print >>fo, indent + var_subqRes + " = (char *)malloc(" + (subq_res_size if constant_len_res else "sizeof(char *)") + " * " + tupleNum + ");"
     print >>fo, indent + "CHECK_POINTER(" + var_subqRes + ");\n"
 
-    #Print outer loop
     print >>fo, indent + "for(int tupleid = 0; tupleid < " + tupleNum + "; tupleid++){"
 
-    #For all the correlated columns
     for col in pass_in_cols:
-
-        #Add correlated column and lenght
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
         colLen = type_length(col.table_name, col.column_name, col.column_type)
-
-        #Copy value to "pass_in_var"
         if passInPos == "MEM":
             print >>fo, indent + baseIndent + "memcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" +  str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ");"
         elif passInPos == "GPU":
@@ -1168,7 +1145,6 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
             print "ERROR: Unknown pass in value position: ", passInPos
             exit(99)
 
-    #Add sub-query processing
     print >>fo, indent + baseIndent + "{"
 
     #Sofoklis Debug
@@ -1253,10 +1229,8 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
 
     print "================================================================================================="
 
-    #Generate code for the nested blcok
     generate_code_for_a_tree(fo, sub_tree, lvl + 1)
 
-    #Get results of the nested block
     print >>fo, indent + baseIndent * 2 + ""
     if constant_len_res:
         print >>fo, indent + baseIndent * 2 + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
@@ -1265,9 +1239,6 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
         print >>fo, indent + baseIndent * 2 + "*(int *)(((char **)" + var_subqRes + ")[tupleid]) = mn.table->tupleNum;"
         print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
-
-    print >>fo, indent + baseIndent + "//===========End SUB-QUERY processing==========="
-
     print >>fo, indent + baseIndent + "}"
     print >>fo, indent + "}"
 
@@ -1275,26 +1246,6 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
         print >>fo, indent + "free(" + pass_in_var + ");"
     print >>fo, ""
-
-#Base function that re-directs the execution
-def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
-
-    global optimization
-    #Baseline execution
-    if optimization == "--base":
-        print "================================================================================================="
-        print "[INFO]: Executing nested block using baseline algorithms (i.e. nested loops)"
-        print "================================================================================================="
-        generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos)
-
-    # Sort linking predicate and index
-    elif optimization == "--idx":
-        generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos)
-
-    #Error
-    else:
-        print "[ERROR]: Unknown optimization techniques for nested block evaluation!"
-        exit(-1)
 
 """
 gpudb_code_gen: entry point for code generation.
@@ -2189,7 +2140,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         print >>fo, indent + baseIndent + resName + " = " + tnName + ";"
         print >>fo, indent + "}"
 
-    print >>fo, indent + "tupleOffset += header.tupleNum;\n"
+    print >>fo, indent + "tupleOffset += header.tupleNum;"
 
     # Generate indexing code
     if tn.indexCols is not None:
