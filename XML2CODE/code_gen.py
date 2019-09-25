@@ -27,6 +27,7 @@ import pickle
 schema = None
 keepInGpu = 1
 baseIndent = " " * 4
+optimization = None
 
 """
 Get the value of the configurable variables from config.py
@@ -769,7 +770,7 @@ Several configurable variables (in config.py):
     mapped to host memory.
 """
 
-def generate_code(tree, optimization):
+def generate_code(tree):
 
     global baseIndent
     """
@@ -929,7 +930,7 @@ def generate_code(tree, optimization):
     print >>fo, indent + "struct statistic pp;"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
 
-    generate_code_for_a_tree(fo, tree, 0, optimization)
+    generate_code_for_a_tree(fo, tree, 0)
 
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &end);"
     print >>fo, indent + "double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;"
@@ -963,7 +964,7 @@ def get_subqueries(tree, subq_list):
         __get_subqueries__(where_exp, subq_list)
         return
 
-def generate_code_for_a_tree(fo, tree, lvl, optimization):
+def generate_code_for_a_tree(fo, tree, lvl):
 
     global baseIndent
     indent = (lvl * 3 + 1) * baseIndent
@@ -978,7 +979,7 @@ def generate_code_for_a_tree(fo, tree, lvl, optimization):
     print >>fo, indent + "struct tableNode *" + resultNode + ";"
     print >>fo, indent + "char * " + var_subqRes + ";\n"
 
-    tree_result = generate_code_for_a_node(fo, indent, lvl, tree, optimization)
+    tree_result = generate_code_for_a_node(fo, indent, lvl, tree)
 
     print >>fo, indent + resultNode + " = " + tree_result + ";"
 
@@ -1000,7 +1001,7 @@ def generate_code_for_a_tree(fo, tree, lvl, optimization):
         print >>fo, indent + "clReleaseProgram(context.program);\n"
 
 #Baseline subquery execution
-def generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
+def generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
     indent = (lvl * 3 + 2) * baseIndent
     var_subqRes = "subqRes" + str(lvl)
@@ -1064,7 +1065,7 @@ def generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName
 
     print >>fo, indent + baseIndent + "{"
 
-    generate_code_for_a_tree(fo, sub_tree, lvl + 1, optimization)
+    generate_code_for_a_tree(fo, sub_tree, lvl + 1)
 
     print >>fo, indent + baseIndent * 2 + ""
     if constant_len_res:
@@ -1083,7 +1084,7 @@ def generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName
     print >>fo, ""
 
 #Indexed subquery execution
-def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
+def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
     print "================================================================================================="
     print "[INFO]: Executing nested block using sorting and indexing (i.e. sort linking predicate and index)"
@@ -1136,10 +1137,10 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
 
         #Get column len
         colLen = type_length(col.table_name, col.column_name, col.column_type)
-        
+
         #Get correlated variable
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-        
+
         #Allocate memory for the column
         print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
         print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
@@ -1184,19 +1185,19 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
     nodesToExplore = []
     nodesHierarchy = {} #Key = Parent, Value = [Child1, Child2]
     nodesToExplore.append(sub_tree)
-    while len(nodesToExplore) != 0: 
+    while len(nodesToExplore) != 0:
 
         #Get next node
-        currNode = nodesToExplore.pop()            
+        currNode = nodesToExplore.pop()
 
         #Add left and right nodes from joins
-        if isinstance(currNode, ystree.TwoJoinNode):            
-            
+        if isinstance(currNode, ystree.TwoJoinNode):
+
             #Explore right and left childs
             nodesToExplore.append(currNode.left_child)
             nodesToExplore.append(currNode.right_child)
 
-            #Keep Hierarchy 
+            #Keep Hierarchy
             chList = []
             chList.append(currNode.left_child)
             chList.append(currNode.right_child)
@@ -1209,7 +1210,7 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
             if currNode.where_condition is not None:
 
                 #Keep colunms that need to be ordered
-                columnsToShort = []  
+                columnsToShort = []
 
                 #Analyze where condition
                 whereList = []
@@ -1219,25 +1220,25 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
 
                 #Check if it filters a linking predicate
                 for col in conList:
-                    if isinstance(col, ystree.YRawColExp): 
+                    if isinstance(col, ystree.YRawColExp):
 
-                        #Mark all columns that need to be sorted 
+                        #Mark all columns that need to be sorted
                         for linkingPredicate in pass_in_cols:
                             if col.table_name == linkingPredicate.table_name and col.column_name == linkingPredicate.column_name:
-        
+
                                 print "[INFO]: Found linking predicate column: "+linkingPredicate.table_name+"."+str(linkingPredicate.column_name)
-                                
+
                                 #Add to the list of columns that need to be sorted
                                 columnsToShort.append(col)
-            
+
                 #Check if we have to short this table
                 if len(columnsToShort) != 0:
-                    
-                    #Add columns to create index
-                    currNode.indexCols = copy.deepcopy(columnsToShort)   
 
-                    #Remove regular scan and add index scan
-                    currNode.indexScan = copy.deepcopy(currNode.where_condition)   
+                    #Add columns to create index
+                    currNode.indexCols = copy.deepcopy(columnsToShort)
+
+                    #Remove regular scan and add idex scan
+                    currNode.indexScan = copy.deepcopy(currNode.where_condition)
                     currNode.where_condition = None
 
         else:
@@ -1245,7 +1246,7 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
             #If this is anything else (order, group by etc) we move to the next one
             nodesToExplore.append(currNode.child)
 
-            #Keep Hierarchy 
+            #Keep Hierarchy
             chList = []
             chList.append(currNode.child)
             nodesHierarchy[currNode] = chList
@@ -1253,7 +1254,7 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
     print "================================================================================================="
 
     #Generate code for the nested blcok
-    generate_code_for_a_tree(fo, sub_tree, lvl + 1, optimization)
+    generate_code_for_a_tree(fo, sub_tree, lvl + 1)
 
     #Get results of the nested block
     print >>fo, indent + baseIndent * 2 + ""
@@ -1266,7 +1267,7 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
         print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
 
     print >>fo, indent + baseIndent + "//===========End SUB-QUERY processing==========="
-    
+
     print >>fo, indent + baseIndent + "}"
     print >>fo, indent + "}"
 
@@ -1276,20 +1277,21 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
     print >>fo, ""
 
 #Base function that re-directs the execution
-def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization):
+def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
+    global optimization
     #Baseline execution
     if optimization == "--base":
         print "================================================================================================="
         print "[INFO]: Executing nested block using baseline algorithms (i.e. nested loops)"
         print "================================================================================================="
-        generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization)
-    
+        generate_code_for_a_subquery_baseline(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos)
+
     # Sort linking predicate and index
     elif optimization == "--idx":
-        generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos, optimization)
+        generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos)
 
-    #Error 
+    #Error
     else:
         print "[ERROR]: Unknown optimization techniques for nested block evaluation!"
         exit(-1)
@@ -1314,14 +1316,12 @@ def gpudb_code_gen(argv):
     #Exec query
     if len(sys.argv) == 3 or len(sys.argv) == 4:
         tree_node = ystree.ysmart_tree_gen(argv[1],argv[2])
-    
-    #Data loading 
+        if tree_node is None:
+            exit(-1)
+
+    #Data loading
     elif len(sys.argv) == 2:
         schemaFile = ystree.ysmart_get_schema(argv[1])
-
-    #Need a parsing tree to execute queries
-    if len(sys.argv) == 3 or len(sys.argv) == 4 and tree_node is None:
-        exit(-1)
 
     if os.path.exists(resultDir) is False:
         os.makedirs(resultDir)
@@ -1349,12 +1349,11 @@ def gpudb_code_gen(argv):
     os.chdir(resultDir)
     os.chdir(codeDir)
 
-    if len(sys.argv) == 3:
-        generate_code(tree_node, None)
-    
-    #Pass optimization
-    elif len(sys.argv) == 4:
-        generate_code(tree_node, argv[3])
+    if len(sys.argv) >= 3:
+        if len(sys.argv) > 3:
+            global optimization
+            optimization = argv[3]
+        generate_code(tree_node)
 
     os.chdir(pwd)
     os.chdir(resultDir)
@@ -1367,28 +1366,28 @@ def gpudb_code_gen(argv):
 
     os.chdir(pwd)
 
-def generate_code_for_a_node(fo, indent, lvl, node, optimization):
-    
+def generate_code_for_a_node(fo, indent, lvl, node):
+
     if isinstance(node, ystree.TwoJoinNode):
-        return generate_code_for_a_two_join_node(fo, indent, lvl, node, optimization)
+        return generate_code_for_a_two_join_node(fo, indent, lvl, node)
     elif isinstance(node, ystree.GroupByNode):
-        return generate_code_for_a_group_by_node(fo, indent, lvl, node, optimization)
+        return generate_code_for_a_group_by_node(fo, indent, lvl, node)
     elif isinstance(node, ystree.OrderByNode):
-        return generate_code_for_a_order_by_node(fo, indent, lvl, node, optimization)
+        return generate_code_for_a_order_by_node(fo, indent, lvl, node)
     elif isinstance(node, ystree.TableNode):
-        return generate_code_for_a_table_node(fo, indent, lvl, node, optimization)
+        return generate_code_for_a_table_node(fo, indent, lvl, node)
     elif isinstance(node, ystree.SelectProjectNode):
-        return generate_code_for_a_select_project_node(fo, indent, lvl, node, optimization)
+        return generate_code_for_a_select_project_node(fo, indent, lvl, node)
 
-def generate_code_for_a_select_project_node(fo, indent, lvl, spn, optimization):
+def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
 
-    inputNode = generate_code_for_a_node(fo, indent, lvl, spn.child, optimization)
+    inputNode = generate_code_for_a_node(fo, indent, lvl, spn.child)
 
     return inputNode
 
-def generate_code_for_a_order_by_node(fo, indent, lvl, obn, optimization):
+def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
 
-    inputNode = generate_code_for_a_node(fo, indent, lvl, obn.child, optimization )
+    inputNode = generate_code_for_a_node(fo, indent, lvl, obn.child)
 
     orderby_exp_list = obn.order_by_clause.orderby_exp_list
     odLen = len(orderby_exp_list)
@@ -1429,9 +1428,9 @@ def generate_code_for_a_order_by_node(fo, indent, lvl, obn, optimization):
 
     return resultNode
 
-def generate_code_for_a_group_by_node(fo, indent, lvl, gbn, optimization):
+def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 
-    inputNode = generate_code_for_a_node(fo, indent, lvl, gbn.child, optimization)
+    inputNode = generate_code_for_a_node(fo, indent, lvl, gbn.child)
 
     gb_exp_list = gbn.group_by_clause.groupby_exp_list
     select_list = gbn.select_list.tmp_exp_list
@@ -1535,9 +1534,9 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn, optimization):
 
     return resultNode
 
-def generate_code_for_a_two_join_node(fo, indent, lvl, jn, optimization):
+def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
-    leftName, rightName = generate_code_for_a_node(fo, indent, lvl, jn.left_child, optimization), generate_code_for_a_node(fo, indent, lvl, jn.right_child, optimization)
+    leftName, rightName = generate_code_for_a_node(fo, indent, lvl, jn.left_child), generate_code_for_a_node(fo, indent, lvl, jn.right_child)
     var_subqRes = "subqRes" + str(lvl)
 
     if leftName is None or rightName is None:
@@ -1848,7 +1847,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn, optimization):
                     col.column_name = rOutList[j]
                     indexDict[ystree.__trace_to_leaf__(jn, col, False).evaluate()] = rPosList[j]
 
-                generate_code_for_a_subquery(fo, lvl, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU", optimization)
+                generate_code_for_a_subquery(fo, lvl, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU")
 
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
 
@@ -1864,7 +1863,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn, optimization):
 
     else:
         print >>fo, indent + resName + " = joinRes;"
-    
+
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}\n"
 
@@ -1888,7 +1887,7 @@ table_refs = {
     "partsupp" : 0
     }
 
-def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
+def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
     resName =  tn.table_name.lower()[0:2] if table_abbr[tn.table_name.lower()] == None else table_abbr[tn.table_name.lower()]
     resName = resName + str(table_refs[tn.table_name.lower()])
@@ -2101,7 +2100,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
                 indexDict = {}
                 for j in range(0, len(indexList)):
                     indexDict[ tn.table_name + "." + str(indexList[j])] = j
-                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], "header.tupleNum", tnName, indexDict, tn, "MEM", optimization)
+                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], "header.tupleNum", tnName, indexDict, tn, "MEM")
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
@@ -2170,7 +2169,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         ############## end of wherecondition not none
 
     else:
-        
+
         print >>fo, indent + "if(blockTotal != 1){"
 
         if CODETYPE == 0:
@@ -2194,7 +2193,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
 
     # Generate indexing code
     if tn.indexCols is not None:
-        
+
         #Init index
         print >>fo, indent + "// Indexing initialization"
         print >>fo, indent + resName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
@@ -2266,7 +2265,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
     else:
         print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
         print >>fo, indent + resName + "->colIdxNum = 0;\n"
-        
+
 
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}"
