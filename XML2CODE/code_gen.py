@@ -1903,10 +1903,10 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
             print >>fo, indent + tnName + "->dataFormat["      + str(i) + "] = " + preloadName + "->dataFormat["      + str(fullIndexPos(i)) + "];"
             print >>fo, indent + tnName + "->attrTotalSize["   + str(i) + "] = " + preloadName + "->attrTotalSize["   + str(fullIndexPos(i)) + "];"
             print >>fo, indent + tnName + "->content["         + str(i) + "] = " + preloadName + "->content["         + str(fullIndexPos(i)) + "];"
-            print >>fo, indent + "tuple_size += " + tnName + "->attrSize[" + str(i) + "];"
+            print >>fo, indent + "tuple_size += " + tnName + "->attrSize[" + str(i) + "];\n"
 
         print >>fo, indent + tnName + "->tupleSize = tuple_size;"
-        print >>fo, indent + tnName + "->tupleNum = " + preloadName + "->tupleNum;"
+        print >>fo, indent + tnName + "->tupleNum = " + preloadName + "->tupleNum;\n"
     else:
         tnName = generate_code_for_loading_a_table(fo, indent, tn.table_name, merge(indexList, colList))
 
@@ -2039,7 +2039,8 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
         print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
         if tablePreloaded:
-            print >>fo, indent + relName + ".tn = NULL;"
+            for i in range(0, totalAttr):
+                print >>fo, indent + tnName + "->content[" + str(i) + "] = NULL;"
 
         print >>fo, indent + "freeScan(&" + relName + ");\n"
         if CODETYPE == 1:

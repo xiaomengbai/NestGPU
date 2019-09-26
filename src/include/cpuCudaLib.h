@@ -106,6 +106,8 @@ static void freeTable(struct tableNode * tn){
     int i;
 
     for(i=0;i<tn->totalAttr;i++){
+        if(tn->content[i] == NULL)
+            continue;
         if(tn->dataPos[i] == MEM)
             free(tn->content[i]);
         else if(tn->dataPos[i] == MMAP)
