@@ -29,6 +29,10 @@ keepInGpu = 1
 baseIndent = " " * 4
 optimization = None
 
+merge = lambda l1, l2: [ (l1[i], l2[i]) for i in range(0, min(len(l1), len(l2))) ]
+unmerge = lambda l: ( [ l[i][0] for i in range(0, len(l)) ], [ l[i][1] for i in range(0, len(l)) ] )
+loaded_table_list = {}
+
 """
 Get the value of the configurable variables from config.py
 """
@@ -838,11 +842,9 @@ def generate_code(tree):
         print >>fo, "#include \"../include/cpuCudaLib.h\""
         print >>fo, "#include \"../include/gpuCudaLib.h\""
         print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
-
         #Indexing functions
         print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         print >>fo, "extern struct tableNode* indexScan (struct tableNode *, int, int, int, struct statistic *);"
-        
         if joinType == 0:
             print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);"
         else:
@@ -929,6 +931,8 @@ def generate_code(tree):
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&start);"
     print >>fo, indent + "struct statistic pp;"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
+
+    generate_code_for_loading_tables(fo, indent, tree)
 
     generate_code_for_a_tree(fo, tree, 0)
 
@@ -1839,6 +1843,7 @@ table_refs = {
     }
 
 def generate_code_for_a_table_node(fo, indent, lvl, tn):
+    global loaded_table_list
 
     resName =  tn.table_name.lower()[0:2] if table_abbr[tn.table_name.lower()] == None else table_abbr[tn.table_name.lower()]
     resName = resName + str(table_refs[tn.table_name.lower()])
@@ -1850,6 +1855,16 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
     print >>fo, indent + "{"
     indent += baseIndent
+
+    # indexList = []
+    # colList   = []
+    # if tn.table_name in loaded_table_list.keys():
+    #     tnName = tn.table_name.lower() + "Table"
+    #     indexList, colList = unmerge(loaded_table_list[tn.table_name])
+    # else:
+    #     generate_col_list(tn, indexList, colList)
+    #     tnName = generate_code_for_loading_a_table(fo, indent, tn.table_name, merge(indexList, colList))
+
     print >>fo, indent + "struct tableNode *" + tnName + ";"
     print >>fo, indent + "int outFd;"
     print >>fo, indent + "long outSize;"
@@ -1968,7 +1983,9 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         print >>fo, indent + "close(outFd);\n"
 
     print >>fo, indent + tnName + "->tupleSize = " + tupleSize + ";"
-    print >>fo, indent + tnName + "->tupleNum = header.tupleNum;\n"
+    print >>fo, indent + tnName + "->tupleNum = header.tupleNum;"
+    print >>fo, indent + tnName + "->colIdxNum = 0;\n"
+
 
     if tn.where_condition is not None:
         whereList = []
@@ -2224,3 +2241,254 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
     print >>fo, indent + "}\n"
 
     return resName
+
+def __traverse_tree(node, func):
+    if isinstance(node, ystree.TwoJoinNode):
+        __traverse_tree(node.left_child, func)
+        __traverse_tree(node.right_child, func)
+    elif isinstance(node, ystree.GroupByNode) or isinstance(node, ystree.OrderByNode) or isinstance(node, ystree.SelectProjectNode):
+        __traverse_tree(node.child, func)
+
+    func(node)
+
+def generate_code_for_loading_tables(fo, indent, tree):
+    global loaded_table_list
+    
+    # check if a TableNode has new column to load
+    def __gen_col_lists(tn, col_lists):
+        if not isinstance(tn, ystree.TableNode):
+            return
+
+        indexList = []
+        colList = []
+        generate_col_list(tn, indexList, colList)
+
+        if tn.table_name in col_lists:
+            oldList = col_lists[tn.table_name]
+            oldIndexList, oldColList = unmerge(oldList)
+            for i in range(0, len(indexList)):
+                if indexList[i] not in oldIndexList:
+                    oldIndexList.append(indexList[i])
+                    oldColList.append(colList[i])
+
+            indexList = oldIndexList
+            colList = oldColList
+        
+        col_lists[tn.table_name] = merge(indexList, colList)
+
+    def generate_col_lists(col_lists):
+        return lambda tn: __gen_col_lists(tn, col_lists)
+
+    __traverse_tree(tree, generate_col_lists(loaded_table_list))
+    map( lambda t: __traverse_tree(t, generate_col_lists(loaded_table_list)), ystree.subqueries )
+
+    for t_name, c_list in loaded_table_list.items():
+        generate_code_for_loading_a_table(fo, indent, t_name, c_list)
+
+
+def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
+
+    tnName  = "_" + t_name.lower() + "_table"
+    resName = t_name.lower() + "Table"
+
+    indexList, colList = unmerge(c_list)
+
+    print >>fo, indent + "// Load columns from the table " + t_name
+
+    print >>fo, indent + "struct tableNode *" + resName + ";"
+    print >>fo, indent + resName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+    print >>fo, indent + "CHECK_POINTER("+ resName + ");"
+    print >>fo, indent + "initTable(" + resName + ");"
+
+    print >>fo, indent + "{"
+    indent += baseIndent
+    print >>fo, indent + "struct tableNode *" + tnName + ";"
+    print >>fo, indent + "int outFd;"
+    print >>fo, indent + "long outSize;"
+    print >>fo, indent + "char *outTable;"
+    print >>fo, indent + "long offset, tupleOffset;"
+    print >>fo, indent + "int blockTotal;"
+    print >>fo, indent + "struct columnHeader header;\n"
+
+    totalAttr = len(indexList)
+    if totalAttr <= 0:
+        print "ERROR: Failed to generate code for loading the table " + t_name + ": no column is specified"
+        exit(-1)
+
+    firstTableFile = t_name + str(colList[0].column_name)
+    print >>fo, indent + "// Retrieve the block number from " + firstTableFile
+    print >>fo, indent + "outFd = open(\"" + firstTableFile + "\", O_RDONLY);"
+    print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
+    print >>fo, indent + "blockTotal = header.blockTotal;"
+    print >>fo, indent + "close(outFd);"
+    print >>fo, indent + "offset = 0;"
+    print >>fo, indent + "tupleOffset = 0;"
+
+    print >>fo, indent + "for(int i = 0; i < blockTotal; i++){\n"
+    indent += baseIndent
+    print >>fo, indent + "// Table initialization"
+    print >>fo, indent + tnName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + ");"
+    print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
+    print >>fo, indent + tnName + "->attrType = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrType);"
+    print >>fo, indent + tnName + "->attrSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrSize);"
+    print >>fo, indent + tnName + "->attrIndex = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrIndex);"
+    print >>fo, indent + tnName + "->attrTotalSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrTotalSize);"
+    print >>fo, indent + tnName + "->dataPos = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataPos);"
+    print >>fo, indent + tnName + "->dataFormat = (int *) malloc(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataFormat);"
+    print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
+    print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
+
+    tupleSize = "0"
+    for i in range(0, totalAttr):
+        col = colList[i]
+        ctype = to_ctype(col.column_type)
+        colIndex = int(col.column_name)
+        colLen = type_length(t_name, colIndex, col.column_type)
+        tupleSize += " + " + colLen
+
+        print >>fo, indent + "// Load column " + str(colIndex) + ", type: " + col.column_type
+        print >>fo, indent + tnName + "->attrSize[" + str(i) + "] = " + colLen + ";"
+        print >>fo, indent + tnName + "->attrIndex["+ str(i) + "] = " + str(colIndex) + ";"
+        print >>fo, indent + tnName + "->attrType[" + str(i) + "] = " + ctype + ";"
+
+        if POS == 0:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MEM;"
+        elif POS == 1:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = PINNED;"
+        elif POS == 2:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = UVA;"
+        elif POS == 3:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MMAP;"
+        else:
+            print >>fo, indent + tnName + "->dataPos[" + str(i) + "] = MEM;"
+
+        print >>fo, indent + "outFd = open(\"" + t_name + str(colIndex) + "\", O_RDONLY);"
+        print >>fo, indent + "offset = i * sizeof(struct columnHeader) + tupleOffset * " + str(colLen) + ";"
+        print >>fo, indent + "lseek(outFd, offset, SEEK_SET);"
+        print >>fo, indent + "read(outFd, &header, sizeof(struct columnHeader));"
+        print >>fo, indent + "offset += sizeof(struct columnHeader);"
+        print >>fo, indent + tnName + "->dataFormat[" + str(i) + "] = header.format;"
+        print >>fo, indent + "outSize = header.tupleNum * " + colLen + ";"
+        print >>fo, indent + tnName + "->attrTotalSize[" + str(i) + "] = outSize;\n"
+
+        print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&diskStart);"
+        print >>fo, indent + "outTable =(char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
+
+        if CODETYPE == 0:
+            if POS == 1:
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void **)&" + tnName + "->content[" + str(i) + "], outSize));"
+                print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
+            elif POS == 2:
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC(cudaMallocHost((void **)&" + tnName+"->content["+str(i)+"], outSize));"
+                print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
+            elif POS == 3:
+                print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
+            else:
+                print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)memalign(256, outSize);"
+                print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
+        else:
+            if POS == 0:
+                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)memalign(256, outSize);"
+                    print >>fo, indent + "memcpy(" + tnName + "->content[" + str(i) + "], outTable, outSize);"
+            elif POS == 3:
+                    print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)mmap(0, outSize, PROT_READ, MAP_SHARED, outFd, offset);"
+            else:
+                print >>fo, indent + tnName + "->content[" + str(i) + "] = (char *)clCreateBuffer(context.context, CL_MEM_READ_ONLY | CL_MEM_ALLOC_HOST_PTR, outSize, NULL, 0);"
+                print >>fo, indent + "clTmp = clEnqueueMapBuffer(context.queue, (cl_mem)" + tnName + "->content[" + str(i) + "], CL_TRUE,CL_MAP_WRITE,0,outSize, 0, 0, 0, 0);"
+                print >>fo, indent + "memcpy(clTmp, outTable, outSize);"
+                print >>fo, indent + "clEnqueueUnmapMemObject(context.queue, (cl_mem)" + tnName + "->content[" + str(i) + "], clTmp, 0, 0, 0);"
+
+        print >>fo, indent + "munmap(outTable, outSize);"
+        print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
+        print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
+        print >>fo, indent + "close(outFd);\n"
+
+    print >>fo, indent + tnName + "->tupleSize = " + tupleSize + ";"
+    print >>fo, indent + tnName + "->tupleNum = header.tupleNum;\n"
+
+    print >>fo, indent + "if(blockTotal != 1){"
+
+    if CODETYPE == 0:
+        print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + "," + tnName +", &pp);"
+    else:
+        print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + "," + tnName +", &context, &pp);"
+
+    print >>fo, indent + baseIndent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
+    print >>fo, indent + baseIndent + "freeTable(" + tnName + ");"
+    if CODETYPE == 1:
+        print >>fo, indent + baseIndent + "clFinish(context.queue);"
+
+    print >>fo, indent + baseIndent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
+    print >>fo, indent + baseIndent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
+    print >>fo, indent + "}else{"
+    print >>fo, indent + baseIndent + "free(" + resName + ");"
+    print >>fo, indent + baseIndent + resName + " = " + tnName + ";"
+    print >>fo, indent + "}"
+
+    print >>fo, indent + "tupleOffset += header.tupleNum;"
+
+    print >>fo, indent + resName + "->colIdxNum = 0;"
+
+    indent = indent[:indent.rfind(baseIndent)]
+    print >>fo, indent + "}"
+    indent = indent[:indent.rfind(baseIndent)]
+    print >>fo, indent + "}\n"
+
+    return resName
+
+    # Generate indexing code
+    # if tn.indexCols is not None:
+
+    #     #Init index
+    #     print >>fo, indent + "// Indexing initialization"
+    #     print >>fo, indent + resName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
+    #     print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
+    #     print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
+    #     print >>fo, indent + resName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
+    #     print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
+    #     print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
+    #     print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
+    #     count = 0
+
+    #     # Create index
+    #     for idxCol in tn.indexCols:
+    #         print >>fo, indent + "// Create index for column " + str(idxCol.column_name) + ", type: " + idxCol.column_type
+    #         print >>fo, indent + resName + "->colIdx["+str(count)+"] = "+str(idxCol.column_name)+";"
+    #         print >>fo, indent + "createIndex("+resName+","+str(count)+","+str(idxCol.column_name)+",&pp);\n"
+    #         count = count + 1
+
+    #     # Add scan indexing
+    #     if tn.indexScan is not None:
+    #         whereList = []
+    #         relList = []
+    #         conList = []
+    #         get_where_attr(tn.indexScan.where_condition_exp, whereList, relList, conList)
+
+    #         if len(relList) != 1:
+    #             print "[ERROR] : Cannot use complicated nested condition with indexing!"
+    #             exit(-1)
+    #         if relList[0] != "EQ":
+    #             print "[ERROR] : Can only use \"EQ\" nested condition with indexing!"
+    #             exit(-1)
+
+    #         #Part outer
+    #         for col in whereList:
+    #             print col.table_name
+    #             print col.column_name
+
+    #         #TODO need to fix that to pass the outer table
+    #         print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate()
+    #         print >>fo, indent + "// createIndex("+resName+",&"+var_subqRes+","+str(conList[0].column_name)+",&pp);\n"
+
+    # else:
+    #     print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
+    #     print >>fo, indent + resName + "->colIdxNum = 0;\n"
+
+
