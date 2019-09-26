@@ -151,7 +151,8 @@ static void freeScan(struct scanNode * rel){
     rel->outputIndex = NULL;
     free(rel->filter);
     rel->filter = NULL;
-    freeTable(rel->tn);
+    if(rel->tn != NULL)
+        freeTable(rel->tn);
 
 }
 
@@ -172,7 +173,8 @@ static void freeGroupByNode(struct groupByNode * tn){
     }
     free(tn->gbExp);
     tn->gbExp = NULL;
-    freeTable(tn->table);
+    if(tn->table != NULL)
+        freeTable(tn->table);
 }
 
 static void freeOrderByNode(struct orderByNode * tn){
@@ -180,7 +182,8 @@ static void freeOrderByNode(struct orderByNode * tn){
     tn->orderBySeq = NULL;
     free(tn->orderByIndex);
     tn->orderByIndex = NULL;
-    freeTable(tn->table);
+    if(tn->table != NULL)
+        freeTable(tn->table);
 }
 
 static void printCol(char *col, int size, int type,int tupleNum,int pos){
