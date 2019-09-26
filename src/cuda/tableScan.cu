@@ -2841,13 +2841,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
 }
 
-
 /*
  * Assign numbers 0 to inNum in a buffer using the device. 
  */
 __global__ static void assign_index(int *col, long  inNum){
     int stride = blockDim.x * gridDim.x;
     int offset = blockIdx.x * blockDim.x + threadIdx.x;
+    //int global_index = threadIdx.x + blockDim.x * threadIdx.y;
     for (int i = offset; i<inNum; i += stride){
         col[i] = i;
     }
@@ -2868,17 +2868,27 @@ __global__ static void assign_index(int *col, long  inNum){
  */
 void createIndex (struct tableNode *tn, int columnPos, int idxPos, struct statistic *pp){
 
+    //Check assumption (INT enum == 4)
+    if (tn->attrType[columnPos] != 4 ){
+        printf("[ERROR] Indexing is only supported for INT type!\n");
+        exit(-1);
+    }
+    if (tn->attrSize[columnPos] != sizeof(int)){
+        printf("[ERROR] Indexing is only supported for INT type (and size!)!\n");
+        exit(-1); 
+    }
+
     //Define Grid and block size
     dim3 grid(2048);
     dim3 block(256);
 
     //Get data size
-    long dataSize = tn->tupleNum * tn->attrSize[columnPos];
+    long dataSize = sizeof(int) * tn->tupleNum;
 
     //Allocate memory for the index (in host)
-    tn->contentIdx[idxPos] = (char *)malloc(dataSize); 
+    tn->contentIdx[idxPos] = (int *)malloc(dataSize); 
     CHECK_POINTER(tn->contentIdx[idxPos]);
-    tn->posIdx[idxPos] = (int *)malloc(sizeof(int *) *  tn->tupleNum); 
+    tn->posIdx[idxPos] = (int *)malloc(sizeof(int) * tn->tupleNum); 
     CHECK_POINTER(tn->posIdx[idxPos]);
 
     //Assign index (in device)
@@ -2887,17 +2897,28 @@ void createIndex (struct tableNode *tn, int columnPos, int idxPos, struct statis
     assign_index<<<grid,block>>>(posIdx_d, tn->tupleNum);
 
     //Copy values (in device)
-    char* contentIdx_d;
+    int* contentIdx_d;
     CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->content[columnPos], dataSize, cudaMemcpyHostToDevice));
 
     //Sort columns
-    thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + dataSize , posIdx_d); //thrust inplace sorting
+    //thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, posIdx_d); //thrust inplace sorting
 
     //Copy index to host
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->contentIdx[idxPos], contentIdx_d, dataSize, cudaMemcpyDeviceToHost));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->posIdx[idxPos], posIdx_d, sizeof(int) * tn->tupleNum, cudaMemcpyDeviceToHost)); 
 
+    //DOES IT WORK HERE? (contentIdx SHOULD BE UN-SORTED AND posIdx HAVE THE POS);
+
+
+    for (int i = 0; i<tn->tupleNum; i++){
+        printf ("Index value [%d] : %d \n", i, tn->contentIdx[idxPos][i]);
+    } 
+
+    for (int i = 0; i<tn->tupleNum; i++){
+             printf ("Index value [%d] : %d \n", i, tn->posIdx[idxPos][i]);
+    } 
+    
     //De-allocate device memory
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(posIdx_d));
