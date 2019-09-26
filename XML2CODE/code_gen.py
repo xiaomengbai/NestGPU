@@ -837,7 +837,11 @@ def generate_code(tree, optimization):
         print >>fo, "#include \"../include/cpuCudaLib.h\""
         print >>fo, "#include \"../include/gpuCudaLib.h\""
         print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
-        print >>fo, "extern void createIndex (struct tableNode *, int, int,struct statistic *);"
+
+        #Indexing functions
+        print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
+        print >>fo, "extern struct tableNode* indexScan (struct tableNode *, int, int, int, struct statistic *);"
+        
         if joinType == 0:
             print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);"
         else:
@@ -1225,7 +1229,7 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
                                 
                                 #Add to the list of columns that need to be sorted
                                 columnsToShort.append(col)
-                
+            
                 #Check if we have to short this table
                 if len(columnsToShort) != 0:
                     
@@ -2201,14 +2205,11 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         print >>fo, indent + resName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);\n"
  
-
         # Create index
         countIdxCol = 0
         countCol = 0
-        for idxCol in tn.indexCols:
-
-            #Columns are NOT scanned in order...need to check which one we need!
-            for i in range(0, totalAttr):
+        for idxCol in tn.indexCols: 
+            for i in range(0, totalAttr): #Columns are NOT scanned in order...need to check which one we need!
                 col = colList[i]
 
                 if col.column_name == idxCol.column_name and col.column_type == idxCol.column_type:
@@ -2219,33 +2220,47 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
                     print >>fo, indent + "createIndex("+resName+","+str(countCol)+","+str(idxCol.column_name)+",&pp);\n"
                     countIdxCol = countIdxCol + 1
                 
+                    # Add scan indexing
+                    if tn.indexScan is not None:
+                        whereList = []
+                        relList = []
+                        conList = []
+                        get_where_attr(tn.indexScan.where_condition_exp, whereList, relList, conList)
+
+                        newWhereList = []
+                        whereLen = count_whereList(whereList, newWhereList)
+
+                        for i in range(0, len(whereList)):
+                            colIndex = -1
+                            for j in range(0, len(newWhereList)):
+                                if newWhereList[j].compare(whereList[i]) is True:
+                                    colIndex = j
+                                    break
+
+                            if colIndex < 0:
+                                print 1/0
+
+                        colType = whereList[i].column_type
+                        ctype = to_ctype(colType)
+
+                        #Get value from the outer table
+                        if ctype == "INT":
+                            if isinstance(conList[i], ystree.YRawColExp):
+                                con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
+                            else:
+                                con_value = conList[i]
+                        else: 
+                            print "[ERROR] - We do not support indexing with complex nesting"
+                            print 1/0
+
+                        #Perform indexScan and replace current tableNode with scan result
+                        print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate() 
+                        print >>fo, indent + "int tmpExternalVal = " + con_value + ";"         
+                        print >>fo, indent + "struct tableNode *tmp = indexScan("+resName+","+str(countCol)+","+str(idxCol.column_name)+",tmpExternalVal,&pp);"
+                        print >>fo, indent + resName+" = tmp;\n"
+
                 #Move to next col
                 countCol = countCol + 1
-
-        # # Add scan indexing
-        # # Note: The where clause in used in indexScan!
-        #
-        # if tn.indexScan is not None:
-        #     whereList = []
-        #     relList = []
-        #     conList = []
-        #     get_where_attr(tn.indexScan.where_condition_exp, whereList, relList, conList)
-
-        #     if len(relList) != 1:
-        #         print "[ERROR] : Cannot use complicated nested condition with indexing!"
-        #         exit(-1)
-        #     if relList[0] != "EQ":
-        #         print "[ERROR] : Can only use \"EQ\" nested condition with indexing!"
-        #         exit(-1)             
-        
-        #     #Part outer
-        #     for col in whereList:
-        #         print col.table_name
-        #         print col.column_name
-
-        #     #TODO need to fix that to pass the outer table
-        #     print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate() 
-        #     print >>fo, indent + "// createIndex("+resName+",&"+var_subqRes+","+str(conList[0].column_name)+",&pp);\n"
 
     else:
         print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
