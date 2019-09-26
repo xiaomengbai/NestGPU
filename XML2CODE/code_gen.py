@@ -719,13 +719,13 @@ generate_col_list gets all the columns that will be scannned for a given table n
 @colList stores the columnExp for each column.
 """
 
-def generate_col_list(tn,indexList, colList):
+def generate_col_list(tn, indexList, colList):
 
     for col in tn.select_list.tmp_exp_list:
         if col.column_name not in indexList:
             indexList.append(col.column_name)
             colList.append(col)
-
+ 
     if tn.where_condition is not None:
         whereList = []
         relList = []
@@ -742,6 +742,12 @@ def generate_col_list(tn,indexList, colList):
                         indexList.append(par.column_name)
                         colList.append(par)
 
+    #Also check indexed columns
+    if tn.indexCols is not None:
+        for col in tn.indexCols:
+            if col.column_name not in indexList:
+                indexList.append(col.column_name)
+                colList.append(col)
 
 """
 generate_code generates CUDA/OpenCL codes from the query plan tree.
@@ -1226,7 +1232,7 @@ def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, ind
                     #Add columns to create index
                     currNode.indexCols = copy.deepcopy(columnsToShort)   
 
-                    #Remove regular scan and add idex scan
+                    #Remove regular scan and add index scan
                     currNode.indexScan = copy.deepcopy(currNode.where_condition)   
                     currNode.where_condition = None
 
@@ -2190,41 +2196,56 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
         print >>fo, indent + resName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
         print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
-        print >>fo, indent + resName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
         print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
-        count = 0
+        print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);"
+        print >>fo, indent + resName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);\n"
+ 
 
         # Create index
+        countIdxCol = 0
+        countCol = 0
         for idxCol in tn.indexCols:
-            print >>fo, indent + "// Create index for column " + str(idxCol.column_name) + ", type: " + idxCol.column_type
-            print >>fo, indent + resName + "->colIdx["+str(count)+"] = "+str(idxCol.column_name)+";"
-            print >>fo, indent + "createIndex("+resName+","+str(count)+","+str(idxCol.column_name)+",&pp);\n"
-            count = count + 1
 
-        # Add scan indexing
-        if tn.indexScan is not None:
-            whereList = []
-            relList = []
-            conList = []
-            get_where_attr(tn.indexScan.where_condition_exp, whereList, relList, conList)
+            #Columns are NOT scanned in order...need to check which one we need!
+            for i in range(0, totalAttr):
+                col = colList[i]
 
-            if len(relList) != 1:
-                print "[ERROR] : Cannot use complicated nested condition with indexing!"
-                exit(-1)
-            if relList[0] != "EQ":
-                print "[ERROR] : Can only use \"EQ\" nested condition with indexing!"
-                exit(-1)             
+                if col.column_name == idxCol.column_name and col.column_type == idxCol.column_type:
+                    
+                    # Add Index column (countCol needs to be the column pos which is equal to the pos in the table not (and not the index column) )
+                    print >>fo, indent + "// Create index for column " + str(col.column_name) + ", type: " + idxCol.column_type
+                    print >>fo, indent + resName + "->colIdx["+str(countIdxCol)+"] = "+str(countCol)+";"
+                    print >>fo, indent + "createIndex("+resName+","+str(countCol)+","+str(idxCol.column_name)+",&pp);\n"
+                    countIdxCol = countIdxCol + 1
+                
+                #Move to next col
+                countCol = countCol + 1
+
+        # # Add scan indexing
+        # # Note: The where clause in used in indexScan!
+        #
+        # if tn.indexScan is not None:
+        #     whereList = []
+        #     relList = []
+        #     conList = []
+        #     get_where_attr(tn.indexScan.where_condition_exp, whereList, relList, conList)
+
+        #     if len(relList) != 1:
+        #         print "[ERROR] : Cannot use complicated nested condition with indexing!"
+        #         exit(-1)
+        #     if relList[0] != "EQ":
+        #         print "[ERROR] : Can only use \"EQ\" nested condition with indexing!"
+        #         exit(-1)             
         
-            #Part outer
-            for col in whereList:
-                print col.table_name
-                print col.column_name
+        #     #Part outer
+        #     for col in whereList:
+        #         print col.table_name
+        #         print col.column_name
 
-            #TODO need to fix that to pass the outer table
-            print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate() 
-            print >>fo, indent + "// createIndex("+resName+",&"+var_subqRes+","+str(conList[0].column_name)+",&pp);\n"
+        #     #TODO need to fix that to pass the outer table
+        #     print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate() 
+        #     print >>fo, indent + "// createIndex("+resName+",&"+var_subqRes+","+str(conList[0].column_name)+",&pp);\n"
 
     else:
         print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
