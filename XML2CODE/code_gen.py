@@ -31,6 +31,7 @@ optimization = None
 
 merge = lambda l1, l2: [ (l1[i], l2[i]) for i in range(0, min(len(l1), len(l2))) ]
 unmerge = lambda l: ( [ l[i][0] for i in range(0, len(l)) ], [ l[i][1] for i in range(0, len(l)) ] )
+preload_threshold = 1024 * 1024 * 1024
 loaded_table_list = {}
 
 """
@@ -2148,7 +2149,7 @@ def __traverse_tree(node, func):
 def generate_code_for_loading_tables(fo, indent, tree):
     global loaded_table_list
     
-    # check if a TableNode has new column to load
+    # check if a TableNode has new columns to load
     def __gen_col_lists(tn, col_lists):
         if not isinstance(tn, ystree.TableNode):
             return
@@ -2173,14 +2174,81 @@ def generate_code_for_loading_tables(fo, indent, tree):
     def generate_col_lists(col_lists):
         return lambda tn: __gen_col_lists(tn, col_lists)
 
+    # traverse all query plan trees to find tables and their columns
     __traverse_tree(tree, generate_col_lists(loaded_table_list))
     map( lambda t: __traverse_tree(t, generate_col_lists(loaded_table_list)), ystree.subqueries )
+
+    # calculate the table size (with loading columns)
+    def cal_table_size(t_name, col_list):
+        indexList, colList = unmerge(col_list)
+        table_dir = "../../test/tables"
+        column_files = [ table_dir + "/" + t_name + str(idx) for idx in indexList ]
+        return sum(map(lambda f: os.path.getsize(f), column_files))
+
+
+    # extract which subqueries are in the next level
+    def __extract_subquery_indices(node, indices):
+        if node.where_condition is not None and node.where_condition.where_condition_exp is not None:
+            where_exp = node.where_condition.where_condition_exp
+            def __extract_subquery_indices_exp(exp, _indices):
+                if isinstance(exp, ystree.YFuncExp) and exp.func_name == "SUBQ":
+                    if exp.parameter_list[0] not in _indices:
+                        _indices.append(exp.parameter_list[0].cons_value)
+
+            def extract_subquery_indices_exp(_indices):
+                return lambda e : __extract_subquery_indices_exp(e, _indices)
+
+            ystree.__traverse_exp_map__(where_exp, extract_subquery_indices_exp(indices))
+
+    def extract_subquery_indices(indices):
+        return lambda n : __extract_subquery_indices(n, indices)
+
+    # identify the levels of all subqueries 
+    indices = []
+    subqs = []
+    __traverse_tree(tree, extract_subquery_indices(indices))
+    while len(indices) > 0:
+        subqs.append( indices )
+        new_indices = []
+        map(lambda idx: __traverse_tree(ystree.subqueries[idx], extract_subquery_indices(new_indices)), indices)
+        indices = new_indices
+
+    # check if a table node is the requested table
+    def __has_table(node, t_name, res_list):
+        if not isinstance(node, ystree.TableNode):
+            return
+
+        if node.table_name == t_name:
+            res_list.append(True)
+
+    def has_table(t_name, res_list):
+        return lambda n: __has_table(n, t_name, res_list)
+
+    # get the deepest subquery level a table is at
+    def table_level(t_name, subqs):
+        for i in range(len(subqs) - 1, -1, -1) :
+            res = []
+            for subq_idx in subqs[i]:
+                __traverse_tree(ystree.subqueries[subq_idx], has_table(t_name, res))
+                if len(res) > 0:
+                    return i + 1
+        return 0
+
+    # sort all tables with their subquery level (descending) and their table size (ascending)
+    # We remove tables depending on the subquery level first (a lower level first) and the table size (a larger table first)
+    _loaded_list = [ (t_name, cal_table_size(t_name, c_list), table_level(t_name, subqs)) for t_name, c_list in loaded_table_list.items() ]
+    _loaded_list.sort(key = lambda x: (x[2], -x[1]), reverse = True)
+
+    # remove table until the preloaded tables are smaller than the threshold
+    mem_size = sum( [ t[1] for t in _loaded_list ] )
+    while mem_size > preload_threshold:
+        t = _loaded_list.pop()
+        mem_size -= t[1]
+        del loaded_table_list[t[0]]
 
     for t_name, c_list in loaded_table_list.items():
         generate_code_for_loading_a_table(fo, indent, t_name, c_list)
 
-    # del loaded_table_list['PART']
-    # del loaded_table_list['PARTSUPP']
 
 def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
 
