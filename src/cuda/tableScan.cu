@@ -2902,22 +2902,12 @@ void createIndex (struct tableNode *tn, int columnPos, int idxPos, struct statis
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->content[columnPos], dataSize, cudaMemcpyHostToDevice));
 
     //Sort columns
-    //thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, posIdx_d); //thrust inplace sorting
+    thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, posIdx_d); //thrust inplace sorting
+    cudaDeviceSynchronize(); //need to wait for short (or SEGFAULT)
 
     //Copy index to host
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->contentIdx[idxPos], contentIdx_d, dataSize, cudaMemcpyDeviceToHost));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->posIdx[idxPos], posIdx_d, sizeof(int) * tn->tupleNum, cudaMemcpyDeviceToHost)); 
-
-    //DOES IT WORK HERE? (contentIdx SHOULD BE UN-SORTED AND posIdx HAVE THE POS);
-
-
-    for (int i = 0; i<tn->tupleNum; i++){
-        printf ("Index value [%d] : %d \n", i, tn->contentIdx[idxPos][i]);
-    } 
-
-    for (int i = 0; i<tn->tupleNum; i++){
-             printf ("Index value [%d] : %d \n", i, tn->posIdx[idxPos][i]);
-    } 
     
     //De-allocate device memory
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
