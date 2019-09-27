@@ -33,6 +33,7 @@ merge = lambda l1, l2: [ (l1[i], l2[i]) for i in range(0, min(len(l1), len(l2)))
 unmerge = lambda l: ( [ l[i][0] for i in range(0, len(l)) ], [ l[i][1] for i in range(0, len(l)) ] )
 preload_threshold = 1024 * 1024 * 1024
 loaded_table_list = {}
+cols_to_index = []
 
 """
 Get the value of the configurable variables from config.py
@@ -1088,170 +1089,6 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
         print >>fo, indent + "free(" + pass_in_var + ");"
     print >>fo, ""
 
-#Indexed subquery execution
-def generate_code_for_a_subquery_idx(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
-
-    indent = (lvl * 3 + 2) * baseIndent
-    var_subqRes = "subqRes" + str(lvl)
-
-    subq_id = con.parameter_list[0].cons_value
-    pass_in_cols = con.parameter_list[1:]
-    sub_tree = ystree.subqueries[subq_id]
-
-    subq_select_list = sub_tree.select_list.tmp_exp_list
-    if len(subq_select_list) > 1:
-        print "[ERROR] : more than one column are selected in a subquery!"
-        sub_tree.debug(0)
-        exit(-1)
-
-    selectItem = subq_select_list[0]
-    subq_res_size = 0
-    if isinstance(selectItem, ystree.YFuncExp):
-        # Assume the aggregation function with only one parameter, i.e., the column
-        subq_res_col = selectItem.parameter_list[0]
-    elif isinstance(selectItem, ystree.YRawColExp):
-        subq_res_col = selectItem
-    else:
-        print "ERROR: Unknown select column type in a subquery: ", selectItem.evaluate()
-        exit(-1)
-
-    if rel in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
-        constant_len_res = True
-        subq_res_size = "sizeof(float)"
-    else:
-        constant_len_res = False
-        subq_res_size = type_length(subq_res_col.table_name, subq_res_col.column_name, subq_res_col.column_type)
-
-    print >>fo, ""
-    print >>fo, indent + "// Process the subquery"
-
-    if isinstance(currentNode, ystree.TwoJoinNode):
-        pass_in_cols = map(lambda c: ystree.__trace_to_leaf__(currentNode, c, False), pass_in_cols)
-
-    for col in pass_in_cols:
-        colLen = type_length(col.table_name, col.column_name, col.column_type)
-        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-        print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
-        print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
-
-    print >>fo, indent + var_subqRes + " = (char *)malloc(" + (subq_res_size if constant_len_res else "sizeof(char *)") + " * " + tupleNum + ");"
-    print >>fo, indent + "CHECK_POINTER(" + var_subqRes + ");\n"
-
-    print >>fo, indent + "for(int tupleid = 0; tupleid < " + tupleNum + "; tupleid++){"
-
-    for col in pass_in_cols:
-        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-        colLen = type_length(col.table_name, col.column_name, col.column_type)
-        if passInPos == "MEM":
-            print >>fo, indent + baseIndent + "memcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" +  str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ");"
-        elif passInPos == "GPU":
-            print >>fo, indent + baseIndent + "CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" + str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ", cudaMemcpyDeviceToHost) );"
-        else:
-            print "ERROR: Unknown pass in value position: ", passInPos
-            exit(99)
-
-    print >>fo, indent + baseIndent + "{"
-
-    #Sofoklis Debug
-    print >>fo, indent + baseIndent + "//==========Start SUB-QUERY processing (with indexing)=========="
-
-    # Sofoklis Comments for indexing implemenation
-    #-----------------------------------------------------------------------------------
-    # Step 1 - Search for linking predicates
-    # Step 2 - Create build index (by sorting linking predicate)
-    # Step 3 - If there is an index do binary search instead of scan
-    #-----------------------------------------------------------------------------------
-
-    #Explore all the nested block
-    nodesToExplore = []
-    nodesHierarchy = {} #Key = Parent, Value = [Child1, Child2]
-    nodesToExplore.append(sub_tree)
-    while len(nodesToExplore) != 0:
-
-        #Get next node
-        currNode = nodesToExplore.pop()
-
-        #Add left and right nodes from joins
-        if isinstance(currNode, ystree.TwoJoinNode):
-
-            #Explore right and left childs
-            nodesToExplore.append(currNode.left_child)
-            nodesToExplore.append(currNode.right_child)
-
-            #Keep Hierarchy
-            chList = []
-            chList.append(currNode.left_child)
-            chList.append(currNode.right_child)
-            nodesHierarchy[currNode] = chList
-
-        #Found leafs (i.e. tables)
-        elif isinstance(currNode, ystree.TableNode):
-
-            #Check if there is a where condition
-            if currNode.where_condition is not None:
-
-                #Keep colunms that need to be ordered
-                columnsToShort = []
-
-                #Analyze where condition
-                whereList = []
-                relList = []
-                conList = []
-                get_where_attr(currNode.where_condition.where_condition_exp, whereList, relList, conList)
-
-                #Check if it filters a linking predicate
-                for col in conList:
-                    if isinstance(col, ystree.YRawColExp):
-
-                        #Mark all columns that need to be sorted
-                        for linkingPredicate in pass_in_cols:
-                            if col.table_name == linkingPredicate.table_name and col.column_name == linkingPredicate.column_name:
-
-                                print "[INFO]: Found linking predicate column: "+linkingPredicate.table_name+"."+str(linkingPredicate.column_name)
-
-                                #Add to the list of columns that need to be sorted
-                                columnsToShort.append(col)
-
-                #Check if we have to short this table
-                if len(columnsToShort) != 0:
-
-                    #Add columns to create index
-                    currNode.indexCols = copy.deepcopy(columnsToShort)
-
-                    #Remove regular scan and add idex scan
-                    currNode.indexScan = copy.deepcopy(currNode.where_condition)
-                    currNode.where_condition = None
-
-        else:
-
-            #If this is anything else (order, group by etc) we move to the next one
-            nodesToExplore.append(currNode.child)
-
-            #Keep Hierarchy
-            chList = []
-            chList.append(currNode.child)
-            nodesHierarchy[currNode] = chList
-
-    print "================================================================================================="
-
-    generate_code_for_a_tree(fo, sub_tree, lvl + 1)
-
-    print >>fo, indent + baseIndent * 2 + ""
-    if constant_len_res:
-        print >>fo, indent + baseIndent * 2 + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
-    else:
-        print >>fo, indent + baseIndent * 2 + "((char **)" + var_subqRes + ")[tupleid] = (char *)malloc(sizeof(int) + " + subq_res_size + " * mn.table->tupleNum);"
-        print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
-        print >>fo, indent + baseIndent * 2 + "*(int *)(((char **)" + var_subqRes + ")[tupleid]) = mn.table->tupleNum;"
-        print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
-    print >>fo, indent + baseIndent + "}"
-    print >>fo, indent + "}"
-
-    for col in pass_in_cols:
-        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-        print >>fo, indent + "free(" + pass_in_var + ");"
-    print >>fo, ""
-
 """
 gpudb_code_gen: entry point for code generation.
 """
@@ -1908,6 +1745,24 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
         print >>fo, indent + tnName + "->tupleSize = tuple_size;"
         print >>fo, indent + tnName + "->tupleNum = " + preloadName + "->tupleNum;\n"
+
+        sortList = map( lambda c: int(c.split(".")[1]), filter( lambda c: c.split(".")[0] == tn.table_name, cols_to_index ) )
+        sortListPart = list(set(indexList) & set(sortList))
+
+        print >>fo, indent + tnName + "->colIdxNum = " + str(len(sortListPart)) + ";"
+        if len(sortListPart) > 0:
+            print >>fo, indent + tnName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortListPart)) + ");"
+            print >>fo, indent + "CHECK_POINTER(" + tnName + "->colIdx);"
+            print >>fo, indent + tnName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(sortListPart)) + ");"
+            print >>fo, indent + "CHECK_POINTER(" + tnName + "->contentIdx);"
+            print >>fo, indent + tnName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(sortListPart)) + ");"
+            print >>fo, indent + "CHECK_POINTER(" + tnName + "->posIdx);\n"
+
+            for i in range(0, len(sortListPart)):
+                print >>fo, indent + tnName + "->colIdx[" + str(i) + "] = " + str( indexList.index(sortListPart[i]) ) + ";"
+                print >>fo, indent + tnName + "->posIdx[" + str(i) + "] = " + preloadName + "->posIdx[" + str( sortList.index(sortListPart[i]) ) + "];"
+                print >>fo, indent + tnName + "->contentIdx[" + str(i) + "] = " + preloadName + "->contentIdx[" + str( sortList.index(sortListPart[i]) ) + "];"
+
     else:
         tnName = generate_code_for_loading_a_table(fo, indent, tn.table_name, merge(indexList, colList))
 
@@ -2053,84 +1908,9 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         ############## end of wherecondition not none
 
     else:
-
         print >>fo, indent + resName + " = " + tnName + ";"
 
-    # Generate indexing code
-    if tn.indexCols is not None:
-
-        #Init index
-        print >>fo, indent + "// Indexing initialization"
-        print >>fo, indent + resName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
-        print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
-        print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);"
-        print >>fo, indent + resName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);\n"
- 
-        # Create index
-        countIdxCol = 0
-        countCol = 0
-        for idxCol in tn.indexCols: 
-            for i in range(0, totalAttr): #Columns are NOT scanned in order...need to check which one we need!
-                col = colList[i]
-
-                if col.column_name == idxCol.column_name and col.column_type == idxCol.column_type:
-                    
-                    # Add Index column (countCol needs to be the column pos which is equal to the pos in the table not (and not the index column) )
-                    print >>fo, indent + "// Create index for column " + str(col.column_name) + ", type: " + idxCol.column_type
-                    print >>fo, indent + resName + "->colIdx["+str(countIdxCol)+"] = "+str(countCol)+";"
-                    print >>fo, indent + "createIndex("+resName+","+str(countCol)+","+str(idxCol.column_name)+",&pp);\n"
-                    countIdxCol = countIdxCol + 1
-                
-                    # Add scan indexing
-                    if tn.indexScan is not None:
-                        whereList = []
-                        relList = []
-                        conList = []
-                        get_where_attr(tn.indexScan.where_condition_exp, whereList, relList, conList)
-
-                        newWhereList = []
-                        whereLen = count_whereList(whereList, newWhereList)
-
-                        for i in range(0, len(whereList)):
-                            colIndex = -1
-                            for j in range(0, len(newWhereList)):
-                                if newWhereList[j].compare(whereList[i]) is True:
-                                    colIndex = j
-                                    break
-
-                            if colIndex < 0:
-                                print 1/0
-
-                        colType = whereList[i].column_type
-                        ctype = to_ctype(colType)
-
-                        #Get value from the outer table
-                        if ctype == "INT":
-                            if isinstance(conList[i], ystree.YRawColExp):
-                                con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
-                            else:
-                                con_value = conList[i]
-                        else: 
-                            print "[ERROR] - We do not support indexing with complex nesting"
-                            print 1/0
-
-                        #Perform indexScan and replace current tableNode with scan result
-                        print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate() 
-                        print >>fo, indent + "int tmpExternalVal = " + con_value + ";"         
-                        print >>fo, indent + "struct tableNode *indexScanNode = indexScan("+resName+","+str(countCol)+","+str(idxCol.column_name)+",tmpExternalVal,&pp);"
-                        #print >>fo, indent + "free("+resName+");\n"
-                        print >>fo, indent + resName+" = indexScanNode;\n"
-
-                #Move to next col
-                countCol = countCol + 1
-
-    else:
-        print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
-        print >>fo, indent + resName + "->colIdxNum = 0;\n"
-
+    print >>fo, indent + resName + "->colIdxNum = 0;"
 
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}\n"
@@ -2148,6 +1928,7 @@ def __traverse_tree(node, func):
 
 def generate_code_for_loading_tables(fo, indent, tree):
     global loaded_table_list
+    global cols_to_index
     
     # check if a TableNode has new columns to load
     def __gen_col_lists(tn, col_lists):
@@ -2224,7 +2005,7 @@ def generate_code_for_loading_tables(fo, indent, tree):
     def has_table(t_name, res_list):
         return lambda n: __has_table(n, t_name, res_list)
 
-    # get the deepest subquery level a table is at
+    # get the deepest subquery level a table at
     def table_level(t_name, subqs):
         for i in range(len(subqs) - 1, -1, -1) :
             res = []
@@ -2246,6 +2027,28 @@ def generate_code_for_loading_tables(fo, indent, tree):
         mem_size -= t[1]
         del loaded_table_list[t[0]]
 
+
+    def __extract_correlated_cols(node, col_list):
+        if node.where_condition is not None and node.where_condition.where_condition_exp is not None:
+            where_exp = node.where_condition.where_condition_exp
+            is_passed_in_par = lambda par: isinstance(par, ystree.YConsExp) and par.ref_col is not None
+            def __extract_correlated_cols_exp(exp, _col_list):
+                if isinstance(exp, ystree.YFuncExp) and len(exp.parameter_list) == 2 and any(map(is_passed_in_par, exp.parameter_list)):
+                    col = exp.parameter_list[1] if is_passed_in_par(exp.parameter_list[0]) else exp.parameter_list[0]
+                    if isinstance(node, ystree.TableNode) and  isinstance(col, ystree.YRawColExp):
+                        col_list.append(col.table_name + "." + str(col.column_name))
+
+            def extract_correlated_cols_exp(_col_list):
+                return lambda e: __extract_correlated_cols_exp(e, _col_list)
+
+            ystree.__traverse_exp_map__(where_exp, extract_correlated_cols_exp(col_list))
+        
+    def extract_correlated_cols(col_list):
+        return lambda n: __extract_correlated_cols(n, col_list)
+
+    if optimization == "--idx":
+        map( lambda t: __traverse_tree(t, extract_correlated_cols(cols_to_index)), ystree.subqueries )
+
     for t_name, c_list in loaded_table_list.items():
         generate_code_for_loading_a_table(fo, indent, t_name, c_list)
 
@@ -2256,6 +2059,9 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
     resName = t_name.lower() + "Table"
 
     indexList, colList = unmerge(c_list)
+
+    sortList = map( lambda c: int(c.split(".")[1]), filter( lambda c: c.split(".")[0] == t_name, cols_to_index ) )
+    
 
     print >>fo, indent + "// Load columns from the table " + t_name
 
@@ -2398,61 +2204,24 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
 
     print >>fo, indent + "tupleOffset += header.tupleNum;"
 
-    print >>fo, indent + resName + "->colIdxNum = 0;"
-
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}"
+
+    print >>fo, indent + resName + "->colIdxNum = " + str(len(sortList)) + ";"
+    if len(sortList) > 0:
+        print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortList)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
+        print >>fo, indent + resName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(sortList)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
+        print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(sortList)) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
+
+        for i in range(0, len(sortList)):
+            print >>fo, indent + resName + "->colIdx[" + str(i) + "] = " + str( indexList.index(sortList[i]) ) + ";"
+            print >>fo, indent + "createIndex(" + resName + ", " + str(i) + ", " + str( indexList.index(sortList[i]) ) +", &pp);\n"
+
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}\n"
 
     return resName
-
-    # Generate indexing code
-    # if tn.indexCols is not None:
-
-    #     #Init index
-    #     print >>fo, indent + "// Indexing initialization"
-    #     print >>fo, indent + resName + "->colIdxNum = " + str(len(tn.indexCols)) + ";"
-    #     print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(tn.indexCols)) + ");"
-    #     print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
-    #     print >>fo, indent + resName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(tn.indexCols)) + ");"
-    #     print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
-    #     print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(tn.indexCols)) + ");"
-    #     print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
-    #     count = 0
-
-    #     # Create index
-    #     for idxCol in tn.indexCols:
-    #         print >>fo, indent + "// Create index for column " + str(idxCol.column_name) + ", type: " + idxCol.column_type
-    #         print >>fo, indent + resName + "->colIdx["+str(count)+"] = "+str(idxCol.column_name)+";"
-    #         print >>fo, indent + "createIndex("+resName+","+str(count)+","+str(idxCol.column_name)+",&pp);\n"
-    #         count = count + 1
-
-    #     # Add scan indexing
-    #     if tn.indexScan is not None:
-    #         whereList = []
-    #         relList = []
-    #         conList = []
-    #         get_where_attr(tn.indexScan.where_condition_exp, whereList, relList, conList)
-
-    #         if len(relList) != 1:
-    #             print "[ERROR] : Cannot use complicated nested condition with indexing!"
-    #             exit(-1)
-    #         if relList[0] != "EQ":
-    #             print "[ERROR] : Can only use \"EQ\" nested condition with indexing!"
-    #             exit(-1)
-
-    #         #Part outer
-    #         for col in whereList:
-    #             print col.table_name
-    #             print col.column_name
-
-    #         #TODO need to fix that to pass the outer table
-    #         print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate()
-    #         print >>fo, indent + "// createIndex("+resName+",&"+var_subqRes+","+str(conList[0].column_name)+",&pp);\n"
-
-    # else:
-    #     print >>fo, indent + "// No Indexing initialization. This query plan does not use indexing!"
-    #     print >>fo, indent + resName + "->colIdxNum = 0;\n"
-
 
