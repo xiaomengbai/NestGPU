@@ -2256,8 +2256,9 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn, optimization):
                         #Perform indexScan and replace current tableNode with scan result
                         print >>fo, indent + "// Index scan for condition :"+tn.indexScan.where_condition_exp.evaluate() 
                         print >>fo, indent + "int tmpExternalVal = " + con_value + ";"         
-                        print >>fo, indent + "struct tableNode *tmp = indexScan("+resName+","+str(countCol)+","+str(idxCol.column_name)+",tmpExternalVal,&pp);"
-                        print >>fo, indent + resName+" = tmp;\n"
+                        print >>fo, indent + "struct tableNode *indexScanNode = indexScan("+resName+","+str(countCol)+","+str(idxCol.column_name)+",tmpExternalVal,&pp);"
+                        #print >>fo, indent + "free("+resName+");\n"
+                        print >>fo, indent + resName+" = indexScanNode;\n"
 
                 #Move to next col
                 countCol = countCol + 1
