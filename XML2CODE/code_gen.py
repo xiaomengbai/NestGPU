@@ -749,13 +749,6 @@ def generate_col_list(tn, indexList, colList):
                         indexList.append(par.column_name)
                         colList.append(par)
 
-    #Also check indexed columns
-    if tn.indexCols is not None:
-        for col in tn.indexCols:
-            if col.column_name not in indexList:
-                indexList.append(col.column_name)
-                colList.append(col)
-
 """
 generate_code generates CUDA/OpenCL codes from the query plan tree.
 Currently we only generate CUDA/OpenCL codes for star schema queries.
@@ -1006,7 +999,6 @@ def generate_code_for_a_tree(fo, tree, lvl):
         print >>fo, indent + "clReleaseContext(context.context);"
         print >>fo, indent + "clReleaseProgram(context.program);\n"
 
-#Baseline subquery execution
 def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
     indent = (lvl * 3 + 2) * baseIndent
