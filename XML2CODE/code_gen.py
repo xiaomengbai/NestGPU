@@ -17,7 +17,7 @@
 
 import sys
 import commands
-import os.path
+import os
 import copy
 import ystree
 import correlation
@@ -1956,7 +1956,9 @@ def generate_code_for_loading_tables(fo, indent, tree):
         indexList, colList = unmerge(col_list)
         table_dir = "../../test/tables"
         column_files = [ table_dir + "/" + t_name + str(idx) for idx in indexList ]
-        return sum(map(lambda f: os.path.getsize(f), column_files))
+        #print os.getcwd()
+        #return sum(map(lambda f: os.path.getsize(f), column_files))
+        return 0
 
 
     # extract which subqueries are in the next level
