@@ -1745,7 +1745,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         if len(sortListPart) > 0:
             print >>fo, indent + tnName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortListPart)) + ");"
             print >>fo, indent + "CHECK_POINTER(" + tnName + "->colIdx);"
-            print >>fo, indent + tnName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(sortListPart)) + ");"
+            print >>fo, indent + tnName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(sortListPart)) + ");"
             print >>fo, indent + "CHECK_POINTER(" + tnName + "->contentIdx);"
             print >>fo, indent + tnName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(sortListPart)) + ");"
             print >>fo, indent + "CHECK_POINTER(" + tnName + "->posIdx);\n"
@@ -2205,7 +2205,7 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
     if len(sortList) > 0:
         print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortList)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
-        print >>fo, indent + resName + "->contentIdx = (char **)malloc(sizeof(char *) * " + str(len(sortList)) + ");"
+        print >>fo, indent + resName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(sortList)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
         print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(sortList)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"

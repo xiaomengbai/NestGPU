@@ -2038,6 +2038,11 @@ __global__ void static unpack_rle(char * fact, char * rle, long tupleNum, int dN
 
 struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
+    if(sn->tn->colIdxNum == 0){
+
+        printf("MPIKA TABLE SCAN KAI EXO INDEXES");
+    }
+
     struct timespec start,end;
     clock_gettime(CLOCK_REALTIME,&start);
 
@@ -2860,15 +2865,14 @@ __global__ static void assign_index(int *col, long  inNum){
  * 
  * --Input--
  * tn -> Table node
- * columnPos -> Column to be sorted
  * idxPos -> Position of the indexed column in contentIdx and posIdx
- *
+ * columnPos -> Column to be sorted
  *
  * --Output--
  * tn.contentIdx (sorted values)
  * tn.posIdx (position in the original table )
  */
-void createIndex (struct tableNode *tn, int columnPos, int idxPos, struct statistic *pp){
+void createIndex (struct tableNode *tn, int idxPos, int columnPos, struct statistic *pp){
 
     //Check assumption (INT enum == 4)
     if (tn->attrType[columnPos] != 4 ){
@@ -2931,14 +2935,14 @@ void createIndex (struct tableNode *tn, int columnPos, int idxPos, struct statis
  struct tableNode * indexScan (struct tableNode *tn, int columnPos, int idxPos, int filterValue, struct statistic *pp){
 
     //Check assumption (INT enum == 4)
-    if (tn->attrType[columnPos] != 4 ){
-        printf("[ERROR] Indexing is only supported for INT type!\n");
-        exit(-1);
-    }
-    if (tn->attrSize[columnPos] != sizeof(int)){
-        printf("[ERROR] Indexing is only supported for INT type (and size!)!\n");
-        exit(-1); 
-    }
+    // if (tn->attrType[columnPos] != 4 ){
+    //     printf("[ERROR] Indexing is only supported for INT type!\n");
+    //     exit(-1);
+    // }
+    // if (tn->attrSize[columnPos] != sizeof(int)){
+    //     printf("[ERROR] Indexing is only supported for INT type (and size!)!\n");
+    //     exit(-1); 
+    // }
 
     //Get data size
     long dataSize = tn->tupleNum * tn->attrSize[columnPos];

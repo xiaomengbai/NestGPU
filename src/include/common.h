@@ -213,8 +213,8 @@ struct tableNode{
     /* Indexing */
     int colIdxNum;          /* the total number of sorted indexed columns */
     int *colIdx;            /* the list with all the sorted indexed columns */
-    int **posIdx;          /* the possition of each value in the original table (col1, col2 etc) */
-    int **contentIdx;      /* the values sorted (col1, col2 etc) - ASSUMPTION, support only int for indexing */
+    int **posIdx;           /* the possition of each value in the original table (col1, col2 etc) */
+    int **contentIdx;       /* the values sorted (col1, col2 etc) - ASSUMPTION, support only int for indexing */
 };
 
 struct groupByExp{
