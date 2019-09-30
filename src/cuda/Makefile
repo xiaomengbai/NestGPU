@@ -28,13 +28,13 @@ endif
 
 
 gpudb: gpu cpu
-	 $(NVCC) -pg tableScan.o inviJoin.o hashJoin.o cuckoo.o materialize.o groupby.o orderBy.o driver.o $(LDFLAGS) -o GPUDATABASE
+	 $(NVCC) -pg -g -G tableScan.o inviJoin.o hashJoin.o cuckoo.o materialize.o groupby.o orderBy.o driver.o $(LDFLAGS) -o GPUDATABASE
 
 cpu: driver.cu 
-	$(NVCC) -c -g $(GENCODE_FLAGS) driver.cu
+	$(NVCC) -c -g -G $(GENCODE_FLAGS) driver.cu
 
 gpu: tableScan.cu hashJoin.cu cuckoo.cu inviJoin.cu materialize.cu groupby.cu orderBy.cu
-	$(NVCC) -c -g $(GENCODE_FLAGS) tableScan.cu hashJoin.cu cuckoo.cu inviJoin.cu materialize.cu groupby.cu orderBy.cu 
+	$(NVCC) -c -g -G $(GENCODE_FLAGS) tableScan.cu hashJoin.cu cuckoo.cu inviJoin.cu materialize.cu groupby.cu orderBy.cu 
 
 all: gpudb
 
