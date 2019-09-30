@@ -2023,6 +2023,73 @@ __global__ void static unpack_rle(char * fact, char * rle, long tupleNum, int dN
     }
 }
 
+__global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l_offset, int h_offset, int tupleNum){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int pos;
+    for(int i = 0; i<tupleNum; i+=stride){
+        pos = posIdx_d[i];
+        if (l_offset<=i && i<=h_offset){
+            bitmapRes_d[pos] = 1;
+        }
+    }
+}
+
+/*
+ * Performs index scan
+ */
+ void indexScanInt (struct tableNode *tn, int columnPos, int idxPos, int filterValue, int* bitmapRes_d, struct statistic *pp){
+
+    //Check assumption (INT enum == 4)
+    if (tn->attrType[columnPos] != 4 ){
+        printf("[ERROR] Indexing is only supported for INT type!\n");
+        exit(-1);
+    }
+    if (tn->attrSize[columnPos] != sizeof(int)){
+        printf("[ERROR] Indexing is only supported for INT type (and size!)!\n");
+        exit(-1); 
+    }
+
+    //Get data size
+    long dataSize = tn->tupleNum * tn->attrSize[columnPos];
+
+    //Copy index (in device)
+    int* contentIdx_d;
+    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->contentIdx[idxPos], dataSize, cudaMemcpyHostToDevice));  
+
+    //Binary search (checks if point exists)
+    bool exists = thrust::binary_search(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue); //returns true if key exists
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+
+    //If the value exists 
+    int l_offset = -1; 
+    int h_offset = -1;
+    if (exists){
+        //Get range 
+        int* l_pos = thrust::lower_bound(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue);
+        l_offset = (int) (l_pos - contentIdx_d); 
+        int* h_pos = thrust::upper_bound(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue);
+        h_offset = (int) (h_pos - contentIdx_d) - 1; // We do not want to go to the next level 
+    }
+
+    //Copy mapping (in device)
+    int* posIdx_d;
+    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, dataSize));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(posIdx_d, tn->posIdx[idxPos], dataSize, cudaMemcpyHostToDevice));  
+
+    //Define Grid and block size
+    dim3 grid(2048);
+    dim3 block(256);
+
+    //Set everything to false
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemset(bitmapRes_d, 0, tn->tupleNum)); 
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+
+    //Construct bitmap filter result
+    indeScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
+}
+
 /*
  * tableScan Prerequisites:
  *  1. the input data can be fit into GPU device memory
@@ -2037,11 +2104,6 @@ __global__ void static unpack_rle(char * fact, char * rle, long tupleNum, int dN
  */
 
 struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
-
-    if(sn->tn->colIdxNum == 0){
-
-        printf("MPIKA TABLE SCAN KAI EXO INDEXES");
-    }
 
     struct timespec start,end;
     clock_gettime(CLOCK_REALTIME,&start);
@@ -2233,9 +2295,33 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                 else
                     whereVec = *((int **) where->exp[0].content);
 
-                if(rel==EQ)
-                    genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
-                else if(rel == NOT_EQ)
+                if(rel==EQ){
+                    //Check if this column is indexed
+                    int idxPos = -1;
+                    if (sn->tn->colIdxNum != 0){
+                        for (int k=0; k<sn->tn->colIdxNum; k++){
+                            if (sn->tn->colIdx[k] == index){
+                                idxPos = k; 
+                            }
+                        }
+                    }
+                    if (idxPos >= 0){ //Index scan!
+                        //genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
+                        indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
+                        int* originalRes = (int *)malloc(sizeof(int) * totalTupleNum);
+                        CHECK_POINTER(originalRes); 
+                        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(originalRes, gpuFilter, sizeof(int) * totalTupleNum, cudaMemcpyDeviceToHost));
+                        printf("This is what is being returned by serial scan:\n");
+                        for (int i=0;i<totalTupleNum;i++){
+                            if (originalRes[i] != 0 ){
+                                printf ("Value[%d]: %d \n",i,originalRes[i]);
+                            }
+                        }
+                        free(originalRes);
+                    }else{
+                        genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
+                    }
+                }else if(rel == NOT_EQ)
                     genScanFilter_init_int_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                 else if(rel == GTH)
                     genScanFilter_init_int_gth<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
@@ -2918,150 +3004,4 @@ void createIndex (struct tableNode *tn, int idxPos, int columnPos, struct statis
     //De-allocate device memory
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(posIdx_d));
-}
-  
-/*
- * Scans index based on a column
- * 
- * --Input--
- * tn -> Table node
- * columnPos -> searched
- * idxPos -> Position of the indexed column in contentIdx and posIdx
- * 
- *
- * --Output--
- * new tableNode with only the selected values!
- */
- struct tableNode * indexScan (struct tableNode *tn, int columnPos, int idxPos, int filterValue, struct statistic *pp){
-
-    //Check assumption (INT enum == 4)
-    // if (tn->attrType[columnPos] != 4 ){
-    //     printf("[ERROR] Indexing is only supported for INT type!\n");
-    //     exit(-1);
-    // }
-    // if (tn->attrSize[columnPos] != sizeof(int)){
-    //     printf("[ERROR] Indexing is only supported for INT type (and size!)!\n");
-    //     exit(-1); 
-    // }
-
-    //Get data size
-    long dataSize = tn->tupleNum * tn->attrSize[columnPos];
-
-    //Copy index (in device)
-    int* contentIdx_d;
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->contentIdx[idxPos], dataSize, cudaMemcpyHostToDevice));  
-
-    //Binary search (checks if point exists)
-    bool exists = thrust::binary_search(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue); //returns true if key exists
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-
-    //If the value exists 
-    if (exists){
-
-        //Get bounds 
-        int* l_pos = thrust::lower_bound(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue);
-        int l_offset = (int) (l_pos - contentIdx_d); 
-        int* h_pos = thrust::upper_bound(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue);
-        int h_offset = (int) (h_pos - contentIdx_d) - 1; // We do not want to go to the next level 
-
-        //Calculate result size
-        int resScanNum = h_offset - l_offset;
-        int resScanSize = resScanNum * sizeof(int);
-
-        //Get result from the device
-        int *resScanBuff = (int *)malloc(resScanSize); 
-
-        //Get data values
-        int* data = (int*) tn->content[columnPos];
-
-        //Go over the range
-        int resPos = 0;
-        for (int i = l_offset; i <= h_offset; i++){
-
-            //Get data pos
-            int dataPos = tn->posIdx[idxPos][i];
-            
-            //Get value from pos and store it to result buffer
-            resScanBuff[resPos] = data[dataPos];
-
-            //Go to next result pos
-            resPos++;
-        }
-
-        //Print result (debug)
-        // printf ("--IndexScan Res--\n");
-        // for (int i=0; i< resScanNum; i++){
-        //     printf ("Value [%d] : %d \n", i, resScanBuff[i]);
-        // }
-
-        //Create a new table node!
-        struct tableNode *res = NULL;
-        int tupleSize = 0;
-        res = (struct tableNode *) malloc(sizeof(struct tableNode));
-        CHECK_POINTER(res);
-        res->totalAttr = tn->totalAttr; // Same as output
-        res->attrType = (int *) malloc(sizeof(int) * res->totalAttr);
-        CHECK_POINTER(res->attrType);
-        res->attrSize = (int *) malloc(sizeof(int) * res->totalAttr);
-        CHECK_POINTER(res->attrSize);
-        res->attrTotalSize = (int *) malloc(sizeof(int) * res->totalAttr);
-        CHECK_POINTER(res->attrTotalSize);
-        res->attrIndex = (int *) malloc(sizeof(int) * res->totalAttr);
-        CHECK_POINTER(res->attrIndex);
-        res->dataPos = (int *) malloc(sizeof(int) * res->totalAttr);
-        CHECK_POINTER(res->dataPos);
-        res->dataFormat = (int *) malloc(sizeof(int) * res->totalAttr);
-        CHECK_POINTER(res->dataFormat);
-        res->content = (char **) malloc(sizeof(char *) * res->totalAttr);
-        CHECK_POINTER(res->content);
-        for(int i=0;i<res->totalAttr;i++){
-            res->attrType[i] = tn->attrType[i];
-            res->attrSize[i] = tn->attrSize[i];
-        }
-        res->tupleNum = resScanNum;//This is the same as the result scan
-        res->tupleSize = tn->tupleSize;
-        printf("[INFO]Number of selection results of index scan: %d\n",resScanNum);
-   
-        // for(int i=0; i<tn->totalAttr; i++){
-
-        //     //Add info
-        //     int colSize = res->tupleNum * res->attrSize[i];
-        //     res->attrTotalSize[i] = colSize;
-        //     res->dataFormat[i] = UNCOMPRESSED;
-        //     res->dataPos[i] = MEM;
-        //     res->content[i] = (char *)malloc(colSize);
-        //     CHECK_POINTER(res->content[i]);
-        //     memset(res->content[i],0,colSize);
-
-        //     //Get only selected index
-        //     int resPos = 0;
-        //     for (int j = l_offset; j <= h_offset; j++){
-
-        //         //Get data pos
-        //         int dataPos = tn->posIdx[idxPos][j];
-            
-        //         //Get value from pos and store it to result buffer
-        //         res->content[i][resPos] = res->content[i][dataPos];
-
-        //         //Go to next result pos
-        //         resPos++;
-        //     }
-        // }
-        
-        // //De-allocate device memory
-        // CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
-        
-        // //De-allocate old table scan
-        // freeTable (tn);
-
-        // //Return new result
-        // return res;
-    }
-
-    //De-allocate device memory
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
-
-    //Just return the same table node
-    return tn;
 }

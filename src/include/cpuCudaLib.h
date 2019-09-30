@@ -135,12 +135,12 @@ static void freeTable(struct tableNode * tn){
     if (tn->colIdxNum > 0){
         free(tn->colIdx);
         tn->colIdx = NULL;
-        for(i=0;i<tn->colIdxNum;i++){ 
-            if(tn->contentIdx[i] == NULL)
-                continue;
-            free(tn->contentIdx[i]);
-        }
-        // Not sure why this fails
+        // Need to implement keepInGpu for indexes as well
+        // for(i=0;i<tn->colIdxNum;i++){ 
+        //     if(tn->contentIdx[i] == NULL)
+        //         continue;
+        //     free(tn->contentIdx[i]);
+        // }
         // for(i=0;i<tn->colIdxNum;i++){ 
         //     if(tn->posIdx[i] == NULL)
         //         continue;
