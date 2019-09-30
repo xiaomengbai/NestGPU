@@ -136,13 +136,21 @@ static void freeTable(struct tableNode * tn){
         free(tn->colIdx);
         tn->colIdx = NULL;
         for(i=0;i<tn->colIdxNum;i++){ 
+            if(tn->contentIdx[i] == NULL)
+                continue;
             free(tn->contentIdx[i]);
-            free(tn->posIdx[i]);
         }
-        free(tn->posIdx);
-        tn->posIdx = NULL;
+        // Not sure why this fails
+        // for(i=0;i<tn->colIdxNum;i++){ 
+        //     if(tn->posIdx[i] == NULL)
+        //         continue;
+        //     free(tn->posIdx[i]);
+        // } 
         free (tn->contentIdx);
         tn->contentIdx = NULL;
+        free(tn->posIdx);
+        tn->posIdx = NULL;
+        tn->colIdxNum = 0;
     }
 }
 
