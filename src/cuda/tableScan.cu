@@ -2023,11 +2023,14 @@ __global__ void static unpack_rle(char * fact, char * rle, long tupleNum, int dN
     }
 }
 
+/*
+ * Construct bitmap buffer based on the index results
+ */
 __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l_offset, int h_offset, int tupleNum){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int pos;
-    for(int i = 0; i<tupleNum; i+=stride){
+    for(int i = l_offset+tid; i<=h_offset; i+=stride){
         pos = posIdx_d[i];
         if (l_offset<=i && i<=h_offset){
             bitmapRes_d[pos] = 1;
@@ -2083,8 +2086,7 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
     dim3 block(256);
 
     //Set everything to false
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemset(bitmapRes_d, 0, tn->tupleNum)); 
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemset(bitmapRes_d, 0, sizeof(int)* tn->tupleNum)); 
 
     //Construct bitmap filter result
     indeScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
@@ -2305,19 +2307,25 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             }
                         }
                     }
-                    if (idxPos >= 0){ //Index scan!
+                    if (idxPos >= 0){ 
+
+                        //Regular scan
                         //genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
+                        
+                        //Index scan!
                         indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
-                        int* originalRes = (int *)malloc(sizeof(int) * totalTupleNum);
-                        CHECK_POINTER(originalRes); 
-                        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(originalRes, gpuFilter, sizeof(int) * totalTupleNum, cudaMemcpyDeviceToHost));
-                        printf("This is what is being returned by serial scan:\n");
-                        for (int i=0;i<totalTupleNum;i++){
-                            if (originalRes[i] != 0 ){
-                                printf ("Value[%d]: %d \n",i,originalRes[i]);
-                            }
-                        }
-                        free(originalRes);
+                        
+                        /* DEBUG CODE - DO NOT REMOVE FOR NOW */
+                        // int* originalRes = (int *)malloc(sizeof(int) * totalTupleNum);
+                        // CHECK_POINTER(originalRes); 
+                        // CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(originalRes, gpuFilter, sizeof(int) * totalTupleNum, cudaMemcpyDeviceToHost));
+                        // printf("This is what is being returned by serial scan:\n");
+                        // for (int i=0;i<totalTupleNum;i++){
+                        //     if (originalRes[i] != 0 ){
+                        //         printf ("Value[%d]: %d \n",i,originalRes[i]);
+                        //     }
+                        // }
+                        // free(originalRes);
                     }else{
                         genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                     }
