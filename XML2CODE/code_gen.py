@@ -1627,8 +1627,8 @@ def generate_code_for_loading_tables(fo, indent, tree):
         table_dir = "../../test/tables"
         column_files = [ table_dir + "/" + t_name + str(idx) for idx in indexList ]
         #print os.getcwd()
-        #return sum(map(lambda f: os.path.getsize(f), column_files))
-        return 0
+        return sum(map(lambda f: os.path.getsize(f), column_files))
+        # return 0
 
 
     # extract which subqueries are in the next level

@@ -137,7 +137,7 @@ CUDA_DRIVER_DEP := XML2CODE/code_gen.py \
                    XML2CODE/schema.py   \
                    XML2CODE/config.py
 
-$(CUDA_DRIVER): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP)
+$(CUDA_DRIVER): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP) load-columns
 	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA) $(GPU_OPT)
 
 CUDA_SRC_FILES := tableScan.cu hashJoin.cu cuckoo.cu inviJoin.cu materialize.cu groupby.cu orderBy.cu
@@ -155,7 +155,7 @@ $(CUDA_GPUDB): $(CUDA_DRIVER) $(CUDA_GPUDB_DEP)
 driver: $(CUDA_DRIVER)
 gpudb: $(CUDA_GPUDB)
 
-run: $(CUDA_GPUDB) load-columns
+run: $(CUDA_GPUDB)
 	$(CUDA_GPUDB) --datadir $(DATA_DIR)
 
 
