@@ -34,15 +34,15 @@ Several configurable variables:
     @SOA is currently for testing only.
 """
 
-joinType = 0    
+joinType = 0
 POS = 0
 CODETYPE = 0
 SOA = 0
 
 """
-OpenCL specific configurable variables: 
+OpenCL specific configurable variables:
     @PID is the platform ID that will execute the query.
-    @DTYPE specifies the type of the device which executes the query. 
+    @DTYPE specifies the type of the device which executes the query.
     0 represents CL_DEVICE_TYPE_GPU,
     1 represnets CL_DEVICE_TYPE_CPU and
     2 represnets CL_DEVICE_TYPE_ACCELERATOR.
@@ -50,4 +50,3 @@ OpenCL specific configurable variables:
 
 PID = 0
 DTYPE = 0
-

@@ -1,4 +1,4 @@
-.PHONY: clean gpudb clean-gpudb
+.PHONY: help tables loader load-columns driver gpudb run clean clean-gpudb clean-loader clean-all
 
 help:
 	@echo "help          print this message"
@@ -9,9 +9,10 @@ help:
 	@echo "load-columns  generate column files to $(DATA_DIR)"
 	@echo "run           run the gpudb"
 	@echo ""
-	@echo "clean         clean all stuff"
+	@echo "clean"
 	@echo "clean-gpudb   clean $(CUDA_DRIVER) and $(CUDA_GPUDB)"
 	@echo ""
+	@echo "clean-all     clean all stuff"
 
 
 SSB_TEST_DIR := ./test/ssb_test
@@ -43,12 +44,12 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # -- Optimizations --
 
 #Baseline
-#GPU_OPT := --base
+GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
-GPU_OPT := --idx
+#GPU_OPT := --idx
 
-# ------------------- 
+# -------------------
 
 # build test/dbgen/dbgen for generating tables
 DBGEN_DIR := test/dbgen
@@ -91,52 +92,75 @@ $(DATA_DIR):
 
 # target: loader
 #   the program that loads columns from table files
-UTIL_DIR := src/utility
-INC_DIR := src/include
-LOADER_SRC := $(UTIL_DIR)/load.c
-LOADER := $(UTIL_DIR)/gpuDBLoader
-SCHEMA_H := $(INC_DIR)/schema.h
+UTIL_DIR      := src/utility
+INC_DIR       := src/include
+
+LOADER        := $(UTIL_DIR)/gpuDBLoader
+
+LOADER_SRC    := $(UTIL_DIR)/load.c
+SCHEMA_H      := $(INC_DIR)/schema.h
+
+CONFIG_PY     := XML2CODE/config.py
+SCHEMA_PY     := XML2CODE/schema.py
+LOADER_GEN_PY := XML2CODE/loader_gen.py
+SCHEMA_GEN_PY := XML2CODE/schema_gen.py
+
 
 loader: $(LOADER)
 
-$(LOADER): $(LOADER_SRC)
+$(LOADER): $(LOADER_SRC) $(SCHEMA_H)
 	$(MAKE) -C $(UTIL_DIR)
 
-$(LOADER_SRC): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP)
-	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA) $(GPU_OPT)
+$(LOADER_SRC): $(LOADER_GEN_PY) $(SCHEMA) $(SCHEMA_PY) $(CONFIG_PY)
+	python $(LOADER_GEN_PY) $(SCHEMA)
 
+$(SCHEMA_H): $(SCHEMA_GEN_PY) $(SCHEMA) $(SCHEMA_PY) $(CONFIG_PY)
+	python $(SCHEMA_GEN_PY) $(SCHEMA)
 
 # target: load-columns
 #   generate column files from table files
 LOAD_OPTS := --datadir $(DATA_DIR) $(foreach table,$(TABLES), --$(table) $(DATA_DIR)/$(table).tbl)
-load-columns: tables loader
+load-columns: $(TABLE_FILES) $(LOADER)
 	$(LOADER) $(LOAD_OPTS)
 
 
 # target: gpudb
 #    generate and build the gpudb program
 
-CUDA_DIR := src/cuda
-CUDA_GPUDB := $(CUDA_DIR)/GPUDATABASE
-CUDA_DRIVER := $(CUDA_DIR)/driver.cu
+CUDA_DIR        := src/cuda
+CUDA_GPUDB      := $(CUDA_DIR)/GPUDATABASE
+CUDA_DRIVER     := $(CUDA_DIR)/driver.cu
 
-TRANSLATE_PY := translate.py
-CUDA_DRIVER_DEP := XML2CODE/code_gen.py XML2CODE/ystree.py
+TRANSLATE_PY    := translate.py
+CUDA_DRIVER_DEP := XML2CODE/code_gen.py \
+                   XML2CODE/ystree.py   \
+                   XML2CODE/schema.py   \
+                   XML2CODE/config.py
 
 $(CUDA_DRIVER): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP)
 	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA) $(GPU_OPT)
 
-$(CUDA_GPUDB): $(CUDA_DRIVER)
+CUDA_SRC_FILES := tableScan.cu hashJoin.cu cuckoo.cu inviJoin.cu materialize.cu groupby.cu orderBy.cu
+CUDA_GPUDB_DEP := src/include/common.h     \
+                  src/include/hashJoin.h   \
+                  src/include/schema.h     \
+                  src/include/cpuCudaLib.h \
+                  src/include/gpuCudaLib.h \
+                  $(addprefix $(CUDA_DIR)/, $(CUDA_SRC_FILES))
+
+
+$(CUDA_GPUDB): $(CUDA_DRIVER) $(CUDA_GPUDB_DEP)
 	$(MAKE) -C $(CUDA_DIR)
 
 driver: $(CUDA_DRIVER)
 gpudb: $(CUDA_GPUDB)
 
-run:
+run: $(CUDA_GPUDB) load-columns
 	$(CUDA_GPUDB) --datadir $(DATA_DIR)
 
 
 # clean
+clean: clean-gpudb
 clean-gpudb:
 	$(MAKE) -C $(CUDA_DIR) clean
 	rm -f $(CUDA_DRIVER)
@@ -146,7 +170,7 @@ clean-loader:
 	rm -f $(LOADER_SRC)
 	rm -f $(SCHEMA_H)
 
-clean: clean-gpudb clean-loader
+clean-all: clean-gpudb clean-loader
 	$(MAKE) -C $(DBGEN_DIR) clean
 	if [ -d $(DATA_DIR) ]; then \
 	  rm -f $(DATA_DIR)/*; \

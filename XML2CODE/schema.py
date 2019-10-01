@@ -123,8 +123,7 @@ def process_schema_in_a_file(schema_name):
 
     return global_table_dict
 
-
 if __name__ == '__main__':
-    process_schema_in_a_file(sys.argv[1])
 
+    process_schema_in_a_file(argv[1])
     print global_table_dict
