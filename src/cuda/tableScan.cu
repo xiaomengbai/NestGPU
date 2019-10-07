@@ -2056,11 +2056,18 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
     //Get data size
     long dataSize = tn->tupleNum * tn->attrSize[columnPos];
 
-    //Copy index (in device)
+    //Get index
     int* contentIdx_d;
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->contentIdx[idxPos], dataSize, cudaMemcpyHostToDevice));  
-
+    if (tn->indexPos == MEM){
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->contentIdx[idxPos], dataSize, cudaMemcpyHostToDevice));
+    }else if (tn->indexPos == GPU){
+        contentIdx_d = tn->contentIdx[idxPos]; 
+    }else{
+        printf("[ERROR] Index can be on either on host or device!\n");
+        exit(-1);
+    }
+    
     //Binary search (checks if point exists)
     bool exists = thrust::binary_search(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue); //returns true if key exists
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
@@ -2076,10 +2083,17 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
         h_offset = (int) (h_pos - contentIdx_d) - 1; // We do not want to go to the next level 
     }
 
-    //Copy mapping (in device)
+    //Get mapping pos
     int* posIdx_d;
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, dataSize));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(posIdx_d, tn->posIdx[idxPos], dataSize, cudaMemcpyHostToDevice));  
+    if (tn->indexPos == MEM){
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, dataSize));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(posIdx_d, tn->posIdx[idxPos], dataSize, cudaMemcpyHostToDevice));  
+    }else if (tn->indexPos == GPU){
+        posIdx_d = tn->posIdx[idxPos];
+    }else{
+        printf("[ERROR] Index mapping can be on either on host or device!\n");
+        exit(-1);
+    }
 
     //Define Grid and block size
     dim3 grid(2048);
@@ -3005,11 +3019,31 @@ void createIndex (struct tableNode *tn, int idxPos, int columnPos, struct statis
     thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, posIdx_d); //thrust inplace sorting
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait for short (or SEGFAULT)
 
-    //Copy index to host
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->contentIdx[idxPos], contentIdx_d, dataSize, cudaMemcpyDeviceToHost));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->posIdx[idxPos], posIdx_d, sizeof(int) * tn->tupleNum, cudaMemcpyDeviceToHost)); 
+    if (tn->keepInGpuIdx){
+
+        //De-allocate host memory
+        free(tn->contentIdx[idxPos]);
+        free(tn->posIdx[idxPos]);
+
+        //Store Device pointers
+        tn->contentIdx[idxPos] = contentIdx_d;
+        tn->posIdx[idxPos] = posIdx_d;
+
+        //Set position
+        tn->indexPos = GPU;
+
+    }else{
+        
+        //Copy index to host
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->contentIdx[idxPos], contentIdx_d, dataSize, cudaMemcpyDeviceToHost));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->posIdx[idxPos], posIdx_d, sizeof(int) * tn->tupleNum, cudaMemcpyDeviceToHost)); 
     
-    //De-allocate device memory
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(posIdx_d));
+        //De-allocate device memory
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(posIdx_d));
+
+        //Set position
+        tn->indexPos = MEM;
+    }
+
 }

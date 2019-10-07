@@ -135,20 +135,21 @@ static void freeTable(struct tableNode * tn){
     if (tn->colIdxNum > 0){
         free(tn->colIdx);
         tn->colIdx = NULL;
-        // Need to implement keepInGpu for indexes as well
-        // for(i=0;i<tn->colIdxNum;i++){ 
-        //     if(tn->contentIdx[i] == NULL)
-        //         continue;
-        //     free(tn->contentIdx[i]);
+        // if(tn->indexPos == MEM){
+        //     for(i=0;i<tn->colIdxNum;i++){ 
+        //         free(tn->contentIdx[i]);
+        //         free(tn->posIdx[i]);
+        //     }
+        // }else if(tn->indexPos == GPU){
+        //     for(i=0;i<tn->colIdxNum;i++){ 
+        //         cudaFree(tn->contentIdx[i]);
+        //         cudaFree(tn->posIdx[i]);
+        //     }
+        // }else{
+        //     printf("[ERROR] Index cannot be de-allocated. Needs to be on either on host or device!\n");
+        //     exit(-1);
         // }
-        // for(i=0;i<tn->colIdxNum;i++){ 
-        //     if(tn->posIdx[i] == NULL)
-        //         continue;
-        //     free(tn->posIdx[i]);
-        // } 
-        free (tn->contentIdx);
         tn->contentIdx = NULL;
-        free(tn->posIdx);
         tn->posIdx = NULL;
         tn->colIdxNum = 0;
     }

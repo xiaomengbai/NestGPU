@@ -1412,6 +1412,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         sortListPart = list(set(indexList) & set(sortList))
 
         print >>fo, indent + tnName + "->colIdxNum = " + str(len(sortListPart)) + ";"
+        print >>fo, indent + tnName + "->keepInGpuIdx = 1;"
         if len(sortListPart) > 0:
             print >>fo, indent + tnName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortListPart)) + ");"
             print >>fo, indent + "CHECK_POINTER(" + tnName + "->colIdx);"
@@ -1425,6 +1426,8 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 print >>fo, indent + tnName + "->posIdx[" + str(i) + "] = " + preloadName + "->posIdx[" + str( sortList.index(sortListPart[i]) ) + "];"
                 print >>fo, indent + tnName + "->contentIdx[" + str(i) + "] = " + preloadName + "->contentIdx[" + str( sortList.index(sortListPart[i]) ) + "];"
 
+            #Also get index position
+            print >>fo, indent + tnName + "->indexPos = "+ preloadName + "->indexPos;"
     else:
         tnName = generate_code_for_loading_a_table(fo, indent, tn.table_name, merge(indexList, colList))
 
@@ -1872,6 +1875,7 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
     print >>fo, indent + "}"
 
     print >>fo, indent + resName + "->colIdxNum = " + str(len(sortList)) + ";"
+    print >>fo, indent + tnName + "->keepInGpuIdx = 1;" 
     if len(sortList) > 0:
         print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortList)) + ");"
         print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"

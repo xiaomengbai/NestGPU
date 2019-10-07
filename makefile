@@ -44,10 +44,10 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # -- Optimizations --
 
 #Baseline
-GPU_OPT := --base
+#GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
-#GPU_OPT := --idx
+GPU_OPT := --idx
 
 # -------------------
 
@@ -56,6 +56,7 @@ DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
 TABLE_SCALE := 0.01
+#index works for 0.01, 0.1, 0.5, 1 (out of memory)
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
