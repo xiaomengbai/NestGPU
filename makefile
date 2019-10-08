@@ -48,7 +48,6 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 
 #Nested indexes (sort and prefix)
 GPU_OPT := --idx
-
 # -------------------
 
 # build test/dbgen/dbgen for generating tables

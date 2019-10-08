@@ -2024,15 +2024,15 @@ __global__ void static unpack_rle(char * fact, char * rle, long tupleNum, int dN
 }
 
 /*
- * Construct bitmap buffer based on the index results
+ * Construct bitmap buffer based on the index results.
  */
 __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l_offset, int h_offset, int tupleNum){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int pos;
     for(int i = l_offset+tid; i<=h_offset; i+=stride){
-        pos = posIdx_d[i];
         if (l_offset<=i && i<=h_offset){
+            pos = posIdx_d[i];
             bitmapRes_d[pos] = 1;
         }
     }
@@ -2068,20 +2068,41 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
         exit(-1);
     }
     
-    //Binary search (checks if point exists)
-    bool exists = thrust::binary_search(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue); //returns true if key exists
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    // Implemenation with 2 binary searches
+    // ----------------------------------
+    // bool exists = thrust::binary_search(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue); 
+    // int l_offset = -1; 
+    // int h_offset = -1;
+    // if (exists){
+    //     thrust::pair<int *, int *> range;
+    //     range = thrust::equal_range(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue); 
+    //     l_offset = (int) (range.first - contentIdx_d); 
+    //     h_offset = (int) (range.second - contentIdx_d) - 1;
+    // }
+    // ----------------------------------
 
-    //If the value exists 
+    // Implemenation with 1 binary search
+    // ---------------------------------- 
+    //Get range
+    thrust::pair<int *, int *> range; 
+    range = thrust::equal_range(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue);     
     int l_offset = -1; 
     int h_offset = -1;
-    if (exists){
-        //Get range 
-        int* l_pos = thrust::lower_bound(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue);
-        l_offset = (int) (l_pos - contentIdx_d); 
-        int* h_pos = thrust::upper_bound(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue);
-        h_offset = (int) (h_pos - contentIdx_d) - 1; // We do not want to go to the next level 
+
+    //Check if value exists
+    bool exists = false; 
+    int* firstRangeValue = (int *) malloc(sizeof(int));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(firstRangeValue, range.first, sizeof(int), cudaMemcpyDeviceToHost));  
+    if (firstRangeValue[0] == filterValue){
+        exists = true;
     }
+
+    //Convert addrs to elements
+    if (exists){ 
+        l_offset = (int) (range.first - contentIdx_d); 
+        h_offset = (int) (range.second - contentIdx_d) - 1;
+    }  
+    // ----------------------------------
 
     //Get mapping pos
     int* posIdx_d;
@@ -2103,7 +2124,9 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(bitmapRes_d, 0, sizeof(int)* tn->tupleNum)); 
 
     //Construct bitmap filter result
-    indeScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
+    if (exists){
+        indeScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
+    }
 }
 
 /*

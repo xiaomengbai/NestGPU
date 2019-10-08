@@ -215,6 +215,8 @@ struct tableNode{
     int *colIdx;            /* the list with all the sorted indexed columns */
     int **posIdx;           /* the possition of each value in the original table (col1, col2 etc) */
     int **contentIdx;       /* the values sorted (col1, col2 etc) - ASSUMPTION, support only int for indexing */
+    int keepInGpuIdx;       /* indicates if the index should be kept in the device or not */
+    int indexPos;           /* the position of the index, whether in disk, memory or GPU global memory */
 };
 
 struct groupByExp{
