@@ -2344,11 +2344,16 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                             }
                         }
                     }
+
+                    //Start timer
+                    struct timespec startScanTime, endScanTime;
+                    clock_gettime(CLOCK_REALTIME,&startScanTime);
+                    
                     if (idxPos >= 0){ 
 
                         //Regular scan
                         //genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
-                        
+
                         //Index scan!
                         indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
                         
@@ -2363,9 +2368,17 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                         //     }
                         // }
                         // free(originalRes);
+
                     }else{
+
                         genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                     }
+
+                    //End timer
+                    clock_gettime(CLOCK_REALTIME,&endScanTime);
+                    double scanTotal = (endScanTime.tv_sec - startScanTime.tv_sec)* BILLION + endScanTime.tv_nsec - startScanTime.tv_nsec;
+                    pp->scanTotal += scanTotal;
+                    
                 }else if(rel == NOT_EQ)
                     genScanFilter_init_int_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                 else if(rel == GTH)

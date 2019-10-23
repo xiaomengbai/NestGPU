@@ -265,6 +265,7 @@ struct statistic{
     float kernel;
     float pcie;
     float total;
+    double scanTotal;
 };
 
 

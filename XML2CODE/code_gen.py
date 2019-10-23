@@ -614,8 +614,14 @@ def generate_code(tree):
     print >>fo, indent + "struct timespec start, end;"
     print >>fo, indent + "struct timespec diskStart, diskEnd;"
     print >>fo, indent + "double diskTotal = 0;"
+    
+    #Index timing variables
+    print >>fo, indent + "struct timespec startIdxBuildTime, endIdxBuildTime;" + " //Timer variables for build index"
+    print >>fo, indent + "double idxBuildTotal = 0;" + "//Start timer for build index"
+
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&start);"
     print >>fo, indent + "struct statistic pp;"
+    print >>fo, indent + "pp.scanTotal = 0;\n"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
 
     generate_code_for_loading_tables(fo, indent, tree)
@@ -625,8 +631,12 @@ def generate_code(tree):
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &end);"
     print >>fo, indent + "double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;"
     print >>fo, indent + "printf(\"Disk Load Time: %lf\\n\", diskTotal/(1000*1000));"
-    print >>fo, indent + "printf(\"PCIe Time: %lf\\n\",pp.pcie);"
-    print >>fo, indent + "printf(\"Kernel Time: %lf\\n\",pp.kernel);"
+    #print >>fo, indent + "printf(\"PCIe Time: %lf\\n\",pp.pcie);"
+    #print >>fo, indent + "printf(\"Kernel Time: %lf\\n\",pp.kernel);"
+
+    print >>fo, indent + "printf(\"Build index Time: %lf\\n\", idxBuildTotal/(1000*1000));\n"
+    print >>fo, indent + "printf(\"Scan Time (linking predicate): %lf\\n\", pp.scanTotal/(1000*1000));\n"
+    
     print >>fo, indent + "printf(\"Total Time: %lf\\n\", timeE/(1000*1000));"
     print >>fo, "}\n"
 
@@ -1886,7 +1896,13 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
 
         for i in range(0, len(sortList)):
             print >>fo, indent + resName + "->colIdx[" + str(i) + "] = " + str( indexList.index(sortList[i]) ) + ";"
+            
+            #Code to start timing index build
+            print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&startIdxBuildTime);" + "//Start timer for build index" 
             print >>fo, indent + "createIndex(" + resName + ", " + str(i) + ", " + str( indexList.index(sortList[i]) ) +", &pp);\n"
+            print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &endIdxBuildTime);" + "//Stop timer for build index"
+            print >>fo, indent + "idxBuildTotal = (endIdxBuildTime.tv_sec -  startIdxBuildTime.tv_sec)* BILLION + endIdxBuildTime.tv_nsec - startIdxBuildTime.tv_nsec;"
+
 
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}\n"
