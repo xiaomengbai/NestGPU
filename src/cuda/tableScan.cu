@@ -2144,8 +2144,9 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
 
 struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
-    struct timespec start,end;
-    clock_gettime(CLOCK_REALTIME,&start);
+    //Start timer (total tableScan())
+    struct timespec startTableScanTotal,endTableScanTotal;
+    clock_gettime(CLOCK_REALTIME,&startTableScanTotal);
 
     struct tableNode *res = NULL;
     int tupleSize = 0;
@@ -2230,6 +2231,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     if(1){
 
+        //Start timer for Step 1 - Copy where clause 
+        struct timespec startS1, endS1;
+        clock_gettime(CLOCK_REALTIME,&startS1);
+
         struct whereExp * gpuExp = NULL;
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuExp, sizeof(struct whereExp)));
         //CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
@@ -2303,7 +2308,11 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
-
+        //Stop for Step 1 - Copy where clause 
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS1);
+        pp->whereMemCopy_s1 += (endS1.tv_sec - startS1.tv_sec)* BILLION + endS1.tv_nsec - startS1.tv_nsec;
+                 
        /*   
          * @dNum, @byteNum and @gpuDictFilter are for predicates that need to access dictionary-compressed columns.
          */
@@ -2320,11 +2329,21 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &column[whereIndex], sn->tn->attrTotalSize[index]));
 
         if(format == UNCOMPRESSED){
+            
+            //Start timer for Step 2 - Copy data
+            struct timespec startS2, endS2;
+            clock_gettime(CLOCK_REALTIME,&startS2);
+
             if(sn->tn->dataPos[index] == MEM || sn->tn->dataPos[index] == MMAP || sn->tn->dataPos[index] == PINNED)
                 CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(column[whereIndex], sn->tn->content[index], sn->tn->attrTotalSize[index], cudaMemcpyHostToDevice));
             else if (sn->tn->dataPos[index] == UVA || sn->tn->dataPos[index] == GPU)
                 column[whereIndex] = sn->tn->content[index];
 
+            //Stop timer for Step 2 - Copy data
+            CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+            clock_gettime(CLOCK_REALTIME, &endS2);
+            pp->dataMemCopy_s2 += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
+                
             int rel = where->exp[0].relation;
             if(sn->tn->attrType[index] == INT){
                 int whereValue;
@@ -2345,9 +2364,9 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                         }
                     }
 
-                    //Start timer
-                    struct timespec startScanTime, endScanTime;
-                    clock_gettime(CLOCK_REALTIME,&startScanTime);
+                    //Start timer for Step 3 - Scan
+                    struct timespec startS3, endS3;
+                    clock_gettime(CLOCK_REALTIME,&startS3);
                     
                     if (idxPos >= 0){ 
 
@@ -2370,15 +2389,14 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                         // free(originalRes);
 
                     }else{
-
                         genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                     }
 
-                    //End timer
-                    clock_gettime(CLOCK_REALTIME,&endScanTime);
-                    double scanTotal = (endScanTime.tv_sec - startScanTime.tv_sec)* BILLION + endScanTime.tv_nsec - startScanTime.tv_nsec;
-                    pp->scanTotal += scanTotal;
-                    
+                    //Stop timer for Step 3 - Scan
+                    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+                    clock_gettime(CLOCK_REALTIME, &endS3);
+                    pp->scanTotal_s3 += (endS3.tv_sec - startS3.tv_sec)* BILLION + endS3.tv_nsec - startS3.tv_nsec;
+
                 }else if(rel == NOT_EQ)
                     genScanFilter_init_int_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                 else if(rel == GTH)
@@ -2505,6 +2523,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
         int dictFinal = OR;
         int dictInit = 1;
 
+        //Start timer for Step 1 - Copy where clause (Part2)
+        struct timespec startS12, endS12;
+        clock_gettime(CLOCK_REALTIME,&startS12);
+
         for(int i=1;i<where->expNum;i++){
             whereIndex = where->exp[i].index;
             index = sn->whereIndex[whereIndex];
@@ -2563,7 +2585,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
             if(prevIndex != index){
 
-        /*When the two consecutive predicates access different columns*/
+                 /*When the two consecutive predicates access different columns*/
 
                 if(prevFormat == DICT){
                     if(dictInit == 1){
@@ -2832,6 +2854,11 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
         }
 
+        //Stop timer for Step 1 - Copy where clause (Part2)
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS12);
+        pp->whereMemCopy_s1 += (endS12.tv_sec - startS12.tv_sec)* BILLION + endS12.tv_nsec - startS12.tv_nsec;            
+
         if(prevFormat == DICT){
             if (dictInit == 1){
                 transform_dict_filter_init<<<grid,block>>>(gpuDictFilter, column[prevWhere], totalTupleNum, dNum, gpuFilter, byteNum);
@@ -2850,6 +2877,9 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     }
 
+    //Start timer for Step 4 - Count result (PreScan)
+    struct timespec startS4, endS4;
+    clock_gettime(CLOCK_REALTIME,&startS4);
 
     /* Count the number of tuples that meets the predicats for each thread
     * and calculate the prefix sum.
@@ -2857,10 +2887,26 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
     scanImpl(gpuCount,threadNum,gpuPsum, pp);
 
+    //Stop timer for Step 4 - Count result (PreScan)
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS4);
+    pp->preScanTotal_s4 += (endS4.tv_sec -  startS4.tv_sec)* BILLION + endS4.tv_nsec - startS4.tv_nsec;
+    pp->preScanCount_s4++;
+
     int tmp1, tmp2;
+
+    //Start timer for Step 5 - Count result (PreScan)
+    struct timespec startS5, endS5;
+    clock_gettime(CLOCK_REALTIME,&startS5);
 
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1, &gpuCount[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &gpuPsum[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
+
+    //End timer for Step 5 - Count result (PreScan)
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS5);
+    pp->preScanResultMemCopy_s5 += (endS5.tv_sec -  startS5.tv_sec)* BILLION + endS5.tv_nsec - startS5.tv_nsec;
+    
 
     count = tmp1+tmp2;
     res->tupleNum = count;
@@ -2876,6 +2922,11 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     CHECK_POINTER(scanCol);
     result = (char **) malloc(attrNum * sizeof(char *));
     CHECK_POINTER(result);
+
+
+    //Start timer for Step 6 - Copy to device all other columns
+    struct timespec startS6, endS6;
+    clock_gettime(CLOCK_REALTIME,&startS6);
 
     for(int i=0;i<attrNum;i++){
 
@@ -2905,6 +2956,15 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &result[i], count * sn->tn->attrSize[index]));
     }
+
+    //End timer for Step 6 - Copy to device all other columns
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS6);
+    pp->dataMemCopyOther_s6 += (endS6.tv_sec -  startS6.tv_sec)* BILLION + endS6.tv_nsec - startS6.tv_nsec;
+   
+    //Start timer for Step 7 - Materialize result
+    struct timespec startS7, endS7;
+    clock_gettime(CLOCK_REALTIME,&startS7);
 
     if(1){
 
@@ -2949,6 +3009,15 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
         }
     }
 
+    //End timer for Step 7 - Materialize result
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS7);
+    pp->materializeResult_s7 += (endS7.tv_sec -  startS7.tv_sec)* BILLION + endS7.tv_nsec - startS7.tv_nsec;
+   
+        
+    //Start timer for Step 8 - Copy final result
+    struct timespec startS8, endS8;
+    clock_gettime(CLOCK_REALTIME,&startS8);
 
     res->tupleSize = tupleSize;
 
@@ -2977,6 +3046,11 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
         }
     }
 
+    //End timer for Step 8 - Copy final result
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS8);
+    pp->finalResultMemCopy_s8 += (endS8.tv_sec -  startS8.tv_sec)* BILLION + endS8.tv_nsec - startS8.tv_nsec;
+   
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuFilter));
 
@@ -2984,12 +3058,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     free(scanCol);
     free(result);
 
-    clock_gettime(CLOCK_REALTIME,&end);
-    double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    // printf("TableScan Time: %lf\n", timeE/(1000*1000));
+    //Stop timer (Global tableScan())
+    clock_gettime(CLOCK_REALTIME,&endTableScanTotal);
+    pp->tableScanTotal += (endTableScanTotal.tv_sec -  startTableScanTotal.tv_sec)* BILLION + endTableScanTotal.tv_nsec - startTableScanTotal.tv_nsec;
+    pp->tableScanCount ++;
 
     return res;
-
 }
 
 /*
@@ -3018,6 +3092,10 @@ __global__ static void assign_index(int *col, long  inNum){
  */
 void createIndex (struct tableNode *tn, int idxPos, int columnPos, struct statistic *pp){
 
+    //Start timer for build index
+    struct timespec startIdxBuildTime, endIdxBuildTime;
+    clock_gettime(CLOCK_REALTIME,&startIdxBuildTime);
+ 
     //Check assumption (INT enum == 4)
     if (tn->attrType[columnPos] != 4 ){
         printf("[ERROR] Indexing is only supported for INT type!\n");
@@ -3082,4 +3160,7 @@ void createIndex (struct tableNode *tn, int idxPos, int columnPos, struct statis
         tn->indexPos = MEM;
     }
 
+    //Stop and add 
+    clock_gettime(CLOCK_REALTIME, &endIdxBuildTime);
+    pp->buildIndexTotal += (endIdxBuildTime.tv_sec -  startIdxBuildTime.tv_sec)* BILLION + endIdxBuildTime.tv_nsec - startIdxBuildTime.tv_nsec;
 }

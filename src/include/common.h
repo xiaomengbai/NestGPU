@@ -265,7 +265,38 @@ struct statistic{
     float kernel;
     float pcie;
     float total;
-    double scanTotal;
+    
+    // Indexing profiling
+    double buildIndexTotal;
+    
+    // Total scan time prof
+    double tableScanTotal;
+    int tableScanCount;
+
+    // Step 1 - Copy where clause
+    double whereMemCopy_s1;
+
+    // Step 2 - Copy data
+    double dataMemCopy_s2;
+
+    // Step 3 - Scan
+    double scanTotal_s3;
+
+    // Step 4 - Count result (PreScan)
+    double preScanTotal_s4;
+    int preScanCount_s4;
+
+    // Step 5 - Return count result (PreScan result)
+    double preScanResultMemCopy_s5;
+
+    // Step 6 - Copy to device all other columns  (to materialize the final result)
+    double dataMemCopyOther_s6;
+
+    // Step 7 - Materialize result
+    double materializeResult_s7;
+
+    // Step 8 - Copy final result
+    double finalResultMemCopy_s8;
 };
 
 
