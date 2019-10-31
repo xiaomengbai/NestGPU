@@ -2102,6 +2102,10 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
         l_offset = (int) (range.first - contentIdx_d); 
         h_offset = (int) (range.second - contentIdx_d) - 1;
     }  
+
+    //Calculate number of selected nodes
+    int countResult = h_offset - l_offset 
+    printf("[INFO]Number of selection results from IndexScan: %d\n",countResult);
     // ----------------------------------
 
     //Get mapping pos
@@ -2148,6 +2152,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     struct timespec startTableScanTotal,endTableScanTotal;
     clock_gettime(CLOCK_REALTIME,&startTableScanTotal);
 
+    //Start timer for Other - 01 (tableScan)
+    struct timespec startS01,endS01;
+    clock_gettime(CLOCK_REALTIME,&startS01);
+
     struct tableNode *res = NULL;
     int tupleSize = 0;
 
@@ -2171,7 +2179,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     res->content = (char **) malloc(sizeof(char *) * res->totalAttr);
     CHECK_POINTER(res->content);
     res->colIdxNum = 0;
-
 
     for(int i=0;i<res->totalAttr;i++){
         int index = sn->outputIndex[i];
@@ -2224,6 +2231,11 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     assert(sn->filter != NULL);
 
     struct whereCondition *where = sn->filter;
+
+    //Stop timer for Other - 01 (tableScan)
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS01);
+    pp->create_tableNode_S01 += (endS01.tv_sec - startS01.tv_sec)* BILLION + endS01.tv_nsec - startS01.tv_nsec;
 
     /*
      * The first step is to evaluate the selection predicates and generate a vetor to form the final results.
@@ -2881,7 +2893,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     struct timespec startS4, endS4;
     clock_gettime(CLOCK_REALTIME,&startS4);
 
-    /* Count the number of tuples that meets the predicats for each thread
+    /* 
+    * Count the number of tuples that meets the predicats for each thread
     * and calculate the prefix sum.
     */
     countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
@@ -2907,10 +2920,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     clock_gettime(CLOCK_REALTIME, &endS5);
     pp->preScanResultMemCopy_s5 += (endS5.tv_sec -  startS5.tv_sec)* BILLION + endS5.tv_nsec - startS5.tv_nsec;
     
-
+    //Start timer for Other - 02 (mallocRes)
+    struct timespec startS02,endS02;
+    clock_gettime(CLOCK_REALTIME,&startS02);
+    
     count = tmp1+tmp2;
     res->tupleNum = count;
-    // printf("[INFO]Number of selection results: %d\n",count);
+    printf("[INFO]Number of selection results from PreScan: %d\n",count);
 
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
 
@@ -2923,6 +2939,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     result = (char **) malloc(attrNum * sizeof(char *));
     CHECK_POINTER(result);
 
+    //Stop timer for Other - 02 (mallocRes)
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS02);
+    pp->mallocRes_S02 += (endS02.tv_sec - startS02.tv_sec)* BILLION + endS02.tv_nsec - startS02.tv_nsec;
 
     //Start timer for Step 6 - Copy to device all other columns
     struct timespec startS6, endS6;
@@ -3051,6 +3071,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     clock_gettime(CLOCK_REALTIME, &endS8);
     pp->finalResultMemCopy_s8 += (endS8.tv_sec -  startS8.tv_sec)* BILLION + endS8.tv_nsec - startS8.tv_nsec;
    
+    //Start timer for Other - 03 (deallocate buffers)
+    struct timespec startS03,endS03;
+    clock_gettime(CLOCK_REALTIME,&startS03);
+
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuFilter));
 
@@ -3058,7 +3082,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     free(scanCol);
     free(result);
 
+    //Stop timer for Other - 01 (tableScan)
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS03);
+    pp->deallocateBuffs_S03 += (endS03.tv_sec - startS03.tv_sec)* BILLION + endS03.tv_nsec - startS03.tv_nsec;
+
     //Stop timer (Global tableScan())
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME,&endTableScanTotal);
     pp->tableScanTotal += (endTableScanTotal.tv_sec -  startTableScanTotal.tv_sec)* BILLION + endTableScanTotal.tv_nsec - startTableScanTotal.tv_nsec;
     pp->tableScanCount ++;

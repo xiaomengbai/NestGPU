@@ -297,6 +297,15 @@ struct statistic{
 
     // Step 8 - Copy final result
     double finalResultMemCopy_s8;
+
+    // Other - 01 (tableScan) Time on other stuff inside tableScan()
+    double create_tableNode_S01;
+
+    // Other - 02 (allocate result) Time on other stuff inside tableScan()
+    double mallocRes_S02;
+
+    // Other - 02 (deallocate bufs) Time on other stuff inside tableScan()
+    double deallocateBuffs_S03;
 };
 
 

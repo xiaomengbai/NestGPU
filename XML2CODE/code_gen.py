@@ -630,6 +630,9 @@ def generate_code(tree):
     print >>fo, indent + "pp.dataMemCopyOther_s6 = 0;"
     print >>fo, indent + "pp.materializeResult_s7 = 0;"
     print >>fo, indent + "pp.finalResultMemCopy_s8 = 0;"
+    print >>fo, indent + "pp.create_tableNode_S01 = 0;"
+    print >>fo, indent + "pp.mallocRes_S02 = 0;"
+    print >>fo, indent + "pp.deallocateBuffs_S03 = 0;"
 
     generate_code_for_loading_tables(fo, indent, tree)
 
@@ -656,6 +659,9 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"Step 6 - Copy rest of columns  : %lf\\n\", pp.dataMemCopyOther_s6/(1000*1000));"
     print >>fo, indent + "printf(\"Step 7 - Materialize result    : %lf\\n\", pp.materializeResult_s7/(1000*1000));"
     print >>fo, indent + "printf(\"Step 8 - Copy final result     : %lf\\n\", pp.finalResultMemCopy_s8/(1000*1000));"
+    print >>fo, indent + "printf(\"Other 1 - Create tableNode     : %lf\\n\", pp.create_tableNode_S01/(1000*1000));"
+    print >>fo, indent + "printf(\"Other 2 - Malloc res           : %lf\\n\", pp.mallocRes_S02/(1000*1000));"
+    print >>fo, indent + "printf(\"Other 3 - Deallocate buffers   : %lf\\n\", pp.deallocateBuffs_S03/(1000*1000));"
     print >>fo, indent + "printf(\"<----------------->\");"
 
     print >>fo, indent + "printf(\"\\n\");"
