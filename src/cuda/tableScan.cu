@@ -2892,20 +2892,22 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     }
 
-
-
     //Start timer for Step 4 - Count result (PreScan)
     struct timespec startS4, endS4;
     clock_gettime(CLOCK_REALTIME,&startS4);
+ 
 
-    if (idxPos < 0){ 
-        /* 
-         * Count the number of tuples that meets the predicats for each thread
-         * and calculate the prefix sum.
-         */
-         countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
-         scanImpl(gpuCount,threadNum,gpuPsum, pp);
-    }
+    /* --Optimization Note--
+    * We cannot remove this one even if we know the number of selected tuples
+    * because counts the tuples per thread (not only total number)
+    */
+
+    /* 
+    * Count the number of tuples that meets the predicats for each thread
+    * and calculate the prefix sum.
+    */
+    countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
+    scanImpl(gpuCount,threadNum, gpuPsum, pp);
 
     //Stop timer for Step 4 - Count result (PreScan)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
@@ -2920,8 +2922,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     clock_gettime(CLOCK_REALTIME,&startS5);
 
     if (idxPos < 0){ 
+    
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1, &gpuCount[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &gpuPsum[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
+        
+        count = tmp1+tmp2;
+        res->tupleNum = count;
     }
 
     //End timer for Step 5 - Count result (PreScan)
@@ -2932,12 +2938,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     //Start timer for Other - 02 (mallocRes)
     struct timespec startS02,endS02;
     clock_gettime(CLOCK_REALTIME,&startS02);
-    
-    if (idxPos < 0){ 
-        count = tmp1+tmp2;
-        res->tupleNum = count;
-        //printf("[INFO]Number of selection results from PreScan: %d\n",count);
-    } 
     
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
 
