@@ -2041,7 +2041,7 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
 /*
  * Performs index scan
  */
- void indexScanInt (struct tableNode *tn, int columnPos, int idxPos, int filterValue, int* bitmapRes_d, struct statistic *pp){
+ int indexScanInt (struct tableNode *tn, int columnPos, int idxPos, int filterValue, int* bitmapRes_d, struct statistic *pp){
 
     //Check assumption (INT enum == 4)
     if (tn->attrType[columnPos] != 4 ){
@@ -2104,8 +2104,7 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
     }  
 
     //Calculate number of selected nodes
-    int countResult = h_offset - l_offset 
-    printf("[INFO]Number of selection results from IndexScan: %d\n",countResult);
+    int countResult = (h_offset + 1) - l_offset ;
     // ----------------------------------
 
     //Get mapping pos
@@ -2131,6 +2130,9 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
     if (exists){
         indeScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
     }
+
+    //Return selected rows
+    return countResult;
 }
 
 /*
@@ -2237,10 +2239,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     clock_gettime(CLOCK_REALTIME, &endS01);
     pp->create_tableNode_S01 += (endS01.tv_sec - startS01.tv_sec)* BILLION + endS01.tv_nsec - startS01.tv_nsec;
 
+    //Keeps index col pos
+    int idxPos = -1;
+
     /*
      * The first step is to evaluate the selection predicates and generate a vetor to form the final results.
     */
-
     if(1){
 
         //Start timer for Step 1 - Copy where clause 
@@ -2367,7 +2371,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
                 if(rel==EQ){
                     //Check if this column is indexed
-                    int idxPos = -1;
                     if (sn->tn->colIdxNum != 0){
                         for (int k=0; k<sn->tn->colIdxNum; k++){
                             if (sn->tn->colIdx[k] == index){
@@ -2386,7 +2389,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
                         //genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
 
                         //Index scan!
-                        indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
+                        res->tupleNum = indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
                         
                         /* DEBUG CODE - DO NOT REMOVE FOR NOW */
                         // int* originalRes = (int *)malloc(sizeof(int) * totalTupleNum);
@@ -2889,16 +2892,20 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     }
 
+
+
     //Start timer for Step 4 - Count result (PreScan)
     struct timespec startS4, endS4;
     clock_gettime(CLOCK_REALTIME,&startS4);
 
-    /* 
-    * Count the number of tuples that meets the predicats for each thread
-    * and calculate the prefix sum.
-    */
-    countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
-    scanImpl(gpuCount,threadNum,gpuPsum, pp);
+    if (idxPos < 0){ 
+        /* 
+         * Count the number of tuples that meets the predicats for each thread
+         * and calculate the prefix sum.
+         */
+         countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
+         scanImpl(gpuCount,threadNum,gpuPsum, pp);
+    }
 
     //Stop timer for Step 4 - Count result (PreScan)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
@@ -2912,8 +2919,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     struct timespec startS5, endS5;
     clock_gettime(CLOCK_REALTIME,&startS5);
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1, &gpuCount[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &gpuPsum[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
+    if (idxPos < 0){ 
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1, &gpuCount[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &gpuPsum[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
+    }
 
     //End timer for Step 5 - Count result (PreScan)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
@@ -2924,10 +2933,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     struct timespec startS02,endS02;
     clock_gettime(CLOCK_REALTIME,&startS02);
     
-    count = tmp1+tmp2;
-    res->tupleNum = count;
-    printf("[INFO]Number of selection results from PreScan: %d\n",count);
-
+    if (idxPos < 0){ 
+        count = tmp1+tmp2;
+        res->tupleNum = count;
+        //printf("[INFO]Number of selection results from PreScan: %d\n",count);
+    } 
+    
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
 
     char **result = NULL, **scanCol = NULL;
