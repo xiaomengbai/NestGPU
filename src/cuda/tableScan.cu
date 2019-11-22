@@ -3121,7 +3121,21 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
  * Output:
  *  A new table node
  */
- struct tableNode * tableScanNest(struct scanNode *sn, struct tableNode *rslt, struct statistic *pp){
+ struct tableNode * tableScanNest(struct scanNode *sn, struct tableNode *rslt, struct statistic *pp,
+
+    //Other objs
+    char ** column,
+    int * whereFree,
+    int * colWherePos,
+
+    //Gpu objs
+    int * gpuCount,
+    int * gpuFilter,
+    int * gpuPsum,
+    dim3 grid,
+    dim3 block
+
+){
 
     //Start timer (total tableScan())
     struct timespec startTableScanTotal,endTableScanTotal;
@@ -3133,48 +3147,15 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     //Set tableNode result already given by the user
     struct tableNode *res = rslt;
+
+    //Some other info
     int tupleSize = 0;
-
-    int *gpuCount = NULL, *gpuFilter = NULL, *gpuPsum = NULL;
-
-    dim3 grid(2048);
-    dim3 block(256);
-
     long totalTupleNum = sn->tn->tupleNum;
-    int blockNum = totalTupleNum / block.x + 1;
-
-    if(blockNum<2048)
-        grid = blockNum;
-
     int threadNum = grid.x * block.x;
     int attrNum = sn->whereAttrNum;
-
-    char ** column = (char **) malloc(attrNum * sizeof(char *));
-    CHECK_POINTER(column);
-
-    int * whereFree = (int *)malloc(attrNum * sizeof(int));
-    CHECK_POINTER(whereFree);
-
-    int * colWherePos = (int *)malloc(sn->outputNum * sizeof(int));
-    CHECK_POINTER(colWherePos);
-
-    for(int i=0;i<sn->outputNum;i++)
-        colWherePos[i] = -1;
-
-    for(int i=0;i<attrNum;i++){
-        whereFree[i] = 1;
-        for(int j=0;j<sn->outputNum;j++){
-            if(sn->whereIndex[i] == sn->outputIndex[j]){
-                whereFree[i] = -1;
-                colWherePos[j] = i;
-            }
-        }
-    }
-
+    int blockNum = totalTupleNum / block.x + 1;
     int count;
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuFilter,sizeof(int) * totalTupleNum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuPsum,sizeof(int)*threadNum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuCount,sizeof(int)*threadNum));
+
 
     assert(sn->hasWhere !=0);
     assert(sn->filter != NULL);
@@ -3886,7 +3867,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     struct timespec startS02,endS02;
     clock_gettime(CLOCK_REALTIME,&startS02);
     
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
+    //CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
 
     char **result = NULL, **scanCol = NULL;
 
@@ -4033,10 +4014,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     struct timespec startS03,endS03;
     clock_gettime(CLOCK_REALTIME,&startS03);
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuFilter));
+    //CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
+    //CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuFilter));
 
-    free(column);
+    //free(column);
     free(scanCol);
     free(result);
 

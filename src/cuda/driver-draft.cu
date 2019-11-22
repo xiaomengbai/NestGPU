@@ -17,7 +17,20 @@
 #include "../include/cpuCudaLib.h"
 #include "../include/gpuCudaLib.h"
 extern struct tableNode* tableScan(struct scanNode *,struct statistic *);
-extern struct tableNode* tableScanNest(struct scanNode *, struct tableNode *, struct statistic *);
+
+//Ugly...we will put everything together later into an object
+extern struct tableNode* tableScanNest(struct scanNode *, struct tableNode *, struct statistic *,
+    char ** ,
+    int *,
+    int *,
+    int *,
+    int *,
+    int *,
+    dim3,
+    dim3
+);
+
+
 extern void createIndex (struct tableNode *, int, int, struct statistic *);
 extern struct tableNode* indexScan (struct tableNode *, int, int, int, struct statistic *);
 extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);
@@ -1208,6 +1221,7 @@ int main(int argc, char ** argv){
         struct materializeNode mn;
 
         //-----TableScanNest Objects-----
+
         struct tableNode *res = (struct tableNode *) malloc(sizeof(struct tableNode));
         CHECK_POINTER(res);
         res->totalAttr = partsuppRel.outputNum;
@@ -1232,6 +1246,39 @@ int main(int argc, char ** argv){
             res->attrSize[i] = partsuppRel.tn->attrSize[index];
         }
 
+        //Column and Where objs
+        int attrNum = partsuppRel.whereAttrNum;
+        char ** column = (char **) malloc(attrNum * sizeof(char *));
+        CHECK_POINTER(column);
+        int * whereFree = (int *)malloc(attrNum * sizeof(int));
+        CHECK_POINTER(whereFree);
+        int * colWherePos = (int *)malloc(partsuppRel.outputNum * sizeof(int));
+        CHECK_POINTER(colWherePos);
+        for(int i=0;i<partsuppRel.outputNum;i++)
+        colWherePos[i] = -1;
+        for(int i=0;i<attrNum;i++){
+            whereFree[i] = 1;
+            for(int j=0;j<partsuppRel.outputNum;j++){
+                if(partsuppRel.whereIndex[i] == partsuppRel.outputIndex[j]){
+                    whereFree[i] = -1;
+                    colWherePos[j] = i;
+                }
+            }
+        }
+
+        //GPU objs
+        int *gpuCount = NULL, *gpuFilter = NULL, *gpuPsum = NULL;
+        dim3 grid(2048);
+        dim3 block(256);
+        long totalTupleNum = partsuppRel.tn->tupleNum;
+        int blockNum = totalTupleNum / block.x + 1;
+        if(blockNum<2048){
+            grid = blockNum;
+        }
+        int threadNum = grid.x * block.x;
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuFilter,sizeof(int) * totalTupleNum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuPsum,sizeof(int)*threadNum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuCount,sizeof(int)*threadNum));
         //-------------------------------
 
         //===========================================================
@@ -1245,7 +1292,20 @@ int main(int argc, char ** argv){
             memcpy((partsuppRel.filter)->exp[0].content, &tmp, sizeof(int));
 
             //Table scan to filter linking predicate
-            ps1 = tableScanNest(&partsuppRel, res, &pp);
+            ps1 = tableScanNest(&partsuppRel, res, &pp,
+                
+                //Other objs
+                column,
+                whereFree,
+                colWherePos,
+
+                //Gpu objs,
+                gpuCount,
+                gpuFilter,
+                gpuPsum,
+                grid,
+                block
+            );
             ps1->colIdxNum = 0;
 
             //Group by
@@ -1264,6 +1324,12 @@ int main(int argc, char ** argv){
         //===========================================================
         freeScan(&partsuppRel);
         free(_PART_0);
+
+        //--Table scan de-allocaiton
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuFilter));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
+        free(column);
         //===========================================================
 
         memcpy((joinRel.filter)->exp[0].content, &subqRes0, sizeof(void *));
