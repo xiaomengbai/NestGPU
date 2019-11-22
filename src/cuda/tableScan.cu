@@ -3131,35 +3131,9 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     struct timespec startS01,endS01;
     clock_gettime(CLOCK_REALTIME,&startS01);
 
-    struct tableNode *res = NULL;
+    //Set tableNode result already given by the user
+    struct tableNode *res = rslt;
     int tupleSize = 0;
-
-    res = (struct tableNode *) malloc(sizeof(struct tableNode));
-    CHECK_POINTER(res);
-
-    res->totalAttr = sn->outputNum;
-
-    res->attrType = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrType);
-    res->attrSize = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrSize);
-    res->attrTotalSize = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrTotalSize);
-    res->attrIndex = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrIndex);
-    res->dataPos = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->dataPos);
-    res->dataFormat = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->dataFormat);
-    res->content = (char **) malloc(sizeof(char *) * res->totalAttr);
-    CHECK_POINTER(res->content);
-    res->colIdxNum = 0;
-
-    for(int i=0;i<res->totalAttr;i++){
-        int index = sn->outputIndex[i];
-        res->attrType[i] = sn->tn->attrType[index];
-        res->attrSize[i] = sn->tn->attrSize[index];
-    }
 
     int *gpuCount = NULL, *gpuFilter = NULL, *gpuPsum = NULL;
 

@@ -1209,6 +1209,29 @@ int main(int argc, char ** argv){
 
         //-----TableScanNest Objects-----
         struct tableNode *res = (struct tableNode *) malloc(sizeof(struct tableNode));
+        CHECK_POINTER(res);
+        res->totalAttr = partsuppRel.outputNum;
+        res->attrType = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrType);
+        res->attrSize = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrSize);
+        res->attrTotalSize = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrTotalSize);
+        res->attrIndex = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrIndex);
+        res->dataPos = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->dataPos);
+        res->dataFormat = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->dataFormat);
+        res->content = (char **) malloc(sizeof(char *) * res->totalAttr);
+        CHECK_POINTER(res->content);
+        res->colIdxNum = 0;
+        for(int i=0;i<res->totalAttr;i++){
+            int index = partsuppRel.outputIndex[i];
+            res->attrType[i] = partsuppRel.tn->attrType[index];
+            res->attrSize[i] = partsuppRel.tn->attrSize[index];
+        }
+
         //-------------------------------
 
         //===========================================================
