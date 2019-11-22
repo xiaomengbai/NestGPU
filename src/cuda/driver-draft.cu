@@ -17,6 +17,7 @@
 #include "../include/cpuCudaLib.h"
 #include "../include/gpuCudaLib.h"
 extern struct tableNode* tableScan(struct scanNode *,struct statistic *);
+extern struct tableNode* tableScanNest(struct scanNode *, struct tableNode *, struct statistic *);
 extern void createIndex (struct tableNode *, int, int, struct statistic *);
 extern struct tableNode* indexScan (struct tableNode *, int, int, int, struct statistic *);
 extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);
@@ -1205,6 +1206,11 @@ int main(int argc, char ** argv){
 
         //Meterialization
         struct materializeNode mn;
+
+        //-----TableScanNest Objects-----
+        struct tableNode *res = (struct tableNode *) malloc(sizeof(struct tableNode));
+        //-------------------------------
+
         //===========================================================
 
         //Loop through all the tuples
@@ -1216,7 +1222,7 @@ int main(int argc, char ** argv){
             memcpy((partsuppRel.filter)->exp[0].content, &tmp, sizeof(int));
 
             //Table scan to filter linking predicate
-            ps1 = tableScan(&partsuppRel, &pp);
+            ps1 = tableScanNest(&partsuppRel, res, &pp);
             ps1->colIdxNum = 0;
 
             //Group by
