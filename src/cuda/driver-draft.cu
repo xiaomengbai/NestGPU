@@ -1167,33 +1167,21 @@ int main(int argc, char ** argv){
         (partsuppRel.filter)->exp[0].relation = EQ;
         (partsuppRel.filter)->exp[0].dataPos  = MEM;
 
-
+        //Get data reference only only once
+        partsuppTablePartial->content[0] = partsuppTable->content[2];
+        partsuppTablePartial->content[1] = partsuppTable->content[1];
         //===========================================================
-
 
         //Loop through all the tuples
         for(int tupleid = 0; tupleid < joinRes->tupleNum; tupleid++){
                   
-            // This needs to be inside (update location and size in each iteration, not sure why it does not work outside the loop)
-            partsuppTablePartial->content[0] = partsuppTable->content[2];
-            partsuppTablePartial->content[1] = partsuppTable->content[1];
-
             //Create Copy tupleid value
             CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(_PART_0, (char *)(joinRes->content[0]) + tupleid * sizeof(int), sizeof(int), cudaMemcpyDeviceToHost) );
-            {
-                int tmp = *(int *)(_PART_0);
-                memcpy((partsuppRel.filter)->exp[0].content, &tmp, sizeof(int));
-            }
+            int tmp = *(int *)(_PART_0);
+            memcpy((partsuppRel.filter)->exp[0].content, &tmp, sizeof(int));
 
-            {
-                ps1 = tableScan(&partsuppRel, &pp);
-                clock_gettime(CLOCK_REALTIME, &diskStart);
-                partsuppTablePartial->content[0] = NULL;
-                partsuppTablePartial->content[1] = NULL;
-                //freeScan(&partsuppRel);
-                clock_gettime(CLOCK_REALTIME, &diskEnd);
-                ps1->colIdxNum = 0;
-            }
+            ps1 = tableScan(&partsuppRel, &pp);
+            ps1->colIdxNum = 0;
 
             {
                 struct tableNode * ps1_gb;
