@@ -1170,6 +1170,38 @@ int main(int argc, char ** argv){
         //Get data reference only only once
         partsuppTablePartial->content[0] = partsuppTable->content[2];
         partsuppTablePartial->content[1] = partsuppTable->content[1];
+
+
+        //Group by object
+        struct tableNode * ps1_gb;
+        struct groupByNode * gbNode = (struct groupByNode *) malloc(sizeof(struct groupByNode));
+        CHECK_POINTER(gbNode);
+        gbNode->groupByColNum = 1;
+        gbNode->groupByIndex = (int *)malloc(sizeof(int) * 1);
+        CHECK_POINTER(gbNode->groupByIndex);
+        gbNode->groupByType = (int *)malloc(sizeof(int) * 1);
+        CHECK_POINTER(gbNode->groupByType);
+        gbNode->groupBySize = (int *)malloc(sizeof(int) * 1);
+        CHECK_POINTER(gbNode->groupBySize);
+        gbNode->groupByIndex[0] = -1;
+        gbNode->groupByType[0] = INT;
+        gbNode->groupBySize[0] = sizeof(int);
+        gbNode->outputAttrNum = 1;
+        gbNode->attrType = (int *) malloc(sizeof(int) *1);
+        CHECK_POINTER(gbNode->attrType);
+        gbNode->attrSize = (int *) malloc(sizeof(int) *1);
+        CHECK_POINTER(gbNode->attrSize);
+        gbNode->tupleSize = 0;
+        gbNode->gbExp = (struct groupByExp *) malloc(sizeof(struct groupByExp) * 1);
+        gbNode->tupleSize += sizeof(float);
+        gbNode->attrType[0] = FLOAT;
+        gbNode->attrSize[0] = sizeof(float);
+        gbNode->gbExp[0].func = MIN;
+        gbNode->gbExp[0].exp.op = NOOP;
+        gbNode->gbExp[0].exp.opNum = 1;
+        gbNode->gbExp[0].exp.exp = 0;
+        gbNode->gbExp[0].exp.opType = COLUMN_DECIMAL;
+        gbNode->gbExp[0].exp.opValue = 0;
         //===========================================================
 
         //Loop through all the tuples
@@ -1180,52 +1212,21 @@ int main(int argc, char ** argv){
             int tmp = *(int *)(_PART_0);
             memcpy((partsuppRel.filter)->exp[0].content, &tmp, sizeof(int));
 
+            //Table scan to filter linking predicate
             ps1 = tableScan(&partsuppRel, &pp);
             ps1->colIdxNum = 0;
 
-            {
-                struct tableNode * ps1_gb;
-                {
+            //Group by
+            gbNode->table = ps1;
+            ps1_gb = groupBy(gbNode, &pp);
 
-                    struct groupByNode * gbNode = (struct groupByNode *) malloc(sizeof(struct groupByNode));
-                    CHECK_POINTER(gbNode);
-                    gbNode->table = ps1;
-                    gbNode->groupByColNum = 1;
-                    gbNode->groupByIndex = (int *)malloc(sizeof(int) * 1);
-                    CHECK_POINTER(gbNode->groupByIndex);
-                    gbNode->groupByType = (int *)malloc(sizeof(int) * 1);
-                    CHECK_POINTER(gbNode->groupByType);
-                    gbNode->groupBySize = (int *)malloc(sizeof(int) * 1);
-                    CHECK_POINTER(gbNode->groupBySize);
-                    gbNode->groupByIndex[0] = -1;
-                    gbNode->groupByType[0] = INT;
-                    gbNode->groupBySize[0] = sizeof(int);
-                    gbNode->outputAttrNum = 1;
-                    gbNode->attrType = (int *) malloc(sizeof(int) *1);
-                    CHECK_POINTER(gbNode->attrType);
-                    gbNode->attrSize = (int *) malloc(sizeof(int) *1);
-                    CHECK_POINTER(gbNode->attrSize);
-                    gbNode->tupleSize = 0;
-                    gbNode->gbExp = (struct groupByExp *) malloc(sizeof(struct groupByExp) * 1);
-                    gbNode->tupleSize += sizeof(float);
-                    gbNode->attrType[0] = FLOAT;
-                    gbNode->attrSize[0] = sizeof(float);
-                    gbNode->gbExp[0].func = MIN;
-                    gbNode->gbExp[0].exp.op = NOOP;
-                    gbNode->gbExp[0].exp.opNum = 1;
-                    gbNode->gbExp[0].exp.exp = 0;
-                    gbNode->gbExp[0].exp.opType = COLUMN_DECIMAL;
-                    gbNode->gbExp[0].exp.opValue = 0;
-                    ps1_gb = groupBy(gbNode, &pp);
-                }
-
-                result = ps1_gb;
-                struct materializeNode mn;
-                mn.table = result;
-                char *final = materializeCol(&mn, &pp);
+            result = ps1_gb;
+            struct materializeNode mn;
+            mn.table = result;
+            char *final = materializeCol(&mn, &pp);
                 
-                mempcpy(subqRes0 + tupleid * sizeof(float), final, sizeof(float));
-            }
+            mempcpy(subqRes0 + tupleid * sizeof(float), final, sizeof(float));
+            
         }
         
         //Manual optimizations (delete objects at the end etc)
