@@ -1227,6 +1227,12 @@ int main(int argc, char ** argv){
                 mempcpy(subqRes0 + tupleid * sizeof(float), final, sizeof(float));
             }
         }
+        
+        //Manual optimizations (delete objects at the end etc)
+        //===========================================================
+        freeScan(&partsuppRel);
+        //===========================================================
+
         free(_PART_0);
 
         memcpy((joinRel.filter)->exp[0].content, &subqRes0, sizeof(void *));
@@ -1234,14 +1240,6 @@ int main(int argc, char ** argv){
         freeScan(&joinRel);
 
     }
-
-    //Manual optimizations (delete objects at the end etc)
-    //===========================================================
-    
-    //freeScan(&partsuppRel);
-
-    //===========================================================
-
 
     // Process the TableNode for SUPPLIER
     struct tableNode *su0;
