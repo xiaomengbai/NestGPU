@@ -1202,6 +1202,9 @@ int main(int argc, char ** argv){
         gbNode->gbExp[0].exp.exp = 0;
         gbNode->gbExp[0].exp.opType = COLUMN_DECIMAL;
         gbNode->gbExp[0].exp.opValue = 0;
+
+        //Meterialization
+        struct materializeNode mn;
         //===========================================================
 
         //Loop through all the tuples
@@ -1220,21 +1223,19 @@ int main(int argc, char ** argv){
             gbNode->table = ps1;
             ps1_gb = groupBy(gbNode, &pp);
 
-            result = ps1_gb;
-            struct materializeNode mn;
-            mn.table = result;
-            char *final = materializeCol(&mn, &pp);
-                
-            mempcpy(subqRes0 + tupleid * sizeof(float), final, sizeof(float));
+            //Materialize (we need to move this outside the loop)
+            mn.table = ps1_gb;
+            char *final = materializeCol(&mn, &pp);  
             
+            //Copy result to device
+            mempcpy(subqRes0 + tupleid * sizeof(float), final, sizeof(float));
         }
         
         //Manual optimizations (delete objects at the end etc)
         //===========================================================
         freeScan(&partsuppRel);
-        //===========================================================
-
         free(_PART_0);
+        //===========================================================
 
         memcpy((joinRel.filter)->exp[0].content, &subqRes0, sizeof(void *));
         pa0_ps0 = tableScan(&joinRel, &pp);
