@@ -1098,81 +1098,85 @@ int main(int argc, char ** argv){
         ps1 = (struct tableNode *)malloc(sizeof(struct tableNode));
         CHECK_POINTER(ps1);
 
+        //Scan table (Once)
+        initTable(ps1);
+
+        struct tableNode *partsuppTablePartial;
+        partsuppTablePartial = (struct tableNode *)malloc(sizeof(struct tableNode));
+        CHECK_POINTER(partsuppTablePartial);
+
+        partsuppTablePartial->totalAttr = 2;
+        partsuppTablePartial->attrType = (int *)malloc(sizeof(int) * 2);
+        CHECK_POINTER(partsuppTablePartial->attrType);
+        partsuppTablePartial->attrSize = (int *)malloc(sizeof(int) * 2);
+        CHECK_POINTER(partsuppTablePartial->attrSize);
+        partsuppTablePartial->attrIndex = (int *)malloc(sizeof(int) * 2);
+        CHECK_POINTER(partsuppTablePartial->attrIndex);
+        partsuppTablePartial->attrTotalSize = (int *)malloc(sizeof(int) * 2);
+        CHECK_POINTER(partsuppTablePartial->attrTotalSize);
+        partsuppTablePartial->dataPos = (int *)malloc(sizeof(int) * 2);
+        CHECK_POINTER(partsuppTablePartial->dataPos);
+        partsuppTablePartial->dataFormat = (int *) malloc(sizeof(int) * 2);
+        CHECK_POINTER(partsuppTablePartial->dataFormat);
+        partsuppTablePartial->content = (char **)malloc(sizeof(char *) * 2);
+        CHECK_POINTER(partsuppTablePartial->content);
+        int tuple_size = 0;
+
+        partsuppTablePartial->attrSize[0] = partsuppTable->attrSize[2];
+        partsuppTablePartial->attrIndex[0] = partsuppTable->attrIndex[2];
+        partsuppTablePartial->attrType[0] = partsuppTable->attrType[2];
+        partsuppTablePartial->dataPos[0] = partsuppTable->dataPos[2];
+        partsuppTablePartial->dataFormat[0] = partsuppTable->dataFormat[2];
+        partsuppTablePartial->attrTotalSize[0] = partsuppTable->attrTotalSize[2];
+        tuple_size += partsuppTablePartial->attrSize[0];
+       
+        partsuppTablePartial->attrSize[1] = partsuppTable->attrSize[1];
+        partsuppTablePartial->attrIndex[1] = partsuppTable->attrIndex[1];
+        partsuppTablePartial->attrType[1] = partsuppTable->attrType[1];
+        partsuppTablePartial->dataPos[1] = partsuppTable->dataPos[1];
+        partsuppTablePartial->dataFormat[1] = partsuppTable->dataFormat[1];
+        partsuppTablePartial->attrTotalSize[1] = partsuppTable->attrTotalSize[1];
+
+        tuple_size += partsuppTablePartial->attrSize[1];
+        partsuppTablePartial->tupleSize = tuple_size;
+        partsuppTablePartial->tupleNum = partsuppTable->tupleNum;
+        partsuppTablePartial->colIdxNum = 0;
+        partsuppTablePartial->keepInGpuIdx = 1;
+
+        // Where conditions: EQ(Cons(ref. to PART.0),PARTSUPP.0)
+        struct scanNode partsuppRel;
+        partsuppRel.tn = partsuppTablePartial;
+        partsuppRel.hasWhere = 1;
+        partsuppRel.whereAttrNum = 1;
+        partsuppRel.whereIndex = (int *)malloc(sizeof(int) * 1);
+        CHECK_POINTER(partsuppRel.whereIndex);
+        partsuppRel.outputNum = 1;
+        partsuppRel.outputIndex = (int *)malloc(sizeof(int) * 1);
+        CHECK_POINTER(partsuppRel.outputIndex);
+        partsuppRel.outputIndex[0] = 0;
+        partsuppRel.whereIndex[0] = 1;
+        partsuppRel.keepInGpu = 1;
+        partsuppRel.filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));
+        CHECK_POINTER(partsuppRel.filter);
+        (partsuppRel.filter)->nested = 0;
+        (partsuppRel.filter)->expNum = 1;
+        (partsuppRel.filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *1);
+        CHECK_POINTER((partsuppRel.filter)->exp);
+        (partsuppRel.filter)->andOr = EXP;
+        (partsuppRel.filter)->exp[0].index    = 0;
+        (partsuppRel.filter)->exp[0].relation = EQ;
+        (partsuppRel.filter)->exp[0].dataPos  = MEM;
+
+
         //===========================================================
 
 
         //Loop through all the tuples
         for(int tupleid = 0; tupleid < joinRes->tupleNum; tupleid++){
-            
-            //Scan table (Once)
-            initTable(ps1);
-            
-            struct tableNode *partsuppTablePartial;
-            partsuppTablePartial = (struct tableNode *)malloc(sizeof(struct tableNode));
-            CHECK_POINTER(partsuppTablePartial);
-            partsuppTablePartial->totalAttr = 2;
-            partsuppTablePartial->attrType = (int *)malloc(sizeof(int) * 2);
-            CHECK_POINTER(partsuppTablePartial->attrType);
-            partsuppTablePartial->attrSize = (int *)malloc(sizeof(int) * 2);
-            CHECK_POINTER(partsuppTablePartial->attrSize);
-            partsuppTablePartial->attrIndex = (int *)malloc(sizeof(int) * 2);
-            CHECK_POINTER(partsuppTablePartial->attrIndex);
-            partsuppTablePartial->attrTotalSize = (int *)malloc(sizeof(int) * 2);
-            CHECK_POINTER(partsuppTablePartial->attrTotalSize);
-            partsuppTablePartial->dataPos = (int *)malloc(sizeof(int) * 2);
-            CHECK_POINTER(partsuppTablePartial->dataPos);
-            partsuppTablePartial->dataFormat = (int *) malloc(sizeof(int) * 2);
-            CHECK_POINTER(partsuppTablePartial->dataFormat);
-            partsuppTablePartial->content = (char **)malloc(sizeof(char *) * 2);
-            CHECK_POINTER(partsuppTablePartial->content);
-            int tuple_size = 0;
-            partsuppTablePartial->attrSize[0] = partsuppTable->attrSize[2];
-            partsuppTablePartial->attrIndex[0] = partsuppTable->attrIndex[2];
-            partsuppTablePartial->attrType[0] = partsuppTable->attrType[2];
-            partsuppTablePartial->dataPos[0] = partsuppTable->dataPos[2];
-            partsuppTablePartial->dataFormat[0] = partsuppTable->dataFormat[2];
-            partsuppTablePartial->attrTotalSize[0] = partsuppTable->attrTotalSize[2];
+                  
+            // This needs to be inside (update location and size in each iteration, not sure why it does not work outside the loop)
             partsuppTablePartial->content[0] = partsuppTable->content[2];
-            tuple_size += partsuppTablePartial->attrSize[0];
-    
-            partsuppTablePartial->attrSize[1] = partsuppTable->attrSize[1];
-            partsuppTablePartial->attrIndex[1] = partsuppTable->attrIndex[1];
-            partsuppTablePartial->attrType[1] = partsuppTable->attrType[1];
-            partsuppTablePartial->dataPos[1] = partsuppTable->dataPos[1];
-            partsuppTablePartial->dataFormat[1] = partsuppTable->dataFormat[1];
-            partsuppTablePartial->attrTotalSize[1] = partsuppTable->attrTotalSize[1];
             partsuppTablePartial->content[1] = partsuppTable->content[1];
-            tuple_size += partsuppTablePartial->attrSize[1];
-
-            
-            partsuppTablePartial->tupleSize = tuple_size;
-            partsuppTablePartial->tupleNum = partsuppTable->tupleNum;
-    
-            partsuppTablePartial->colIdxNum = 0;
-            partsuppTablePartial->keepInGpuIdx = 1;
-            // Where conditions: EQ(Cons(ref. to PART.0),PARTSUPP.0)
-            struct scanNode partsuppRel;
-            partsuppRel.tn = partsuppTablePartial;
-            partsuppRel.hasWhere = 1;
-            partsuppRel.whereAttrNum = 1;
-            partsuppRel.whereIndex = (int *)malloc(sizeof(int) * 1);
-            CHECK_POINTER(partsuppRel.whereIndex);
-            partsuppRel.outputNum = 1;
-            partsuppRel.outputIndex = (int *)malloc(sizeof(int) * 1);
-            CHECK_POINTER(partsuppRel.outputIndex);
-            partsuppRel.outputIndex[0] = 0;
-            partsuppRel.whereIndex[0] = 1;
-            partsuppRel.keepInGpu = 1;
-            partsuppRel.filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));
-            CHECK_POINTER(partsuppRel.filter);
-            (partsuppRel.filter)->nested = 0;
-            (partsuppRel.filter)->expNum = 1;
-            (partsuppRel.filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *1);
-            CHECK_POINTER((partsuppRel.filter)->exp);
-            (partsuppRel.filter)->andOr = EXP;
-            (partsuppRel.filter)->exp[0].index    = 0;
-            (partsuppRel.filter)->exp[0].relation = EQ;
-            (partsuppRel.filter)->exp[0].dataPos  = MEM;
 
             //Create Copy tupleid value
             CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(_PART_0, (char *)(joinRes->content[0]) + tupleid * sizeof(int), sizeof(int), cudaMemcpyDeviceToHost) );
@@ -1186,7 +1190,7 @@ int main(int argc, char ** argv){
                 clock_gettime(CLOCK_REALTIME, &diskStart);
                 partsuppTablePartial->content[0] = NULL;
                 partsuppTablePartial->content[1] = NULL;
-                freeScan(&partsuppRel);
+                //freeScan(&partsuppRel);
                 clock_gettime(CLOCK_REALTIME, &diskEnd);
                 ps1->colIdxNum = 0;
             }
@@ -1245,7 +1249,8 @@ int main(int argc, char ** argv){
 
     //Manual optimizations (delete objects at the end etc)
     //===========================================================
-
+    
+    //freeScan(&partsuppRel);
 
     //===========================================================
 
