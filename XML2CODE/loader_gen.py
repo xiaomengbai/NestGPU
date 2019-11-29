@@ -214,7 +214,7 @@ def generate_loader():
                 print >>fo, indent + "fwrite(&header,sizeof(struct columnHeader),1,out[" + str(i) + "]);"
                 indent = indent[:indent.rfind(baseIndent)]
                 print >>fo, indent + "}"
-                print >>fo, indent + "strcpy(tmp." + str(col.column_name.lower()) + ",data);"
+                print >>fo, indent + "strncpy(tmp." + str(col.column_name.lower()) + ",data,sizeof(tmp." + str(col.column_name.lower()) + "));"
                 print >>fo, indent + "fwrite(&(tmp." + str(col.column_name.lower()) + "),sizeof(tmp." +str(col.column_name.lower()) + "), 1, out[" + str(i) + "]);"
 
             print >>fo, indent + "break;"
