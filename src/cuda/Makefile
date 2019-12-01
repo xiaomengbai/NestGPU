@@ -36,17 +36,24 @@ else
     LDFLAGS   := -lcudart -lrt
 endif
 
+SRCS := tableScan.cu inviJoin.cu hashJoin.cu cuckoo.cu materialize.cu groupby.cu orderBy.cu driver.cu
+OBJS := $(SRCS:.cu=.o)
+DEPS := $(SRCS:.cu=.d)
 
-gpudb: gpu cpu
-	 $(NVCC) -pg -g -G tableScan.o inviJoin.o hashJoin.o cuckoo.o materialize.o groupby.o orderBy.o driver.o $(LDFLAGS) -o GPUDATABASE
+all: GPUDATABASE
 
-cpu: driver.cu 
-	$(NVCC) -c -g -G $(GENCODE_FLAGS) driver.cu
+GPUDATABASE: $(OBJS)
+	$(NVCC) -pg -g -G $^ $(LDFLAGS) -o $@
 
-gpu: tableScan.cu hashJoin.cu cuckoo.cu inviJoin.cu materialize.cu groupby.cu orderBy.cu
-	$(NVCC) -c -g -G $(GENCODE_FLAGS) tableScan.cu hashJoin.cu cuckoo.cu inviJoin.cu materialize.cu groupby.cu orderBy.cu 
+-include $(DEPS)
+%.d: %.cu
+	@set -e; rm -f $@; \
+	$(NVCC) -M $(GENCODE_FLAGS) $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
 
-all: gpudb
+%.o: %.cu
+	$(NVCC) -c -g -G $(GENCODE_FLAGS) $<
 
 clean:
-	rm -rf *.o GPUDATABASE
+	rm -rf *.d *.o GPUDATABASE

@@ -44,10 +44,10 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # -- Optimizations --
 
 #Baseline
-#GPU_OPT := --base
+GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
-GPU_OPT := --idx
+#GPU_OPT := --idx
 # -------------------
 
 # build test/dbgen/dbgen for generating tables
@@ -137,27 +137,16 @@ CUDA_DRIVER_DEP := XML2CODE/code_gen.py \
                    XML2CODE/schema.py   \
                    XML2CODE/config.py
 
-$(CUDA_DRIVER): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP) load-columns
+SELF := makefile
+$(CUDA_DRIVER): $(SQL_FILE) $(SCHEMA) $(TRANSLATE_PY) $(CUDA_DRIVER_DEP) $(SELF)
 	python $(TRANSLATE_PY) $(SQL_FILE) $(SCHEMA) $(GPU_OPT)
 
-CUDA_SRC_FILES := tableScan.cu hashJoin.cu cuckoo.cu inviJoin.cu materialize.cu groupby.cu orderBy.cu
-CUDA_GPUDB_DEP := src/include/common.h     \
-                  src/include/hashJoin.h   \
-                  src/include/schema.h     \
-                  src/include/cpuCudaLib.h \
-                  src/include/gpuCudaLib.h \
-                  $(addprefix $(CUDA_DIR)/, $(CUDA_SRC_FILES))
-
-
-$(CUDA_GPUDB): $(CUDA_DRIVER) $(CUDA_GPUDB_DEP)
+driver: $(CUDA_DRIVER)
+gpudb: driver
 	$(MAKE) -C $(CUDA_DIR)
 
-driver: $(CUDA_DRIVER)
-gpudb: $(CUDA_GPUDB)
-
-run: $(CUDA_GPUDB)
+run: gpudb
 	$(CUDA_GPUDB) --datadir $(DATA_DIR)
-
 
 # clean
 clean: clean-gpudb
