@@ -1,0 +1,10 @@
+--Get GPU Node
+salloc -N 1 -p bdw-v100
+
+--Load modules
+module load cuda/10.0
+
+--Run
+make clean-all
+make load-columns
+make run
