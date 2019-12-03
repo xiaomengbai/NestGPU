@@ -27,8 +27,8 @@ SCHEMA := $(TPCH_SCHEMA)
 #SQL_FILE := $(TPCH_TEST_DIR)/test.sql
 
 # TPC-H Q2
-#SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
-SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 # TPC-H Q4
@@ -55,7 +55,7 @@ GPU_OPT := --base
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 0.75
+TABLE_SCALE := 2
 #index works for 0.01, 0.1, 0.5, 1 (out of memory)
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 

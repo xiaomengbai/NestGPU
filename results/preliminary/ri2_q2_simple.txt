@@ -1,3 +1,14 @@
+# Results from 12/01/2019
+# Optimize driver to avoid creating objects for each time we execute the inner loop
+#
+# Query   : Q2_simple.sql
+# Dataset : TPCH
+# Size    : 0.75
+#
+# Move to RI2
+
+
+
 <===============BASELINE===============>
 
 <--Disk Load Time-->           : 24.321888
