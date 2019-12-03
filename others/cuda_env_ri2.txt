@@ -8,3 +8,9 @@ module load cuda/10.0
 make clean-all
 make load-columns
 make run
+
+--Compile only driver
+make gpudb
+
+--Run GPUDB (without makefile)
+./src/cuda/GPUDATABASE  --datadir test/tables
