@@ -1,0 +1,50 @@
+<===============BASELINE===============>
+
+<--Disk Load Time-->           : 7.067601
+
+<--Build index time-->         : 0.000000
+
+<---TableScan()--->
+Total time      : 7674.980535
+Calls           : 2195
+Step 1 - memCopy where clause  : 57.835900
+Step 2 - memCopy predicate col : 1282.940590
+Step 3 - Scan                  : 140.417524
+Step 4 - CountRes(PreScan)     : 1855.419529
+Step 5 - memReturn countRes    : 52.752028
+Step 6 - Copy rest of columns  : 1583.231525
+Step 7 - Materialize result    : 174.403398
+Step 8 - Copy final result     : 254.273696
+Other 1 - Create tableNode     : 852.824785
+Other 2 - Malloc res           : 256.332747
+Other 3 - Deallocate buffers   : 622.029261
+<----------------->
+Total Time: 8256.527386  
+
+
+
+
+<===============Create tableScanNext and move result out (Other 1,2 & 3)===============>
+<--Disk Load Time-->           : 4.051975
+
+<--Build index time-->         : 0.000000
+
+<---TableScan()--->
+Total time      : 5448.729343
+Calls           : 2195
+Step 1 - memCopy where clause  : 40.888621
+Step 2 - memCopy predicate col : 1105.917098
+Step 3 - Scan                  : 131.016908
+Step 4 - CountRes(PreScan)     : 1842.904260
+Step 5 - memReturn countRes    : 41.556763
+Step 6 - Copy rest of columns  : 1379.529420
+Step 7 - Materialize result    : 163.500245
+Step 8 - Copy final result     : 216.671868
+Other 1 - Create tableNode     : 6.586032
+Other 2 - Malloc res           : 5.114853
+Other 3 - Deallocate buffers   : 5.527056
+<----------------->
+Total Time: 6000.882493
+
+
+
