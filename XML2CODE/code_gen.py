@@ -529,7 +529,7 @@ def generate_code(tree):
         print >>fo, "#include \"../include/cpuCudaLib.h\""
         print >>fo, "#include \"../include/gpuCudaLib.h\""
         #print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
-        print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *, bool);"
+        print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *, bool, bool);"
         #Indexing functions
         print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         print >>fo, "extern struct tableNode* indexScan (struct tableNode *, int, int, int, struct statistic *);"
@@ -636,14 +636,16 @@ def generate_code(tree):
     print >>fo, indent + "pp.mallocRes_S02 = 0;"
     print >>fo, indent + "pp.deallocateBuffs_S03 = 0;\n"
 
-    print >>fo, indent + "init_mempool();\n";
+    print >>fo, indent + "init_mempool();";
+    print >>fo, indent + "init_gpu_mempool();\n";
 
     generate_code_for_loading_tables(fo, indent, tree)
 
     generate_code_for_a_tree(fo, tree, 0)
 
     print >>fo, "\n";
-    print >>fo, indent + "destroy_mempool();\n";
+    print >>fo, indent + "destroy_mempool();";
+    print >>fo, indent + "destroy_gpu_mempool();\n";
 
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &end);"
     print >>fo, indent + "double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;"
@@ -1400,7 +1402,12 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
         if CODETYPE == 0:
             # print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
-            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true);"
+            print >>fo, indent + "// space required on GPU: gpuFilter + gpuPsum + gpuCount + gpuExp + padding"
+            print >>fo, indent + "size_t new_size = joinRes->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
+            print >>fo, indent + "resize_gpu_mempool(new_size);"
+            print >>fo, indent + "char *origin_pos = freepos_gpu_mempool();"
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true);"
+            print >>fo, indent + "freeto_gpu_mempool(origin_pos);"
         else:
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
 
@@ -1678,7 +1685,12 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
         if CODETYPE == 0:
             # print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
-            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true);"
+            print >>fo, indent + "// space required on GPU: gpuFilter + gpuPsum + gpuCount + gpuExp + padding"
+            print >>fo, indent + "size_t new_size = " + tnName + "->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
+            print >>fo, indent + "resize_gpu_mempool(new_size);"
+            print >>fo, indent + "char *origin_pos = freepos_gpu_mempool();"
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true);"
+            print >>fo, indent + "freeto_gpu_mempool(origin_pos);"
         else:
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
 

@@ -2149,7 +2149,7 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
  *  A new table node
  */
 
-struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bool use_mempool = false){
+struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false){
 
     //Start timer (total tableScan())
     struct timespec startTableScanTotal,endTableScanTotal;
@@ -2253,9 +2253,16 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     }
 
     int count;
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuFilter,sizeof(int) * totalTupleNum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuPsum,sizeof(int)*threadNum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuCount,sizeof(int)*threadNum));
+    if(!use_gpu_mempool){
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuFilter,sizeof(int) * totalTupleNum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuPsum,sizeof(int)*threadNum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuCount,sizeof(int)*threadNum));
+    }else{
+        alloc_gpu_mempool((char **)&gpuFilter, sizeof(int) * totalTupleNum);
+        alloc_gpu_mempool((char **)&gpuPsum,   sizeof(int) * threadNum);
+        alloc_gpu_mempool((char **)&gpuCount,  sizeof(int) * threadNum);
+        GPU_MEMPOOL_CHECK();
+    }
 
     assert(sn->hasWhere !=0);
     assert(sn->filter != NULL);
@@ -2280,7 +2287,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
         clock_gettime(CLOCK_REALTIME,&startS1);
 
         struct whereExp * gpuExp = NULL;
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuExp, sizeof(struct whereExp)));
+        if(!use_gpu_mempool){
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuExp, sizeof(struct whereExp)));
+        }else{
+            alloc_gpu_mempool((char **)&gpuExp, sizeof(struct whereExp));
+            GPU_MEMPOOL_CHECK();
+        }
         //CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
         /*
@@ -2916,7 +2928,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
         if(whereFree[prevWhere] == 1 && (sn->tn->dataPos[prevIndex] == MEM || sn->tn->dataPos[prevIndex] == MMAP || sn->tn->dataPos[prevIndex] == PINNED))
             CUDA_SAFE_CALL_NO_SYNC(cudaFree(column[prevWhere]));
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuExp));
+        if(!use_gpu_mempool)
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuExp));
 
     }
 
@@ -2966,8 +2979,9 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     //Start timer for Other - 02 (mallocRes)
     struct timespec startS02,endS02;
     clock_gettime(CLOCK_REALTIME,&startS02);
-    
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
+
+    if(!use_gpu_mempool)
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
 
     char **result = NULL, **scanCol = NULL;
 
@@ -3120,8 +3134,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     struct timespec startS03,endS03;
     clock_gettime(CLOCK_REALTIME,&startS03);
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuFilter));
+    if(!use_gpu_mempool){
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuFilter));
+    }
 
     if(!use_mempool){
         free(whereFree);
