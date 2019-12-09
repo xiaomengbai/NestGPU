@@ -155,45 +155,45 @@ static void freeTable(struct tableNode * tn){
     }
 }
 
-static void freeScan(struct scanNode * rel){
-    free(rel->whereIndex);
+static void freeScan(struct scanNode * rel, const bool free_flag = true){
+    if(free_flag) free(rel->whereIndex);
     rel->whereIndex = NULL;
-    free(rel->outputIndex);
+    if(free_flag) free(rel->outputIndex);
     rel->outputIndex = NULL;
-    free(rel->filter);
+    if(free_flag) free(rel->filter);
     rel->filter = NULL;
-    if(rel->tn != NULL)
+    if(free_flag && rel->tn != NULL)
         freeTable(rel->tn);
 
 }
 
-static void freeMathExp(struct mathExp exp){
+static void freeMathExp(struct mathExp exp, const bool free_flag = true){
     if (exp.exp != 0 && exp.opNum == 2){
-        freeMathExp(((struct mathExp *)exp.exp)[0]);
-        freeMathExp(((struct mathExp *)exp.exp)[1]);
-        free(((struct mathExp *)exp.exp));
+        freeMathExp(((struct mathExp *)exp.exp)[0], free_flag);
+        freeMathExp(((struct mathExp *)exp.exp)[1], free_flag);
+        if(free_flag) free(((struct mathExp *)exp.exp));
         exp.exp = NULL;
     }
 }
 
-static void freeGroupByNode(struct groupByNode * tn){
-    free(tn->groupByIndex);
+static void freeGroupByNode(struct groupByNode * tn, const bool free_flag = true){
+    if(free_flag) free(tn->groupByIndex);
     tn->groupByIndex = NULL;
     for (int i=0;i<tn->outputAttrNum;i++){
-        freeMathExp(tn->gbExp[i].exp);
+        freeMathExp(tn->gbExp[i].exp, free_flag);
     }
-    free(tn->gbExp);
+    if(free_flag) free(tn->gbExp);
     tn->gbExp = NULL;
-    if(tn->table != NULL)
+    if(free_flag && tn->table != NULL)
         freeTable(tn->table);
 }
 
-static void freeOrderByNode(struct orderByNode * tn){
-    free(tn->orderBySeq);
+static void freeOrderByNode(struct orderByNode * tn, const bool free_flag = true){
+    if(free_flag) free(tn->orderBySeq);
     tn->orderBySeq = NULL;
-    free(tn->orderByIndex);
+    if(free_flag) free(tn->orderByIndex);
     tn->orderByIndex = NULL;
-    if(tn->table != NULL)
+    if(free_flag && tn->table != NULL)
         freeTable(tn->table);
 }
 

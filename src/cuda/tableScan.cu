@@ -26,6 +26,7 @@
 #include "scanImpl.cu"
 #include "../include/common.h"
 #include "../include/gpuCudaLib.h"
+#include "../include/mempool.h"
 
 #include <thrust/execution_policy.h>
 #include <thrust/system/cuda/execution_policy.h>
@@ -2148,7 +2149,7 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
  *  A new table node
  */
 
-struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
+struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bool use_mempool = false){
 
     //Start timer (total tableScan())
     struct timespec startTableScanTotal,endTableScanTotal;
@@ -2161,25 +2162,43 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     struct tableNode *res = NULL;
     int tupleSize = 0;
 
-    res = (struct tableNode *) malloc(sizeof(struct tableNode));
-    CHECK_POINTER(res);
+    if(!use_mempool){
+        res = (struct tableNode *) malloc(sizeof(struct tableNode));
+        CHECK_POINTER(res);
+    }else{
+        res = (struct tableNode *) alloc_mempool(sizeof(struct tableNode));
+        MEMPOOL_CHECK();
+    }
 
     res->totalAttr = sn->outputNum;
 
-    res->attrType = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrType);
-    res->attrSize = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrSize);
-    res->attrTotalSize = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrTotalSize);
-    res->attrIndex = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrIndex);
-    res->dataPos = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->dataPos);
-    res->dataFormat = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->dataFormat);
-    res->content = (char **) malloc(sizeof(char *) * res->totalAttr);
-    CHECK_POINTER(res->content);
+
+    if(!use_mempool){
+        res->attrType = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrType);
+        res->attrSize = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrSize);
+        res->attrTotalSize = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrTotalSize);
+        res->attrIndex = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrIndex);
+        res->dataPos = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->dataPos);
+        res->dataFormat = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->dataFormat);
+        res->content = (char **) malloc(sizeof(char *) * res->totalAttr);
+        CHECK_POINTER(res->content);
+    }else{
+        res->attrType = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->attrSize = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->attrTotalSize = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->attrIndex = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->dataPos = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->dataFormat = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->content = (char **) alloc_mempool(sizeof(char *) * res->totalAttr);
+        MEMPOOL_CHECK();
+    }
+
     res->colIdxNum = 0;
 
     for(int i=0;i<res->totalAttr;i++){
@@ -2202,14 +2221,23 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     int threadNum = grid.x * block.x;
     int attrNum = sn->whereAttrNum;
 
-    char ** column = (char **) malloc(attrNum * sizeof(char *));
-    CHECK_POINTER(column);
+    char **column;
+    int *whereFree, *colWherePos;
+    if(!use_mempool){
+        column = (char **) malloc(attrNum * sizeof(char *));
+        CHECK_POINTER(column);
 
-    int * whereFree = (int *)malloc(attrNum * sizeof(int));
-    CHECK_POINTER(whereFree);
+        whereFree = (int *)malloc(attrNum * sizeof(int));
+        CHECK_POINTER(whereFree);
 
-    int * colWherePos = (int *)malloc(sn->outputNum * sizeof(int));
-    CHECK_POINTER(colWherePos);
+        colWherePos = (int *)malloc(sn->outputNum * sizeof(int));
+        CHECK_POINTER(colWherePos);
+    }else{
+        column = (char **)alloc_mempool(attrNum * sizeof(char *));
+        whereFree = (int *)alloc_mempool(attrNum * sizeof(int));
+        colWherePos = (int *)alloc_mempool(sn->outputNum * sizeof(int));
+        MEMPOOL_CHECK();
+    }
 
     for(int i=0;i<sn->outputNum;i++)
         colWherePos[i] = -1;
@@ -2945,10 +2973,16 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
 
     attrNum = sn->outputNum;
 
-    scanCol = (char **) malloc(attrNum * sizeof(char *));
-    CHECK_POINTER(scanCol);
-    result = (char **) malloc(attrNum * sizeof(char *));
-    CHECK_POINTER(result);
+    if(!use_mempool){
+        scanCol = (char **) malloc(attrNum * sizeof(char *));
+        CHECK_POINTER(scanCol);
+        result = (char **) malloc(attrNum * sizeof(char *));
+        CHECK_POINTER(result);
+    }else{
+        scanCol = (char **)alloc_mempool(attrNum * sizeof(char *));
+        result = (char **)alloc_mempool(attrNum * sizeof(char *));
+        MEMPOOL_CHECK();
+    }
 
     //Stop timer for Other - 02 (mallocRes)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
@@ -3089,9 +3123,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp){
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuFilter));
 
-    free(column);
-    free(scanCol);
-    free(result);
+    if(!use_mempool){
+        free(whereFree);
+        free(colWherePos);
+        free(column);
+        free(scanCol);
+        free(result);
+    }
 
     //Stop timer for Other - 01 (tableScan)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing

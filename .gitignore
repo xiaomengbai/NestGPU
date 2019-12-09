@@ -58,3 +58,5 @@ ehthumbs.db
 Thumbs.db
 .vscode
 *.d
+*.d.*
+*~

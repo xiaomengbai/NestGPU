@@ -523,11 +523,13 @@ def generate_code(tree):
         print >>fo, "#include \"../include/inviJoin.h\""
 
     print >>fo, "#include \"../include/schema.h\""
+    print >>fo, "#include \"../include/mempool.h\""
 
     if CODETYPE == 0:
         print >>fo, "#include \"../include/cpuCudaLib.h\""
         print >>fo, "#include \"../include/gpuCudaLib.h\""
-        print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
+        #print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
+        print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *, bool);"
         #Indexing functions
         print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         print >>fo, "extern struct tableNode* indexScan (struct tableNode *, int, int, int, struct statistic *);"
@@ -614,12 +616,12 @@ def generate_code(tree):
     print >>fo, indent + "struct timespec start, end;"
     print >>fo, indent + "struct timespec diskStart, diskEnd;"
     print >>fo, indent + "double diskTotal = 0;"
-    
+
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&start);"
     print >>fo, indent + "struct statistic pp;"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
     print >>fo, indent + "pp.buildIndexTotal = 0;"
-    print >>fo, indent + "pp.tableScanTotal = 0;" 
+    print >>fo, indent + "pp.tableScanTotal = 0;"
     print >>fo, indent + "pp.tableScanCount = 0;"
     print >>fo, indent + "pp.whereMemCopy_s1 = 0;"
     print >>fo, indent + "pp.dataMemCopy_s2 = 0;"
@@ -632,11 +634,16 @@ def generate_code(tree):
     print >>fo, indent + "pp.finalResultMemCopy_s8 = 0;"
     print >>fo, indent + "pp.create_tableNode_S01 = 0;"
     print >>fo, indent + "pp.mallocRes_S02 = 0;"
-    print >>fo, indent + "pp.deallocateBuffs_S03 = 0;"
+    print >>fo, indent + "pp.deallocateBuffs_S03 = 0;\n"
+
+    print >>fo, indent + "init_mempool();\n";
 
     generate_code_for_loading_tables(fo, indent, tree)
 
     generate_code_for_a_tree(fo, tree, 0)
+
+    print >>fo, "\n";
+    print >>fo, indent + "destroy_mempool();\n";
 
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &end);"
     print >>fo, indent + "double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;"
@@ -771,12 +778,18 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     for col in pass_in_cols:
         colLen = type_length(col.table_name, col.column_name, col.column_type)
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-        print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
-        print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
+        # print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
+        print >>fo, indent + "char *" + pass_in_var + " = (char *)alloc_mempool(" + colLen + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();"
+
 
     print >>fo, indent + var_subqRes + " = (char *)malloc(" + (subq_res_size if constant_len_res else "sizeof(char *)") + " * " + tupleNum + ");"
     print >>fo, indent + "CHECK_POINTER(" + var_subqRes + ");\n"
+    # print >>fo, indent + var_subqRes + " = (char *)alloc_mempool(" + (subq_res_size if constant_len_res else "sizeof(char *)") + " * " + tupleNum + ");"
+    # print >>fo, indent + "MEMPOOL_CHECK();\n"
 
+    print >>fo, indent + "char *free_pos = freepos_mempool();"
     print >>fo, indent + "for(int tupleid = 0; tupleid < " + tupleNum + "; tupleid++){"
 
     for col in pass_in_cols:
@@ -802,12 +815,13 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
         print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
         print >>fo, indent + baseIndent * 2 + "*(int *)(((char **)" + var_subqRes + ")[tupleid]) = mn.table->tupleNum;"
         print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
+    print >>fo, indent + baseIndent * 2 + "freeto_mempool(free_pos);";
     print >>fo, indent + baseIndent + "}"
     print >>fo, indent + "}"
 
     for col in pass_in_cols:
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-        print >>fo, indent + "free(" + pass_in_var + ");"
+        #print >>fo, indent + "free(" + pass_in_var + ");"
     print >>fo, ""
 
 """
@@ -891,14 +905,20 @@ def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
     print >>fo, indent + "{\n"
     indent += baseIndent
 
-    print >>fo, indent + "struct orderByNode * odNode = (struct orderByNode *) malloc(sizeof(struct orderByNode));"
-    print >>fo, indent + "CHECK_POINTER(odNode);"
+    # print >>fo, indent + "struct orderByNode * odNode = (struct orderByNode *) malloc(sizeof(struct orderByNode));"
+    # print >>fo, indent + "CHECK_POINTER(odNode);"
+    print >>fo, indent + "struct orderByNode * odNode = (struct orderByNode *)alloc_mempool(sizeof(struct orderByNode));"
+    print >>fo, indent + "MEMPOOL_CHECK();"
     print >>fo, indent + "odNode->table = " + inputNode +";"
     print >>fo, indent + "odNode->orderByNum = " + str(odLen) + ";"
-    print >>fo, indent + "odNode->orderBySeq = (int *) malloc(sizeof(int) * odNode->orderByNum);"
-    print >>fo, indent + "CHECK_POINTER(odNode->orderBySeq);"
-    print >>fo, indent + "odNode->orderByIndex = (int *) malloc(sizeof(int) * odNode->orderByNum);"
-    print >>fo, indent + "CHECK_POINTER(odNode->orderByIndex);"
+    # print >>fo, indent + "odNode->orderBySeq = (int *) malloc(sizeof(int) * odNode->orderByNum);"
+    # print >>fo, indent + "CHECK_POINTER(odNode->orderBySeq);"
+    # print >>fo, indent + "odNode->orderByIndex = (int *) malloc(sizeof(int) * odNode->orderByNum);"
+    # print >>fo, indent + "CHECK_POINTER(odNode->orderByIndex);"
+    print >>fo, indent + "odNode->orderBySeq = (int *)alloc_mempool(sizeof(int) * odNode->orderByNum);"
+    print >>fo, indent + "odNode->orderByIndex = (int *)alloc_mempool(sizeof(int) * odNode->orderByNum);"
+    print >>fo, indent + "MEMPOOL_CHECK();"
+
 
     for i in range(0, odLen):
         seq = obn.order_by_clause.order_indicator_list[i]
@@ -914,7 +934,8 @@ def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
     else:
         print >>fo, indent + resultNode + " = orderBy(odNode, &context, &pp);"
 
-    print >>fo, indent + "freeOrderByNode(odNode);\n"
+    # print >>fo, indent + "freeOrderByNode(odNode);\n"
+    print >>fo, indent + "freeOrderByNode(odNode, false);\n"
 
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}\n"
@@ -936,16 +957,22 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
     print >>fo, indent + "{\n"
     indent += baseIndent
 
-    print >>fo, indent + "struct groupByNode * gbNode = (struct groupByNode *) malloc(sizeof(struct groupByNode));"
-    print >>fo, indent + "CHECK_POINTER(gbNode);"
+    # print >>fo, indent + "struct groupByNode * gbNode = (struct groupByNode *) malloc(sizeof(struct groupByNode));"
+    # print >>fo, indent + "CHECK_POINTER(gbNode);"
+    print >>fo, indent + "struct groupByNode * gbNode = (struct groupByNode *)alloc_mempool(sizeof(struct groupByNode));"
+    print >>fo, indent + "MEMPOOL_CHECK();"
     print >>fo, indent + "gbNode->table = " + inputNode +";"
     print >>fo, indent + "gbNode->groupByColNum = " + str(gbLen) + ";"
-    print >>fo, indent + "gbNode->groupByIndex = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
-    print >>fo, indent + "CHECK_POINTER(gbNode->groupByIndex);"
-    print >>fo, indent + "gbNode->groupByType = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
-    print >>fo, indent + "CHECK_POINTER(gbNode->groupByType);"
-    print >>fo, indent + "gbNode->groupBySize = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
-    print >>fo, indent + "CHECK_POINTER(gbNode->groupBySize);"
+    # print >>fo, indent + "gbNode->groupByIndex = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
+    # print >>fo, indent + "CHECK_POINTER(gbNode->groupByIndex);"
+    # print >>fo, indent + "gbNode->groupByType = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
+    # print >>fo, indent + "CHECK_POINTER(gbNode->groupByType);"
+    # print >>fo, indent + "gbNode->groupBySize = (int *)malloc(sizeof(int) * " + str(gbLen) + ");"
+    # print >>fo, indent + "CHECK_POINTER(gbNode->groupBySize);"
+    print >>fo, indent + "gbNode->groupByIndex = (int *)alloc_mempool(sizeof(int) * " + str(gbLen) + ");"
+    print >>fo, indent + "gbNode->groupByType = (int *)alloc_mempool(sizeof(int) * " + str(gbLen) + ");"
+    print >>fo, indent + "gbNode->groupBySize = (int *)alloc_mempool(sizeof(int) * " + str(gbLen) + ");"
+    print >>fo, indent + "MEMPOOL_CHECK();"
 
 
     for i in range(0,gbLen):
@@ -963,12 +990,19 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 
 
     print >>fo, indent + "gbNode->outputAttrNum = " + str(selectLen) + ";"
-    print >>fo, indent + "gbNode->attrType = (int *) malloc(sizeof(int) *" + str(selectLen) + ");"
-    print >>fo, indent + "CHECK_POINTER(gbNode->attrType);"
-    print >>fo, indent + "gbNode->attrSize = (int *) malloc(sizeof(int) *" + str(selectLen) + ");"
-    print >>fo, indent + "CHECK_POINTER(gbNode->attrSize);"
+    # print >>fo, indent + "gbNode->attrType = (int *) malloc(sizeof(int) *" + str(selectLen) + ");"
+    # print >>fo, indent + "CHECK_POINTER(gbNode->attrType);"
+    # print >>fo, indent + "gbNode->attrSize = (int *) malloc(sizeof(int) *" + str(selectLen) + ");"
+    # print >>fo, indent + "CHECK_POINTER(gbNode->attrSize);"
+    # print >>fo, indent + "gbNode->tupleSize = 0;"
+    # print >>fo, indent + "gbNode->gbExp = (struct groupByExp *) malloc(sizeof(struct groupByExp) * " + str(selectLen) + ");"
+    print >>fo, indent + "gbNode->attrType = (int *)alloc_mempool(sizeof(int) *" + str(selectLen) + ");"
+    print >>fo, indent + "gbNode->attrSize = (int *)alloc_mempool(sizeof(int) *" + str(selectLen) + ");"
     print >>fo, indent + "gbNode->tupleSize = 0;"
-    print >>fo, indent + "gbNode->gbExp = (struct groupByExp *) malloc(sizeof(struct groupByExp) * " + str(selectLen) + ");"
+    print >>fo, indent + "gbNode->gbExp = (struct groupByExp *)alloc_mempool(sizeof(struct groupByExp) * " + str(selectLen) + ");"
+    print >>fo, indent + "MEMPOOL_CHECK();"
+
+
 
     for i in range(0,selectLen):
         exp = select_list[i]
@@ -1019,7 +1053,9 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
         print >>fo, indent + resultNode + " = groupBy(gbNode, &pp);"
     else:
         print >>fo, indent + resultNode + " = groupBy(gbNode, &context, &pp);"
-        print >>fo, indent + "freeGroupByNode(gbNode);\n"
+
+    #print >>fo, indent + "freeGroupByNode(gbNode);\n"
+    print >>fo, indent + "freeGroupByNode(gbNode, false);\n"
 
 
     indent = indent[:indent.rfind(baseIndent)]
@@ -1188,8 +1224,10 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         exit(-1)
 
     print >>fo, indent + jName + ".totalAttr = " + str(len(rOutList) + len(lOutList)) + ";"
-    print >>fo, indent + jName + ".keepInGpu = (int *) malloc(sizeof(int) * " + str(len(rOutList) + len(lOutList)) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + jName + ".keepInGpu);"
+    # print >>fo, indent + jName + ".keepInGpu = (int *) malloc(sizeof(int) * " + str(len(rOutList) + len(lOutList)) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + jName + ".keepInGpu);"
+    print >>fo, indent + jName + ".keepInGpu = (int *)alloc_mempool(sizeof(int) * " + str(len(rOutList) + len(lOutList)) + ");"
+    print >>fo, indent + "MEMPOOL_CHECK();"
 
     if keepInGpu == 0:
         print >>fo, indent + "for(int k=0; k<" + str(len(rOutList) + len(lOutList))  + "; k++)"
@@ -1201,12 +1239,16 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
     print >>fo, indent + jName + ".leftOutputAttrNum = " + str(len(lOutList)) + ";"
     print >>fo, indent + jName + ".rightOutputAttrNum = " + str(len(rOutList)) + ";"
 
-    print >>fo, indent + jName + ".leftOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputAttrType);"
-    print >>fo, indent + jName + ".leftOutputIndex = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputIndex);"
-    print >>fo, indent + jName + ".leftPos = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + jName + ".leftPos);"
+    # print >>fo, indent + jName + ".leftOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputAttrType);"
+    # print >>fo, indent + jName + ".leftOutputIndex = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + jName + ".leftOutputIndex);"
+    # print >>fo, indent + jName + ".leftPos = (int *)malloc(sizeof(int)*" + str(len(lOutList)) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + jName + ".leftPos);"
+    print >>fo, indent + jName + ".leftOutputAttrType = (int *)alloc_mempool(sizeof(int)*" + str(len(lOutList)) + ");"
+    print >>fo, indent + jName + ".leftOutputIndex = (int *)alloc_mempool(sizeof(int)*" + str(len(lOutList)) + ");"
+    print >>fo, indent + jName + ".leftPos = (int *)alloc_mempool(sizeof(int)*" + str(len(lOutList)) + ");"
+    print >>fo, indent + "MEMPOOL_CHECK();"
     print >>fo, indent + jName + ".tupleSize = 0;"
     for j in range(0,len(lOutList)):
         ctype = to_ctype(lAttrList[j].type)
@@ -1215,12 +1257,16 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         print >>fo, indent + jName + ".leftPos[" + str(j) + "] = " + str(lPosList[j]) + ";"
         print >>fo, indent + jName + ".tupleSize += " + leftName + "->attrSize[" + str(lOutList[j]) + "];"
 
-    print >>fo, indent + jName + ".rightOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + jName + ".rightOutputAttrType);"
-    print >>fo, indent + jName + ".rightOutputIndex = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + jName + ".rightOutputIndex);"
-    print >>fo, indent + jName + ".rightPos = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + jName + ".rightPos);"
+    # print >>fo, indent + jName + ".rightOutputAttrType = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + jName + ".rightOutputAttrType);"
+    # print >>fo, indent + jName + ".rightOutputIndex = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + jName + ".rightOutputIndex);"
+    # print >>fo, indent + jName + ".rightPos = (int *)malloc(sizeof(int)*" + str(len(rOutList)) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + jName + ".rightPos);"
+    print >>fo, indent + jName + ".rightOutputAttrType = (int *)alloc_mempool(sizeof(int)*" + str(len(rOutList)) + ");"
+    print >>fo, indent + jName + ".rightOutputIndex = (int *)alloc_mempool(sizeof(int)*" + str(len(rOutList)) + ");"
+    print >>fo, indent + jName + ".rightPos = (int *)alloc_mempool(sizeof(int)*" + str(len(rOutList)) + ");"
+    print >>fo, indent + "MEMPOOL_CHECK();"
     for j in range(0,len(rOutList)):
         ctype = to_ctype(rAttrList[j].type)
         print >>fo, indent + jName + ".rightOutputIndex[" + str(j) + "] = " + str(rOutList[j]) + ";"
@@ -1256,11 +1302,15 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         print >>fo, indent + relName + ".tn = joinRes;"
         print >>fo, indent + relName + ".hasWhere = 1;"
         print >>fo, indent + relName + ".whereAttrNum = " + str(len(expList)) + ";"
-        print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int) * " + str(len(expList)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
+        # print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int) * " + str(len(expList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
+        print >>fo, indent + relName + ".whereIndex = (int *)alloc_mempool(sizeof(int) * " + str(len(expList)) + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();"
         print >>fo, indent + relName + ".outputNum = " + str(len(selectList)) + ";"
-        print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
+        # print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
+        print >>fo, indent + relName + ".outputIndex = (int *)alloc_mempool(sizeof(int) * " + str(len(selectList)) + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();"
 
 
         for i in range(0, len(selectList)):
@@ -1299,13 +1349,17 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         else:
             print >>fo, indent + relName + ".keepInGpu = 1;"
 
-        print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
-        print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
+        # print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
+        # print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
+        print >>fo, indent + relName + ".filter = (struct whereCondition *)alloc_mempool(sizeof(struct whereCondition));"
+        print >>fo, indent + "MEMPOOL_CHECK();"
 
         print >>fo, indent + "(" + relName + ".filter)->nested = 0;"
         print >>fo, indent + "(" + relName + ".filter)->expNum = " + str(len(expList)) + ";"
-        print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *" + str(len(expList)) + ");"
-        print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
+        # print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *" + str(len(expList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
+        print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)alloc_mempool(sizeof(struct whereExp) *" + str(len(expList)) + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();"
 
         if jn.where_condition.where_condition_exp.func_name in ["AND","OR"]:
             print >>fo, indent + "(" + relName + ".filter)->andOr = " + jn.where_condition.where_condition_exp.func_name + ";"
@@ -1345,11 +1399,13 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
 
         if CODETYPE == 0:
-            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
+            # print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true);"
         else:
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
 
-        print >>fo, indent + "freeScan(&" + relName + ");\n"
+        # print >>fo, indent + "freeScan(&" + relName + ");\n"
+        print >>fo, indent + "freeScan(&" + relName + ", false);\n"
 
         if CODETYPE == 1:
             print >>fo, indent + "clFinish(context.queue);"
@@ -1390,8 +1446,10 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
     var_subqRes = "subqRes" + str(lvl)
     print >>fo, indent + "// Process the TableNode for " + tn.table_name.upper()
     print >>fo, indent + "struct tableNode *" + resName + ";"
-    print >>fo, indent + resName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
-    print >>fo, indent + "CHECK_POINTER("+ resName + ");"
+    # print >>fo, indent + resName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+    # print >>fo, indent + "CHECK_POINTER("+ resName + ");"
+    print >>fo, indent + resName + " = (struct tableNode *)alloc_mempool(sizeof(struct tableNode));"
+    print >>fo, indent + "MEMPOOL_CHECK();"
     print >>fo, indent + "initTable(" + resName + ");"
 
     print >>fo, indent + "{"
@@ -1412,23 +1470,36 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
         totalAttr = len(indexList)
         print >>fo, indent + "struct tableNode *" + tnName + ";"
-        print >>fo, indent + tnName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + ");"
+        # print >>fo, indent + tnName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+        # print >>fo, indent + "CHECK_POINTER(" + tnName + ");"
+        # print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
+        # print >>fo, indent + tnName + "->attrType = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrType);"
+        # print >>fo, indent + tnName + "->attrSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrSize);"
+        # print >>fo, indent + tnName + "->attrIndex = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrIndex);"
+        # print >>fo, indent + tnName + "->attrTotalSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrTotalSize);"
+        # print >>fo, indent + tnName + "->dataPos = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataPos);"
+        # print >>fo, indent + tnName + "->dataFormat = (int *) malloc(sizeof(int) * " + str(totalAttr) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataFormat);"
+        # print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
+
+        print >>fo, indent + tnName + " = (struct tableNode *)alloc_mempool(sizeof(struct tableNode));"
+        print >>fo, indent + "MEMPOOL_CHECK();"
         print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
-        print >>fo, indent + tnName + "->attrType = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrType);"
-        print >>fo, indent + tnName + "->attrSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrSize);"
-        print >>fo, indent + tnName + "->attrIndex = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrIndex);"
-        print >>fo, indent + tnName + "->attrTotalSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrTotalSize);"
-        print >>fo, indent + tnName + "->dataPos = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataPos);"
-        print >>fo, indent + tnName + "->dataFormat = (int *) malloc(sizeof(int) * " + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataFormat);"
-        print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
+        print >>fo, indent + tnName + "->attrType = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->attrSize = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->attrIndex = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->attrTotalSize = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->dataPos = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->dataFormat = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->content = (char **)alloc_mempool(sizeof(char *) * " + str(totalAttr) + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();\n"
+
 
         print >>fo, indent + "int tuple_size = 0;"
         for i in range(0, totalAttr):
@@ -1452,12 +1523,18 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         print >>fo, indent + tnName + "->colIdxNum = " + str(len(sortListPart)) + ";"
         print >>fo, indent + tnName + "->keepInGpuIdx = 1;"
         if len(sortListPart) > 0:
-            print >>fo, indent + tnName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortListPart)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + tnName + "->colIdx);"
-            print >>fo, indent + tnName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(sortListPart)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + tnName + "->contentIdx);"
-            print >>fo, indent + tnName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(sortListPart)) + ");"
-            print >>fo, indent + "CHECK_POINTER(" + tnName + "->posIdx);\n"
+            # print >>fo, indent + tnName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortListPart)) + ");"
+            # print >>fo, indent + "CHECK_POINTER(" + tnName + "->colIdx);"
+            # print >>fo, indent + tnName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(sortListPart)) + ");"
+            # print >>fo, indent + "CHECK_POINTER(" + tnName + "->contentIdx);"
+            # print >>fo, indent + tnName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(sortListPart)) + ");"
+            # print >>fo, indent + "CHECK_POINTER(" + tnName + "->posIdx);\n"
+
+            print >>fo, indent + tnName + "->colIdx = (int *)alloc_mempool(sizeof(int) * " + str(len(sortListPart)) + ");"
+            print >>fo, indent + tnName + "->contentIdx = (int **)alloc_mempool(sizeof(int *) * " + str(len(sortListPart)) + ");"
+            print >>fo, indent + tnName + "->posIdx = (int **)alloc_mempool(sizeof(int *) * " + str(len(sortListPart)) + ");"
+            print >>fo, indent + "MEMPOOL_CHECK();\n"
+
 
             for i in range(0, len(sortListPart)):
                 print >>fo, indent + tnName + "->colIdx[" + str(i) + "] = " + str( indexList.index(sortListPart[i]) ) + ";"
@@ -1489,11 +1566,15 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         print >>fo, indent + relName + ".tn = " + tnName + ";"
         print >>fo, indent + relName + ".hasWhere = 1;"
         print >>fo, indent + relName + ".whereAttrNum = " + str(whereLen) + ";"
-        print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int) * " + str(len(whereList)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
+        # print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int) * " + str(len(whereList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
+        print >>fo, indent + relName + ".whereIndex = (int *)alloc_mempool(sizeof(int) * " + str(len(whereList)) + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();"
         print >>fo, indent + relName + ".outputNum = " + str(len(selectList)) + ";"
-        print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
+        # print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
+        print >>fo, indent + relName + ".outputIndex = (int *)alloc_mempool(sizeof(int) * " + str(len(selectList)) + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();"
 
         for i in range(0, len(selectList)):
             colIndex = selectList[i].column_name
@@ -1509,13 +1590,17 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         else:
             print >>fo, indent + relName + ".keepInGpu = 1;"
 
-        print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
-        print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
+        # print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
+        # print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
+        print >>fo, indent + relName + ".filter = (struct whereCondition *)alloc_mempool(sizeof(struct whereCondition));"
+        print >>fo, indent + "MEMPOOL_CHECK();"
 
         print >>fo, indent + "(" + relName + ".filter)->nested = 0;"
         print >>fo, indent + "(" + relName + ".filter)->expNum = " + str(len(whereList)) + ";"
-        print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *" + str(len(whereList)) + ");"
-        print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
+        # print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *" + str(len(whereList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
+        print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)alloc_mempool(sizeof(struct whereExp) *" + str(len(whereList)) + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();"
 
         if tn.where_condition.where_condition_exp.func_name in ["AND","OR"]:
             print >>fo, indent + "(" + relName + ".filter)->andOr = " + tn.where_condition.where_condition_exp.func_name + ";"
@@ -1592,7 +1677,8 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + con_value + ");\n"
 
         if CODETYPE == 0:
-            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
+            # print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true);"
         else:
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
 
@@ -1601,7 +1687,8 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
             for i in range(0, totalAttr):
                 print >>fo, indent + tnName + "->content[" + str(i) + "] = NULL;"
 
-        print >>fo, indent + "freeScan(&" + relName + ");\n"
+        #print >>fo, indent + "freeScan(&" + relName + ");\n"
+        print >>fo, indent + "freeScan(&" + relName + ", false);\n"
         if CODETYPE == 1:
             print >>fo, indent + "clFinish(context.queue);"
 
@@ -1771,8 +1858,10 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
     print >>fo, indent + "// Load columns from the table " + t_name
 
     print >>fo, indent + "struct tableNode *" + resName + ";"
-    print >>fo, indent + resName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
-    print >>fo, indent + "CHECK_POINTER("+ resName + ");"
+    # print >>fo, indent + resName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+    # print >>fo, indent + "CHECK_POINTER("+ resName + ");"
+    print >>fo, indent + resName + " = (struct tableNode *)alloc_mempool(sizeof(struct tableNode));"
+    print >>fo, indent + "MEMPOOL_CHECK();"
     print >>fo, indent + "initTable(" + resName + ");"
 
     print >>fo, indent + "{"
@@ -1802,23 +1891,36 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
     print >>fo, indent + "for(int i = 0; i < blockTotal; i++){\n"
     indent += baseIndent
     print >>fo, indent + "// Table initialization"
-    print >>fo, indent + tnName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
-    print >>fo, indent + "CHECK_POINTER(" + tnName + ");"
+    # print >>fo, indent + tnName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+    # print >>fo, indent + "CHECK_POINTER(" + tnName + ");"
+    # print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
+    # print >>fo, indent + tnName + "->attrType = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrType);"
+    # print >>fo, indent + tnName + "->attrSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrSize);"
+    # print >>fo, indent + tnName + "->attrIndex = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrIndex);"
+    # print >>fo, indent + tnName + "->attrTotalSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrTotalSize);"
+    # print >>fo, indent + tnName + "->dataPos = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataPos);"
+    # print >>fo, indent + tnName + "->dataFormat = (int *) malloc(sizeof(int) * " + str(totalAttr) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataFormat);"
+    # print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
+    # print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
+
+    print >>fo, indent + tnName + " = (struct tableNode *)alloc_mempool(sizeof(struct tableNode));"
+    print >>fo, indent + "MEMPOOL_CHECK();"
     print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
-    print >>fo, indent + tnName + "->attrType = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrType);"
-    print >>fo, indent + tnName + "->attrSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrSize);"
-    print >>fo, indent + tnName + "->attrIndex = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrIndex);"
-    print >>fo, indent + tnName + "->attrTotalSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrTotalSize);"
-    print >>fo, indent + tnName + "->dataPos = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataPos);"
-    print >>fo, indent + tnName + "->dataFormat = (int *) malloc(sizeof(int) * " + str(totalAttr) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataFormat);"
-    print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
-    print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
+    print >>fo, indent + tnName + "->attrType = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + tnName + "->attrSize = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + tnName + "->attrIndex = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + tnName + "->attrTotalSize = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + tnName + "->dataPos = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + tnName + "->dataFormat = (int *)alloc_mempool(sizeof(int) * " + str(totalAttr) + ");"
+    print >>fo, indent + tnName + "->content = (char **)alloc_mempool(sizeof(char *) * " + str(totalAttr) + ");"
+    print >>fo, indent + "MEMPOOL_CHECK();\n"
+
 
     tupleSize = "0"
     for i in range(0, totalAttr):
@@ -1903,7 +2005,7 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
     print >>fo, indent + baseIndent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
     print >>fo, indent + baseIndent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
     print >>fo, indent + "}else{"
-    print >>fo, indent + baseIndent + "free(" + resName + ");"
+    # print >>fo, indent + baseIndent + "free(" + resName + ");"
     print >>fo, indent + baseIndent + resName + " = " + tnName + ";"
     print >>fo, indent + "}"
 
@@ -1913,19 +2015,24 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
     print >>fo, indent + "}"
 
     print >>fo, indent + resName + "->colIdxNum = " + str(len(sortList)) + ";"
-    print >>fo, indent + tnName + "->keepInGpuIdx = 1;" 
+    print >>fo, indent + tnName + "->keepInGpuIdx = 1;"
     if len(sortList) > 0:
-        print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortList)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
-        print >>fo, indent + resName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(sortList)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
-        print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(sortList)) + ");"
-        print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
+        # print >>fo, indent + resName + "->colIdx = (int *)malloc(sizeof(int) * " + str(len(sortList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + resName + "->colIdx);"
+        # print >>fo, indent + resName + "->contentIdx = (int **)malloc(sizeof(int *) * " + str(len(sortList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + resName + "->contentIdx);"
+        # print >>fo, indent + resName + "->posIdx = (int **)malloc(sizeof(int *) * " + str(len(sortList)) + ");"
+        # print >>fo, indent + "CHECK_POINTER(" + resName + "->posIdx);\n"
+        print >>fo, indent + resName + "->colIdx = (int *)alloc_mempool(sizeof(int) * " + str(len(sortList)) + ");"
+        print >>fo, indent + resName + "->contentIdx = (int **)alloc_mempool(sizeof(int *) * " + str(len(sortList)) + ");"
+        print >>fo, indent + resName + "->posIdx = (int **)alloc_mempool(sizeof(int *) * " + str(len(sortList)) + ");"
+        print >>fo, indent + "MEMPOOL_CHECK();\n"
+
 
         for i in range(0, len(sortList)):
             print >>fo, indent + resName + "->colIdx[" + str(i) + "] = " + str( indexList.index(sortList[i]) ) + ";"
             print >>fo, indent + "createIndex(" + resName + ", " + str(i) + ", " + str( indexList.index(sortList[i]) ) +", &pp);\n"
-            
+
 
     indent = indent[:indent.rfind(baseIndent)]
     print >>fo, indent + "}\n"
