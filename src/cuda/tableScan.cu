@@ -2042,7 +2042,7 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
 /*
  * Performs index scan
  */
- int indexScanInt (struct tableNode *tn, int columnPos, int idxPos, int filterValue, int* bitmapRes_d, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false){
+ int indexScanInt (struct tableNode *tn, int columnPos, int idxPos, int filterValue, int* bitmapRes_d, struct statistic *pp){
 
     //Check assumption (INT enum == 4)
     if (tn->attrType[columnPos] != 4 ){
@@ -2060,12 +2060,7 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
     //Get index
     int* contentIdx_d;
     if (tn->indexPos == MEM){
-        if (!use_gpu_mempool){
-            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
-        }else{
-            alloc_gpu_mempool((char **)&contentIdx_d, dataSize);
-            GPU_MEMPOOL_CHECK();
-        }        
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));      
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->contentIdx[idxPos], dataSize, cudaMemcpyHostToDevice));
     }else if (tn->indexPos == GPU){
         contentIdx_d = tn->contentIdx[idxPos]; 
@@ -2116,12 +2111,7 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
     //Get mapping pos
     int* posIdx_d;
     if (tn->indexPos == MEM){
-        if (!use_gpu_mempool){
-            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, dataSize));
-        }else{
-            alloc_gpu_mempool((char **)&posIdx_d, dataSize);
-            GPU_MEMPOOL_CHECK();
-        }
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, dataSize));
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(posIdx_d, tn->posIdx[idxPos], dataSize, cudaMemcpyHostToDevice));  
     }else if (tn->indexPos == GPU){
         posIdx_d = tn->posIdx[idxPos];
@@ -2439,7 +2429,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
                         //genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
 
                         //Index scan!
-                        res->tupleNum = indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp, use_mempool, use_gpu_mempool);
+                        res->tupleNum = indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
                         
                         /* DEBUG CODE - DO NOT REMOVE FOR NOW */
                         // int* originalRes = (int *)malloc(sizeof(int) * totalTupleNum);
