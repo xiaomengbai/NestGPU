@@ -2027,7 +2027,7 @@ __global__ void static unpack_rle(char * fact, char * rle, long tupleNum, int dN
 /*
  * Construct bitmap buffer based on the index results.
  */
-__global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l_offset, int h_offset, int tupleNum){
+__global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int l_offset, int h_offset, int tupleNum){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
     int pos;
@@ -2139,9 +2139,9 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
 
     //Construct bitmap filter result
     if (exists){
-        indeScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
+        indexScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
     }
-    
+
     //Return selected rows
     return countResult;
 }
@@ -2971,15 +2971,11 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     struct timespec startS5, endS5;
     clock_gettime(CLOCK_REALTIME,&startS5);
 
-    if (idxPos < 0){ 
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1, &gpuCount[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &gpuPsum[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));    
+    count = tmp1+tmp2;
+    res->tupleNum = count;
     
-        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1, &gpuCount[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
-        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &gpuPsum[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
-        
-        count = tmp1+tmp2;
-        res->tupleNum = count;
-    }
-
     //End timer for Step 5 - Count result (PreScan)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME, &endS5);
@@ -3061,9 +3057,9 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
             int format = sn->tn->dataFormat[index];
             if(format == UNCOMPRESSED){
                 if (sn->tn->attrSize[index] == sizeof(int))
-                    scan_int<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], totalTupleNum,gpuPsum,count, gpuFilter,result[i]);
+                    scan_int<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], totalTupleNum, gpuPsum, count, gpuFilter, result[i]);
                 else
-                    scan_other<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], totalTupleNum,gpuPsum,count, gpuFilter,result[i]);
+                    scan_other<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], totalTupleNum,gpuPsum, count, gpuFilter,result[i]);
 
             }else if(format == DICT){
                 struct dictHeader * dheader = (struct dictHeader *)sn->tn->content[index];
@@ -3249,7 +3245,6 @@ void createIndex (struct tableNode *tn, int idxPos, int columnPos, struct statis
         GPU_MEMPOOL_CHECK();
     }
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->content[columnPos], dataSize, cudaMemcpyHostToDevice));
-
 
     //Sort columns
     thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, posIdx_d); //thrust inplace sorting
