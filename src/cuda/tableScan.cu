@@ -2042,7 +2042,7 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
 /*
  * Performs index scan
  */
- int indexScanInt (struct tableNode *tn, int columnPos, int idxPos, int filterValue, int* bitmapRes_d, struct statistic *pp){
+ int indexScanInt (struct tableNode *tn, int columnPos, int idxPos, int filterValue, int* bitmapRes_d, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false){
 
     //Check assumption (INT enum == 4)
     if (tn->attrType[columnPos] != 4 ){
@@ -2060,7 +2060,12 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
     //Get index
     int* contentIdx_d;
     if (tn->indexPos == MEM){
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
+        if (!use_gpu_mempool){
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
+        }else{
+            alloc_gpu_mempool((char **)&contentIdx_d, dataSize);
+            GPU_MEMPOOL_CHECK();
+        }        
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->contentIdx[idxPos], dataSize, cudaMemcpyHostToDevice));
     }else if (tn->indexPos == GPU){
         contentIdx_d = tn->contentIdx[idxPos]; 
@@ -2111,7 +2116,12 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
     //Get mapping pos
     int* posIdx_d;
     if (tn->indexPos == MEM){
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, dataSize));
+        if (!use_gpu_mempool){
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, dataSize));
+        }else{
+            alloc_gpu_mempool((char **)&posIdx_d, dataSize);
+            GPU_MEMPOOL_CHECK();
+        }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(posIdx_d, tn->posIdx[idxPos], dataSize, cudaMemcpyHostToDevice));  
     }else if (tn->indexPos == GPU){
         posIdx_d = tn->posIdx[idxPos];
@@ -2131,7 +2141,7 @@ __global__ void static indeScanPackResult(int* posIdx_d, int* bitmapRes_d, int l
     if (exists){
         indeScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
     }
-
+    
     //Return selected rows
     return countResult;
 }
@@ -2429,7 +2439,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
                         //genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
 
                         //Index scan!
-                        res->tupleNum = indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
+                        res->tupleNum = indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp, use_mempool, use_gpu_mempool);
                         
                         /* DEBUG CODE - DO NOT REMOVE FOR NOW */
                         // int* originalRes = (int *)malloc(sizeof(int) * totalTupleNum);
@@ -2634,7 +2644,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
                 memcpy(where->exp[i].content, vec_addr_g, 32);
                 where->exp[i].dataPos = GPU;
             }
-
 
             CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[i], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
@@ -3159,6 +3168,127 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     pp->tableScanCount ++;
 
     return res;
+}
+
+/*
+ * Assign numbers 0 to inNum in a buffer using the device. 
+ */
+__global__ static void assign_index(int *col, long  inNum){
+    int stride = blockDim.x * gridDim.x;
+    int offset = blockIdx.x * blockDim.x + threadIdx.x;
+    //int global_index = threadIdx.x + blockDim.x * threadIdx.y;
+    for (int i = offset; i<inNum; i += stride){
+        col[i] = i;
+    }
+}
+
+/*
+ * Creates sorted index for the selected column
+ * 
+ * --Input--
+ * tn -> Table node
+ * idxPos -> Position of the indexed column in contentIdx and posIdx
+ * columnPos -> Column to be sorted
+ *
+ * --Output--
+ * tn.contentIdx (sorted values)
+ * tn.posIdx (position in the original table )
+ */
+void createIndex (struct tableNode *tn, int idxPos, int columnPos, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false){
+
+    //Start timer for build index
+    struct timespec startIdxBuildTime, endIdxBuildTime;
+    clock_gettime(CLOCK_REALTIME,&startIdxBuildTime);
+ 
+    //Check assumption (INT enum == 4)
+    if (tn->attrType[columnPos] != 4 ){
+        printf("[ERROR] Indexing is only supported for INT type!\n");
+        exit(-1);
+    }
+    if (tn->attrSize[columnPos] != sizeof(int)){
+        printf("[ERROR] Indexing is only supported for INT type (and size!)!\n");
+        exit(-1); 
+    }
+
+    //Define Grid and block size
+    dim3 grid(2048);
+    dim3 block(256);
+
+    //Get data size
+    long dataSize = sizeof(int) * tn->tupleNum;
+
+    //Allocate memory for the index (in host)
+    if (!use_mempool){
+        tn->contentIdx[idxPos] = (int *)malloc(dataSize); 
+        CHECK_POINTER(tn->contentIdx[idxPos]);
+        tn->posIdx[idxPos] = (int *)malloc(sizeof(int) * tn->tupleNum); 
+        CHECK_POINTER(tn->posIdx[idxPos]);
+    }else{ 
+        tn->contentIdx[idxPos] = (int *)alloc_mempool(dataSize); 
+        tn->posIdx[idxPos] = (int *)alloc_mempool(sizeof(int) * tn->tupleNum); 
+        MEMPOOL_CHECK();
+    }
+
+    //Assign index (in device)
+    int* posIdx_d;
+    if (!use_gpu_mempool){
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, sizeof(int) * tn->tupleNum));
+    }else{
+        alloc_gpu_mempool((char **)&posIdx_d, sizeof(int) * tn->tupleNum);
+        GPU_MEMPOOL_CHECK();
+    }
+    assign_index<<<grid,block>>>(posIdx_d, tn->tupleNum);
+
+
+    //Copy values (in device)
+    int* contentIdx_d;
+    if (!use_gpu_mempool){ 
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
+    }else{
+        alloc_gpu_mempool((char **)&contentIdx_d, dataSize);
+        GPU_MEMPOOL_CHECK();
+    }
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->content[columnPos], dataSize, cudaMemcpyHostToDevice));
+
+
+    //Sort columns
+    thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, posIdx_d); //thrust inplace sorting
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait for short (or SEGFAULT)
+
+    if (tn->keepInGpuIdx){
+
+        //De-allocate host memory
+        if (!use_mempool){
+            free(tn->contentIdx[idxPos]);
+            free(tn->posIdx[idxPos]);
+        }
+
+        //Store Device pointers
+        tn->contentIdx[idxPos] = contentIdx_d;
+        tn->posIdx[idxPos] = posIdx_d;
+
+        //Set position
+        tn->indexPos = GPU;
+
+    }else{
+        
+        //Copy index to host
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->contentIdx[idxPos], contentIdx_d, dataSize, cudaMemcpyDeviceToHost));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->posIdx[idxPos], posIdx_d, sizeof(int) * tn->tupleNum, cudaMemcpyDeviceToHost)); 
+    
+        //De-allocate device memory
+        if (!use_gpu_mempool){
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(posIdx_d));
+        }
+
+        //Set position
+        tn->indexPos = MEM;
+    }
+
+    //Stop and add 
+    clock_gettime(CLOCK_REALTIME, &endIdxBuildTime);
+    pp->buildIndexTotal += (endIdxBuildTime.tv_sec -  startIdxBuildTime.tv_sec)* BILLION + endIdxBuildTime.tv_nsec - startIdxBuildTime.tv_nsec;
 }
 
 
@@ -4087,103 +4217,4 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     pp->tableScanCount ++;
 
     return res;
-}
-
-/*
- * Assign numbers 0 to inNum in a buffer using the device. 
- */
-__global__ static void assign_index(int *col, long  inNum){
-    int stride = blockDim.x * gridDim.x;
-    int offset = blockIdx.x * blockDim.x + threadIdx.x;
-    //int global_index = threadIdx.x + blockDim.x * threadIdx.y;
-    for (int i = offset; i<inNum; i += stride){
-        col[i] = i;
-    }
-}
-
-/*
- * Creates sorted index for the selected column
- * 
- * --Input--
- * tn -> Table node
- * idxPos -> Position of the indexed column in contentIdx and posIdx
- * columnPos -> Column to be sorted
- *
- * --Output--
- * tn.contentIdx (sorted values)
- * tn.posIdx (position in the original table )
- */
-void createIndex (struct tableNode *tn, int idxPos, int columnPos, struct statistic *pp){
-
-    //Start timer for build index
-    struct timespec startIdxBuildTime, endIdxBuildTime;
-    clock_gettime(CLOCK_REALTIME,&startIdxBuildTime);
- 
-    //Check assumption (INT enum == 4)
-    if (tn->attrType[columnPos] != 4 ){
-        printf("[ERROR] Indexing is only supported for INT type!\n");
-        exit(-1);
-    }
-    if (tn->attrSize[columnPos] != sizeof(int)){
-        printf("[ERROR] Indexing is only supported for INT type (and size!)!\n");
-        exit(-1); 
-    }
-
-    //Define Grid and block size
-    dim3 grid(2048);
-    dim3 block(256);
-
-    //Get data size
-    long dataSize = sizeof(int) * tn->tupleNum;
-
-    //Allocate memory for the index (in host)
-    tn->contentIdx[idxPos] = (int *)malloc(dataSize); 
-    CHECK_POINTER(tn->contentIdx[idxPos]);
-    tn->posIdx[idxPos] = (int *)malloc(sizeof(int) * tn->tupleNum); 
-    CHECK_POINTER(tn->posIdx[idxPos]);
-
-    //Assign index (in device)
-    int* posIdx_d;
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&posIdx_d, sizeof(int) * tn->tupleNum));
-    assign_index<<<grid,block>>>(posIdx_d, tn->tupleNum);
-
-    //Copy values (in device)
-    int* contentIdx_d;
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&contentIdx_d, dataSize));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(contentIdx_d, tn->content[columnPos], dataSize, cudaMemcpyHostToDevice));
-
-    //Sort columns
-    thrust::sort_by_key(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, posIdx_d); //thrust inplace sorting
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait for short (or SEGFAULT)
-
-    if (tn->keepInGpuIdx){
-
-        //De-allocate host memory
-        free(tn->contentIdx[idxPos]);
-        free(tn->posIdx[idxPos]);
-
-        //Store Device pointers
-        tn->contentIdx[idxPos] = contentIdx_d;
-        tn->posIdx[idxPos] = posIdx_d;
-
-        //Set position
-        tn->indexPos = GPU;
-
-    }else{
-        
-        //Copy index to host
-        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->contentIdx[idxPos], contentIdx_d, dataSize, cudaMemcpyDeviceToHost));
-        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tn->posIdx[idxPos], posIdx_d, sizeof(int) * tn->tupleNum, cudaMemcpyDeviceToHost)); 
-    
-        //De-allocate device memory
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(contentIdx_d));
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(posIdx_d));
-
-        //Set position
-        tn->indexPos = MEM;
-    }
-
-    //Stop and add 
-    clock_gettime(CLOCK_REALTIME, &endIdxBuildTime);
-    pp->buildIndexTotal += (endIdxBuildTime.tv_sec -  startIdxBuildTime.tv_sec)* BILLION + endIdxBuildTime.tv_nsec - startIdxBuildTime.tv_nsec;
 }
