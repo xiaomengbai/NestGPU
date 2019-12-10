@@ -131,28 +131,28 @@ static void freeTable(struct tableNode * tn){
     free(tn->content);
     tn->content = NULL;
 
-    //Free indexed data
-    // if (tn->colIdxNum > 0){
-    //     free(tn->colIdx);
-    //     tn->colIdx = NULL;
-    //     if(tn->indexPos == MEM){
-    //         for(i=0;i<tn->colIdxNum;i++){ 
-    //             free(tn->contentIdx[i]);
-    //             free(tn->posIdx[i]);
-    //         }
-    //     }else if(tn->indexPos == GPU){
-    //         for(i=0;i<tn->colIdxNum;i++){ 
-    //             cudaFree(tn->contentIdx[i]);
-    //             cudaFree(tn->posIdx[i]);
-    //         }
-    //     }else{
-    //         printf("[ERROR] Index cannot be de-allocated. Needs to be on either on host or device!\n");
-    //         exit(-1);
-    //     }
-    //     tn->contentIdx = NULL;
-    //     tn->posIdx = NULL;
-    //     tn->colIdxNum = 0;
-    // }
+    //Free indexed data 
+    if (tn->colIdxNum > 0){
+        free(tn->colIdx);
+        tn->colIdx = NULL;
+        if(tn->indexPos == MEM){
+            for(i=0;i<tn->colIdxNum;i++){ 
+                free(tn->contentIdx[i]);
+                free(tn->posIdx[i]);
+            }
+        }else if(tn->indexPos == GPU){
+            for(i=0;i<tn->colIdxNum;i++){ 
+                cudaFree(tn->contentIdx[i]);
+                cudaFree(tn->posIdx[i]);
+            }
+        }else{
+            printf("[ERROR] Index cannot be de-allocated. Needs to be on either on host or device!\n");
+            exit(-1);
+        }
+        tn->contentIdx = NULL;
+        tn->posIdx = NULL;
+        tn->colIdxNum = 0;
+    }
 }
 
 static void freeScan(struct scanNode * rel, const bool free_flag = true){
