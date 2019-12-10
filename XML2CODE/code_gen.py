@@ -531,8 +531,7 @@ def generate_code(tree):
         #print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
         print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *, bool, bool);"
         #Indexing functions
-        #print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
-        print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *, bool, bool);"
+        print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         if joinType == 0:
             print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);"
         else:
@@ -2042,7 +2041,7 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
 
         for i in range(0, len(sortList)):
             print >>fo, indent + resName + "->colIdx[" + str(i) + "] = " + str( indexList.index(sortList[i]) ) + ";"
-            print >>fo, indent + "createIndex(" + resName + ", " + str(i) + ", " + str( indexList.index(sortList[i]) ) +", &pp, true, true);\n"
+            print >>fo, indent + "createIndex(" + resName + ", " + str(i) + ", " + str( indexList.index(sortList[i]) ) +", &pp);\n"
 
 
     indent = indent[:indent.rfind(baseIndent)]
