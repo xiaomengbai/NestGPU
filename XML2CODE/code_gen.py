@@ -529,7 +529,7 @@ def generate_code(tree):
         print >>fo, "#include \"../include/cpuCudaLib.h\""
         print >>fo, "#include \"../include/gpuCudaLib.h\""
         #print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
-        print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *, bool, bool);"
+        print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *, bool, bool, bool);"
         #Indexing functions
         print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         if joinType == 0:
@@ -636,7 +636,8 @@ def generate_code(tree):
     print >>fo, indent + "pp.deallocateBuffs_S03 = 0;\n"
 
     print >>fo, indent + "init_mempool();";
-    print >>fo, indent + "init_gpu_mempool();\n";
+    print >>fo, indent + "init_gpu_mempool(&gpu_inner_mp);";
+    print >>fo, indent + "init_gpu_mempool(&gpu_inter_mp);\n";
 
     generate_code_for_loading_tables(fo, indent, tree)
 
@@ -644,7 +645,8 @@ def generate_code(tree):
 
     print >>fo, "\n";
     print >>fo, indent + "destroy_mempool();";
-    print >>fo, indent + "destroy_gpu_mempool();\n";
+    print >>fo, indent + "destroy_gpu_mempool(&gpu_inner_mp);";
+    print >>fo, indent + "destroy_gpu_mempool(&gpu_inter_mp);\n";
 
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &end);"
     print >>fo, indent + "double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;"
@@ -790,7 +792,18 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     # print >>fo, indent + var_subqRes + " = (char *)alloc_mempool(" + (subq_res_size if constant_len_res else "sizeof(char *)") + " * " + tupleNum + ");"
     # print >>fo, indent + "MEMPOOL_CHECK();\n"
 
+    # traverse all query plan trees to find tables and their columns
+    columns_to_gpu = {}
+    __traverse_tree(sub_tree, generate_col_lists(columns_to_gpu))
+    for key, value in columns_to_gpu.items():
+        # should consider if a column is not pre-loaded
+        fullIndexList, fullColList = unmerge(loaded_table_list[key])
+        t_name = key.lower() + "Table"
+        for pair in value:
+            print >>fo, indent + "transferTableColumnToGPU(" + t_name + ", " + str(fullIndexList.index(pair[0])) + ");"
+
     print >>fo, indent + "char *free_pos = freepos_mempool();"
+    print >>fo, indent + "char *free_gpu_pos = freepos_gpu_mempool(&gpu_inter_mp);";
     print >>fo, indent + "for(int tupleid = 0; tupleid < " + tupleNum + "; tupleid++){"
 
     for col in pass_in_cols:
@@ -816,7 +829,8 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
         print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
         print >>fo, indent + baseIndent * 2 + "*(int *)(((char **)" + var_subqRes + ")[tupleid]) = mn.table->tupleNum;"
         print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
-    print >>fo, indent + baseIndent * 2 + "freeto_mempool(free_pos);";
+    print >>fo, indent + baseIndent * 2 + "freeto_mempool(free_pos);"
+    print >>fo, indent + baseIndent * 2 + "freeto_gpu_mempool(&gpu_inter_mp, free_gpu_pos);"
     print >>fo, indent + baseIndent + "}"
     print >>fo, indent + "}"
 
@@ -1403,10 +1417,10 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
             # print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
             print >>fo, indent + "// space required on GPU: gpuFilter + gpuPsum + gpuCount + gpuExp + padding"
             print >>fo, indent + "size_t new_size = joinRes->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
-            print >>fo, indent + "resize_gpu_mempool(new_size);"
-            print >>fo, indent + "char *origin_pos = freepos_gpu_mempool();"
-            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true);"
-            print >>fo, indent + "freeto_gpu_mempool(origin_pos);"
+            print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size);"
+            print >>fo, indent + "char *origin_pos = freepos_gpu_mempool(&gpu_inner_mp);"
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true" + (", true" if lvl > 0 else ", false") + ");"
+            print >>fo, indent + "freeto_gpu_mempool(&gpu_inner_mp, origin_pos);"
         else:
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
 
@@ -1686,10 +1700,10 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
             # print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
             print >>fo, indent + "// space required on GPU: gpuFilter + gpuPsum + gpuCount + gpuExp + padding"
             print >>fo, indent + "size_t new_size = " + tnName + "->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
-            print >>fo, indent + "resize_gpu_mempool(new_size);"
-            print >>fo, indent + "char *origin_pos = freepos_gpu_mempool();"
-            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true);"
-            print >>fo, indent + "freeto_gpu_mempool(origin_pos);"
+            print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size);"
+            print >>fo, indent + "char *origin_pos = freepos_gpu_mempool(&gpu_inner_mp);"
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true"  + (", true" if lvl > 0 else ", false") + ");"
+            print >>fo, indent + "freeto_gpu_mempool(&gpu_inner_mp, origin_pos);"
         else:
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
 
@@ -1727,34 +1741,60 @@ def __traverse_tree(node, func):
 
     func(node)
 
+# check if a TableNode has new columns to load
+def __gen_col_lists(tn, col_lists):
+    if not isinstance(tn, ystree.TableNode):
+        return
+
+    indexList = []
+    colList = []
+    generate_col_list(tn, indexList, colList)
+
+    if tn.table_name in col_lists:
+        oldList = col_lists[tn.table_name]
+        oldIndexList, oldColList = unmerge(oldList)
+        for i in range(0, len(indexList)):
+            if indexList[i] not in oldIndexList:
+                oldIndexList.append(indexList[i])
+                oldColList.append(colList[i])
+
+        indexList = oldIndexList
+        colList = oldColList
+
+    col_lists[tn.table_name] = merge(indexList, colList)
+
+def generate_col_lists(col_lists):
+    return lambda tn: __gen_col_lists(tn, col_lists)
+
+
 def generate_code_for_loading_tables(fo, indent, tree):
     global loaded_table_list
     global cols_to_index
 
     # check if a TableNode has new columns to load
-    def __gen_col_lists(tn, col_lists):
-        if not isinstance(tn, ystree.TableNode):
-            return
+    # def __gen_col_lists(tn, col_lists):
+    #     if not isinstance(tn, ystree.TableNode):
+    #         return
 
-        indexList = []
-        colList = []
-        generate_col_list(tn, indexList, colList)
+    #     indexList = []
+    #     colList = []
+    #     generate_col_list(tn, indexList, colList)
 
-        if tn.table_name in col_lists:
-            oldList = col_lists[tn.table_name]
-            oldIndexList, oldColList = unmerge(oldList)
-            for i in range(0, len(indexList)):
-                if indexList[i] not in oldIndexList:
-                    oldIndexList.append(indexList[i])
-                    oldColList.append(colList[i])
+    #     if tn.table_name in col_lists:
+    #         oldList = col_lists[tn.table_name]
+    #         oldIndexList, oldColList = unmerge(oldList)
+    #         for i in range(0, len(indexList)):
+    #             if indexList[i] not in oldIndexList:
+    #                 oldIndexList.append(indexList[i])
+    #                 oldColList.append(colList[i])
 
-            indexList = oldIndexList
-            colList = oldColList
+    #         indexList = oldIndexList
+    #         colList = oldColList
 
-        col_lists[tn.table_name] = merge(indexList, colList)
+    #     col_lists[tn.table_name] = merge(indexList, colList)
 
-    def generate_col_lists(col_lists):
-        return lambda tn: __gen_col_lists(tn, col_lists)
+    # def generate_col_lists(col_lists):
+    #     return lambda tn: __gen_col_lists(tn, col_lists)
 
     # traverse all query plan trees to find tables and their columns
     __traverse_tree(tree, generate_col_lists(loaded_table_list))

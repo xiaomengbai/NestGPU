@@ -2149,7 +2149,7 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
  *  A new table node
  */
 
-struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false){
+struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false, const bool results_in_mempool = false){
 
     //Start timer (total tableScan())
     struct timespec startTableScanTotal,endTableScanTotal;
@@ -2258,10 +2258,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuPsum,sizeof(int)*threadNum));
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuCount,sizeof(int)*threadNum));
     }else{
-        alloc_gpu_mempool((char **)&gpuFilter, sizeof(int) * totalTupleNum);
-        alloc_gpu_mempool((char **)&gpuPsum,   sizeof(int) * threadNum);
-        alloc_gpu_mempool((char **)&gpuCount,  sizeof(int) * threadNum);
-        GPU_MEMPOOL_CHECK();
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuFilter, sizeof(int) * totalTupleNum);
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuPsum,   sizeof(int) * threadNum);
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuCount,  sizeof(int) * threadNum);
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
     }
 
     assert(sn->hasWhere !=0);
@@ -2290,8 +2290,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
         if(!use_gpu_mempool){
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuExp, sizeof(struct whereExp)));
         }else{
-            alloc_gpu_mempool((char **)&gpuExp, sizeof(struct whereExp));
-            GPU_MEMPOOL_CHECK();
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuExp, sizeof(struct whereExp));
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
         }
         //CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
@@ -3028,14 +3028,19 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
             }
         }
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &result[i], count * sn->tn->attrSize[index]));
+        if(!results_in_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &result[i], count * sn->tn->attrSize[index]));
+        }else{
+            resize_gpu_mempool(&gpu_inter_mp, gpu_inter_mp.free - gpu_inter_mp.base + count * sn->tn->attrSize[index]);
+            alloc_gpu_mempool(&gpu_inter_mp, (char **) &result[i], count * sn->tn->attrSize[index]);
+        }
     }
 
     //End timer for Step 6 - Copy to device all other columns
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME, &endS6);
     pp->dataMemCopyOther_s6 += (endS6.tv_sec -  startS6.tv_sec)* BILLION + endS6.tv_nsec - startS6.tv_nsec;
-   
+
     //Start timer for Step 7 - Materialize result
     struct timespec startS7, endS7;
     clock_gettime(CLOCK_REALTIME,&startS7);

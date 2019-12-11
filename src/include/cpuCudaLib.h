@@ -277,4 +277,28 @@ static void printMaterializedTable(struct materializeNode &mn, char *table)
         printf("\n");
     }
 }
+
+static void transferTableColumnToGPU(struct tableNode *tn, int i)
+{
+    if(tn->totalAttr > i && (tn->dataPos[i] == MEM || tn->dataPos[i] == PINNED || tn->dataPos[i] == MMAP)) {
+        char *tmp;
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&tmp, tn->attrTotalSize[i]));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tmp, tn->content[i], tn->attrTotalSize[i], cudaMemcpyHostToDevice));
+        free(tn->content[i]);
+        tn->content[i] = tmp;
+        tn->dataPos[i] = GPU;
+    }
+}
+
+static void transferTableColumnToCPU(struct tableNode *tn, int i)
+{
+    if(tn->totalAttr > i && tn->dataPos[i] == GPU) {
+        char *tmp = (char *)malloc(tn->attrTotalSize[i]);
+        assert(tmp != NULL);
+        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tmp, tn->content[i], tn->attrTotalSize[i], cudaMemcpyDeviceToHost));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(tn->content[i]));
+        tn->content[i] = tmp;
+        tn->dataPos[i] = MEM;
+    }
+}
 #endif

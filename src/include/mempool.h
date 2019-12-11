@@ -9,15 +9,20 @@
 extern char * __mp_base__;
 extern char * __mp_free__;
 
-extern char * __gpu_mp_base__;
-extern char * __gpu_mp_free__;
-extern size_t __gpu_mp_size__;
+typedef struct _gpu_mempool {
+    char * base;
+    char * free;
+    size_t size;
+} gpu_mempool;
+
+extern gpu_mempool gpu_inner_mp;
+extern gpu_mempool gpu_inter_mp;
 
 #define MEMPOOL_SZ (128 * 1024 * 1024)
 #define GPU_MEMPOOL_SZ MEMPOOL_SZ
 
 #define MEMPOOL_CHECK() assert(__mp_free__ - __mp_base__ < MEMPOOL_SZ)
-#define GPU_MEMPOOL_CHECK() assert(__gpu_mp_free__ - __gpu_mp_base__ < __gpu_mp_size__)
+#define GPU_MEMPOOL_CHECK(mp) assert(mp.free - mp.base < mp.size)
 
 static inline void init_mempool()
 {
@@ -49,45 +54,45 @@ static inline void destroy_mempool()
 }
 
 
-static inline void init_gpu_mempool(size_t pool_size = GPU_MEMPOOL_SZ)
+static inline void init_gpu_mempool(gpu_mempool *pool, size_t pool_size = GPU_MEMPOOL_SZ)
 {
-    CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&__gpu_mp_base__, pool_size) );
-    __gpu_mp_free__ = __gpu_mp_base__;
-    __gpu_mp_size__ = pool_size;
+    CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&(pool->base), pool_size) );
+    pool->free = pool->base;
+    pool->size = pool_size;
 }
 
-static inline void resize_gpu_mempool(size_t new_size)
+static inline void resize_gpu_mempool(gpu_mempool *pool, size_t new_size)
 {
-    if(new_size <= __gpu_mp_size__)
+    if(new_size <= pool->size)
         return;
     char *tmp;
     CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&tmp, new_size) );
-    CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(tmp, __gpu_mp_base__, __gpu_mp_free__ - __gpu_mp_base__, cudaMemcpyDeviceToDevice) );
-    CUDA_SAFE_CALL_NO_SYNC( cudaFree(__gpu_mp_base__) );
-    __gpu_mp_free__ = tmp + (__gpu_mp_free__ - __gpu_mp_base__);
-    __gpu_mp_base__ = tmp;
-    __gpu_mp_size__ = new_size;
+    CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(tmp, pool->base, pool->free - pool->base, cudaMemcpyDeviceToDevice) );
+    CUDA_SAFE_CALL_NO_SYNC( cudaFree(pool->free) );
+    pool->free = tmp + (pool->free - pool->base);
+    pool->base = tmp;
+    pool->size = new_size;
 }
 
-static inline void destroy_gpu_mempool()
+static inline void destroy_gpu_mempool(gpu_mempool *pool)
 {
-    CUDA_SAFE_CALL_NO_SYNC( cudaFree(__gpu_mp_base__) );
+    CUDA_SAFE_CALL_NO_SYNC( cudaFree(pool->base) );
 }
 
-static inline void alloc_gpu_mempool(char **addr, size_t size)
+static inline void alloc_gpu_mempool(gpu_mempool *pool, char **addr, size_t size)
 {
-    *addr = __gpu_mp_free__;
-    __gpu_mp_free__ = __gpu_mp_free__ + size;
+    *addr = pool->free;
+    pool->free = pool->free + size;
+
 }
 
-static inline char *freepos_gpu_mempool()
+static inline char *freepos_gpu_mempool(gpu_mempool *pool)
 {
-    return __gpu_mp_free__;
+    return pool->base;
 }
 
-static inline void freeto_gpu_mempool(char *reset)
+static inline void freeto_gpu_mempool(gpu_mempool *pool, char *reset)
 {
-    __gpu_mp_free__ = reset;
+    pool->free = reset;
 }
-
 #endif
