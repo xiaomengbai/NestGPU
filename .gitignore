@@ -60,3 +60,7 @@ Thumbs.db
 *.d
 *.d.*
 *~
+
+test/tpch_psql/load_data/*.tbl
+test/tpch_psql/postgresql*
+test/tpch_psql/*.output
