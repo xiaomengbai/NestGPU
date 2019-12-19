@@ -2054,6 +2054,11 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
         exit(-1); 
     }
 
+
+    //Start timer for Index Step 1 - Get index position 
+    struct timespec startInxS1, endInxS1;
+    clock_gettime(CLOCK_REALTIME,&startInxS1);
+
     //Get data size
     long dataSize = tn->tupleNum * tn->attrSize[columnPos];
 
@@ -2068,6 +2073,12 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
         printf("[ERROR] Index can be on either on host or device!\n");
         exit(-1);
     }
+
+    //Stop timer for Index Step 1 - Get index position 
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endInxS1);
+    pp->getIndexPos_idxS1 += (endInxS1.tv_sec - startInxS1.tv_sec)* BILLION + endInxS1.tv_nsec - startInxS1.tv_nsec;    
+
     
     // Implemenation with 2 binary searches
     // ----------------------------------
@@ -2084,11 +2095,26 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
 
     // Implemenation with 1 binary search
     // ---------------------------------- 
+    
+    //Start timer for Index Step 2 - Get range
+    struct timespec startInxS2, endInxS2;
+    clock_gettime(CLOCK_REALTIME,&startInxS2);
+    
     //Get range
     thrust::pair<int *, int *> range; 
     range = thrust::equal_range(thrust::device, contentIdx_d, contentIdx_d + tn->tupleNum, filterValue);     
     int l_offset = -1; 
     int h_offset = -1;
+
+    //Stop timer for Index Step 2 - Get range
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endInxS2);
+    pp->getRange_idxS2 += (endInxS2.tv_sec - startInxS2.tv_sec)* BILLION + endInxS2.tv_nsec - startInxS2.tv_nsec;    
+
+
+    //Start timer for Index Step 3 - Convert mem addrs to elements
+    struct timespec startInxS3, endInxS3;
+    clock_gettime(CLOCK_REALTIME,&startInxS3);
 
     //Check if value exists
     bool exists = false; 
@@ -2103,10 +2129,21 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
         l_offset = (int) (range.first - contentIdx_d); 
         h_offset = (int) (range.second - contentIdx_d) - 1;
     }  
-
+    
     //Calculate number of selected nodes
     int countResult = (h_offset + 1) - l_offset ;
+    
+    //Stop timer for Index Step 3 - Convert mem addrs to elements
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endInxS3);
+    pp->convertMemToElement_idxS3 += (endInxS3.tv_sec - startInxS3.tv_sec)* BILLION + endInxS3.tv_nsec - startInxS3.tv_nsec;    
+        
     // ----------------------------------
+
+
+    //Start timer for Index Step 4 - Get mapping position 
+    struct timespec startInxS4, endInxS4;
+    clock_gettime(CLOCK_REALTIME,&startInxS4);
 
     //Get mapping pos
     int* posIdx_d;
@@ -2120,17 +2157,41 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
         exit(-1);
     }
 
-    //Define Grid and block size
-    dim3 grid(2048);
-    dim3 block(256);
+    //Stop timer for Index Step 4 - Get mapping position 
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endInxS4);
+    pp->getMapping_idxS4 += (endInxS4.tv_sec - startInxS4.tv_sec)* BILLION + endInxS4.tv_nsec - startInxS4.tv_nsec;    
+
+
+    //Start timer for Index Step 5 - Set bitmap to zero
+    struct timespec startInxS5, endInxS5;
+    clock_gettime(CLOCK_REALTIME,&startInxS5);
 
     //Set everything to false
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(bitmapRes_d, 0, sizeof(int)* tn->tupleNum)); 
+
+    //Stop timer for Index Step 5 - Set bitmap to zero
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endInxS5);
+    pp->setBitmapZeros_idxS5 += (endInxS5.tv_sec - startInxS5.tv_sec)* BILLION + endInxS5.tv_nsec - startInxS5.tv_nsec;    
+
+    //Start timer for Index Step 6 - Build bitmap
+    struct timespec startInxS6, endInxS6;
+    clock_gettime(CLOCK_REALTIME,&startInxS6);
+
+    //Define Grid and block size
+    dim3 grid(2048);
+    dim3 block(256);  
 
     //Construct bitmap filter result
     if (exists){
         indexScanPackResult<<<grid,block>>>(posIdx_d, bitmapRes_d, l_offset, h_offset, tn->tupleNum);
     }
+
+    //Stop timer for Index Step 6 - Build bitmap
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endInxS6);
+    pp->buildBitmap_idxS6 += (endInxS6.tv_sec - startInxS6.tv_sec)* BILLION + endInxS6.tv_nsec - startInxS6.tv_nsec;    
 
     //Return selected rows
     return countResult;
