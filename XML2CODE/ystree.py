@@ -3181,16 +3181,17 @@ def __gen_join_key__(exp,key_bool):
 
         if len(exp_list) == 0:
             return None
-        elif len(exp_list) == 1:
+        # elif len(exp_list) == 1:
+        else:
             return_exp = copy.deepcopy(exp_list[0])
             __remove_para__(exp_list[0])
             return return_exp
 
-        else:
-            for x in exp_list:
-                __remove_para__(x)
-            return_exp = YFuncExp("AND",exp_list)
-            return return_exp
+        # else:
+        #     for x in exp_list:
+        #         __remove_para__(x)
+        #     return_exp = YFuncExp("AND",exp_list)
+        #     return return_exp
 
     else:
         if exp.func_name != "EQ":
@@ -3475,6 +3476,8 @@ def predicate_pushdown(tree):
 
             if tree.join_explicit is False:
                 join_exp = __gen_join_key__(exp,True)
+                if exp.compare(join_exp):
+                    tree.where_condition = None
                 if join_exp is not None:
                     if tree.join_condition is None:
                         tree.join_condition = FirstStepWhereCondition(None)
