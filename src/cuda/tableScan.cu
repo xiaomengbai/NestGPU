@@ -3007,8 +3007,28 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     * Count the number of tuples that meets the predicats for each thread
     * and calculate the prefix sum.
     */
+    
+    //Start timer for Count Step 4.1 - Count selected rows kernels
+    struct timespec startCountS1, endCountS1;
+    clock_gettime(CLOCK_REALTIME,&startCountS1);
+
     countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
+
+    //Stop timer for Count Step 4.1 - Count selected rows kernels
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endCountS1);
+    pp->countScanKernel_countS1 += (endCountS1.tv_sec - startCountS1.tv_sec)* BILLION + endCountS1.tv_nsec - startCountS1.tv_nsec;
+
+    //Start timer for Count Step 4.2 - scanImpl time
+    struct timespec startCountS2, endCountS2;
+    clock_gettime(CLOCK_REALTIME,&startCountS2);
+    
     scanImpl(gpuCount,threadNum, gpuPsum, pp);
+
+    //Stop timer for Count Step 4.2 - scanImpl time
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endCountS2);
+    pp->scanImpl_countS2 += (endCountS2.tv_sec - startCountS2.tv_sec)* BILLION + endCountS2.tv_nsec - startCountS2.tv_nsec;
 
     //Stop timer for Step 4 - Count result (PreScan)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing

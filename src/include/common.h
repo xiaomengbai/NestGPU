@@ -307,23 +307,29 @@ struct statistic{
     // Other - 02 (deallocate bufs) Time on other stuff inside tableScan()
     double deallocateBuffs_S03;
 
-    // Index Step 1 - Get index position 
+    // Index Step 3.1 - Get index position 
     double getIndexPos_idxS1;
 
-    // Index Step 2 - Get range
+    // Index Step 3.2 - Get range
     double getRange_idxS2;
 
-    // Index Step 3 - Convert mem addrs to elements
+    // Index Step 3.3 - Convert mem addrs to elements
     double convertMemToElement_idxS3;
 
-    // Index Step 4 - Get mapping position 
+    // Index Step 3.4 - Get mapping position 
     double getMapping_idxS4;
 
-    // Index Step 5 - Set bitmap to zero
+    // Index Step 3.5 - Set bitmap to zero
     double setBitmapZeros_idxS5;
 
-    // Index Step 6 - Build bitmap
+    // Index Step 3.6 - Build bitmap
     double buildBitmap_idxS6;
+
+    // Count Step 4.1 - Count selected rows kernel
+    double countScanKernel_countS1;
+
+    // Count Step 4.2 - scanImpl time
+    double scanImpl_countS2;
 
 };
 
