@@ -641,7 +641,13 @@ def generate_code(tree):
     print >>fo, indent + "pp.setBitmapZeros_idxS5 = 0;"
     print >>fo, indent + "pp.buildBitmap_idxS6 = 0;"
     print >>fo, indent + "pp.countScanKernel_countS1 = 0;"
-    print >>fo, indent + "pp.scanImpl_countS2 = 0;\n"
+    print >>fo, indent + "pp.scanImpl_countS2 = 0;" 
+    print >>fo, indent + "pp.preallocBlockSums_scanImpl_S1 = 0;"
+    print >>fo, indent + "pp.prescanArray_scanImpl_S2 = 0;"
+    print >>fo, indent + "pp.deallocBlockSums_scanImpl_S3 = 0;"
+    print >>fo, indent + "pp.setVar_prescan_S1 = 0;"
+    print >>fo, indent + "pp.preScanKernel_prescan_S2 = 0;"
+    print >>fo, indent + "pp.uniformAddKernel_prescan_S3 = 0;\n"
 
     print >>fo, indent + "init_mempool();";
     print >>fo, indent + "init_gpu_mempool(&gpu_inner_mp);";
@@ -681,6 +687,12 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"Step 4 - CountRes(PreScan)                    : %lf\\n\", pp.preScanTotal_s4/(1000*1000));"
     print >>fo, indent + "printf(\"PreScan Step 4.1 - Count selected rows kernel : %lf\\n\", pp.countScanKernel_countS1/(1000*1000));"
     print >>fo, indent + "printf(\"PreScan Step 4.2 - scanImpl time              : %lf\\n\", pp.scanImpl_countS2/(1000*1000));"
+    print >>fo, indent + "printf(\"scanImpl Step 4.2.1 - preallocBlockSums time  : %lf\\n\", pp.preallocBlockSums_scanImpl_S1/(1000*1000));"
+    print >>fo, indent + "printf(\"scanImpl Step 4.2.2 - prescanArray time       : %lf\\n\", pp.prescanArray_scanImpl_S2/(1000*1000));"
+    print >>fo, indent + "printf(\"scanImpl Step 4.2.3 - deallocBlockSums time   : %lf\\n\", pp.deallocBlockSums_scanImpl_S3/(1000*1000));"
+    print >>fo, indent + "printf(\"prescan Step 4.2.3.1 - set variables time     : %lf\\n\", pp.setVar_prescan_S1/(1000*1000));"
+    print >>fo, indent + "printf(\"prescan Step 4.2.3.2 - prescan Kernel time    : %lf\\n\", pp.preScanKernel_prescan_S2/(1000*1000));"
+    print >>fo, indent + "printf(\"prescan Step 4.2.3.3 - uniformAdd Kernel time : %lf\\n\", pp.uniformAddKernel_prescan_S3/(1000*1000));"
     print >>fo, indent + "printf(\"Step 5 - memReturn countRes                   : %lf\\n\", pp.preScanResultMemCopy_s5/(1000*1000));"
     print >>fo, indent + "printf(\"Step 6 - Copy rest of columns                 : %lf\\n\", pp.dataMemCopyOther_s6/(1000*1000));"
     print >>fo, indent + "printf(\"Step 7 - Materialize result                   : %lf\\n\", pp.materializeResult_s7/(1000*1000));"

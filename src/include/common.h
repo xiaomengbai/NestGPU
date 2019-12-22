@@ -331,6 +331,23 @@ struct statistic{
     // Count Step 4.2 - scanImpl time
     double scanImpl_countS2;
 
+    // scanImpl Step 4.2.1 - preallocBlockSums time
+    double preallocBlockSums_scanImpl_S1;
+
+    // scanImpl Step 4.2.2 - prescanArray time
+    double prescanArray_scanImpl_S2;
+
+    // scanImpl Step 4.2.3 - deallocBlockSums time
+    double deallocBlockSums_scanImpl_S3;
+
+    // prescan Step 4.2.3.1 - set variables time
+    double setVar_prescan_S1;
+
+    // prescan Step 4.2.3.2 - prescan Kernel time
+    double preScanKernel_prescan_S2;
+
+    // prescan Step 4.2.3.3 - uniformAdd Kernel time
+    double uniformAddKernel_prescan_S3;
 };
 
 

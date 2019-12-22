@@ -32,6 +32,7 @@
 #include "scanLargeArray_kernel.cu"
 #include <assert.h>
 #include "../include/common.h"
+#include "../include/gpuCudaLib.h"
 
 static inline bool 
 isPowerOfTwo(int n)
@@ -110,6 +111,12 @@ static void deallocBlockSums()
 
 static void prescanArrayRecursive(int *outArray, const int *inArray, int numElements, int level, struct statistic *pp)
 {
+
+
+    //Start timer for prescan Step 4.2.3.1 - set variables time
+	struct timespec startPreScanS1, endPreScanS1;
+	clock_gettime(CLOCK_REALTIME,&startPreScanS1);
+        
     unsigned int blockSize = BLOCK_SIZE; 
     unsigned int numBlocks = max(1, (int)ceil((int)numElements / (2.f * blockSize)));
     unsigned int numThreads;
@@ -145,12 +152,25 @@ static void prescanArrayRecursive(int *outArray, const int *inArray, int numElem
     dim3  grid(max(1, numBlocks - np2LastBlock), 1, 1); 
     dim3  threads(numThreads, 1, 1);
 
+
+	//Stop timer for prescan Step 4.2.3.1 - set variables time
+	CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+	clock_gettime(CLOCK_REALTIME, &endPreScanS1);
+	pp->setVar_prescan_S1 += (endPreScanS1.tv_sec - startPreScanS1.tv_sec)* BILLION + endPreScanS1.tv_nsec - startPreScanS1.tv_nsec;
+        
+
     if (numBlocks > 1)
     {
+
+        //Start timer for prescan Step 4.2.3.2 - prescan Kernel time
+	    struct timespec startPreScanS2, endPreScanS2;
+	    clock_gettime(CLOCK_REALTIME,&startPreScanS2);
+
         prescan<true, false><<< grid, threads, sharedMemSize >>>(outArray, 
                                                                  inArray, 
                                                                  g_scanBlockSums[level],
                                                                  numThreads * 2, 0, 0);
+
         if (np2LastBlock)
         {
             prescan<true, true><<< 1, numThreadsLastBlock, sharedMemLastBlock >>>
@@ -158,12 +178,22 @@ static void prescanArrayRecursive(int *outArray, const int *inArray, int numElem
                  numBlocks - 1, numElements - numEltsLastBlock);
         }
 
-
+	    //Stop timer for prescan Step 4.2.3.2 - prescan Kernel time
+	    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+	    clock_gettime(CLOCK_REALTIME, &endPreScanS2);
+	    pp->preScanKernel_prescan_S2 += (endPreScanS2.tv_sec - startPreScanS2.tv_sec)* BILLION + endPreScanS2.tv_nsec - startPreScanS2.tv_nsec;
+        
+        
         prescanArrayRecursive(g_scanBlockSums[level], 
                               g_scanBlockSums[level], 
                               numBlocks, 
                               level+1, pp);
 
+
+        //Start timer for prescan Step 4.2.3.3 - uniformAdd Kernel time
+	    struct timespec startPreScanS3, endPreScanS3;
+	    clock_gettime(CLOCK_REALTIME,&startPreScanS3);     
+                              
         uniformAdd<<< grid, threads >>>(outArray, 
                                         g_scanBlockSums[level], 
                                         numElements - numEltsLastBlock, 
@@ -176,6 +206,12 @@ static void prescanArrayRecursive(int *outArray, const int *inArray, int numElem
                                                      numBlocks - 1, 
                                                      numElements - numEltsLastBlock, numElements);
         }
+
+	    //Stop timer for prescan Step 4.2.3.3 - uniformAdd Kernel time
+	    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+	    clock_gettime(CLOCK_REALTIME, &endPreScanS3);
+	    pp->uniformAddKernel_prescan_S3 += (endPreScanS3.tv_sec - startPreScanS3.tv_sec)* BILLION + endPreScanS3.tv_nsec - startPreScanS3.tv_nsec;
+        
     }
     else if (isPowerOfTwo(numElements))
     {
