@@ -615,10 +615,12 @@ def generate_code(tree):
     print >>fo, indent + "struct timespec start, end;"
     print >>fo, indent + "struct timespec diskStart, diskEnd;"
     print >>fo, indent + "double diskTotal = 0;"
-
+    
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&start);"
     print >>fo, indent + "struct statistic pp;"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
+
+    #For tableScan profiling
     print >>fo, indent + "pp.buildIndexTotal = 0;"
     print >>fo, indent + "pp.tableScanTotal = 0;"
     print >>fo, indent + "pp.tableScanCount = 0;"
@@ -649,6 +651,15 @@ def generate_code(tree):
     print >>fo, indent + "pp.preScanKernel_prescan_S2 = 0;"
     print >>fo, indent + "pp.uniformAddKernel_prescan_S3 = 0;\n"
 
+    #For join profiling
+    print >>fo, indent + "pp.join_totalTime = 0;"
+    print >>fo, indent + "pp.join_callTimes = 0;"
+    print >>fo, indent + "pp.joinProf_step1_allocateMem = 0;"
+    print >>fo, indent + "pp.joinProf_step2_buildHash = 0;"
+    print >>fo, indent + "pp.joinProf_step3_join = 0;"
+    print >>fo, indent + "pp.joinProf_step4_deallocate = 0;\n"
+    
+    #Create mem pool
     print >>fo, indent + "init_mempool();";
     print >>fo, indent + "init_gpu_mempool(&gpu_inner_mp);";
     print >>fo, indent + "init_gpu_mempool(&gpu_inter_mp);\n";
@@ -670,8 +681,8 @@ def generate_code(tree):
 
     print >>fo, indent + "printf(\"\\n\");"
     print >>fo, indent + "printf(\"<--Build index time-->         : %lf\\n\", pp.buildIndexTotal/(1000*1000));\n"
-
     print >>fo, indent + "printf(\"\\n\");"
+
     print >>fo, indent + "printf(\"<---TableScan()--->\\n\");"
     print >>fo, indent + "printf(\"Total time      : %lf\\n\", pp.tableScanTotal/(1000*1000));"
     print >>fo, indent + "printf(\"Calls           : %d\\n\", pp.tableScanCount);\n"
@@ -702,6 +713,17 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"Other 3 - Deallocate buffers                  : %lf\\n\", pp.deallocateBuffs_S03/(1000*1000));"
     print >>fo, indent + "printf(\"<----------------->\");"
     print >>fo, indent + "printf(\"\\n\");"
+
+    print >>fo, indent + "printf(\"<---HashJoin()--->\\n\");"
+    print >>fo, indent + "printf(\"Total time                                        : %lf\\n\", pp.join_totalTime/(1000*1000));"
+    print >>fo, indent + "printf(\"Calls                                             : %d\\n\", pp.join_callTimes);\n"
+    print >>fo, indent + "printf(\"Step 1 - Allocate memory for intermediate results : %lf\\n\", pp.joinProf_step1_allocateMem/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 2 - Build hashTable                          : %lf\\n\", pp.joinProf_step2_buildHash/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 3 - Join                                     : %lf\\n\", pp.joinProf_step3_join/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 4 - De-allocate memory                       : %lf\\n\", pp.joinProf_step4_deallocate/(1000*1000));"
+    print >>fo, indent + "printf(\"<----------------->\");"
+    print >>fo, indent + "printf(\"\\n\");"
+
     print >>fo, indent + "printf(\"Total Time: %lf\\n\", timeE/(1000*1000));"
     print >>fo, "}\n"
 

@@ -266,6 +266,8 @@ struct statistic{
     float pcie;
     float total;
     
+    // ========= tableScan() =========
+
     // Indexing profiling
     double buildIndexTotal;
     
@@ -348,6 +350,28 @@ struct statistic{
 
     // prescan Step 4.2.3.3 - uniformAdd Kernel time
     double uniformAddKernel_prescan_S3;
+
+    // ===============================
+
+
+    // ========= hashJoin() =========
+
+    double join_totalTime;
+    int join_callTimes;
+
+    // Step 1 - Allocate memory for intermediate results
+    double joinProf_step1_allocateMem;
+
+    // Step 2 - Build hashTable
+    double joinProf_step2_buildHash;
+
+    // Step 3 - Join
+    double joinProf_step3_join;
+
+    // Step 4 - De-allocate memory
+    double joinProf_step4_deallocate;
+
+    // ===============================
 };
 
 
