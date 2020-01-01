@@ -4,7 +4,7 @@ echo "--------------CUDA VARIABLES---------------"
 
 #CUDA base path
 #export PROJECT_CUDA_PATH="/usr/local/cuda/" #Global v9
-export PROJECT_CUDA_PATH="/mnt/sda2/sofoklis/cuda_drivers/cuda-10.0" #My Cuda drivers V10
+export PROJECT_CUDA_PATH="/opt/cuda/10.0" #My Cuda drivers V10
 echo "Env Variable :PROJECT_CUDA_PATH"       
 echo "Path         :$PROJECT_CUDA_PATH"
 
