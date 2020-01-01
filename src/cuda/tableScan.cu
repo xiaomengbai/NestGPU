@@ -597,6 +597,18 @@ __global__ static void genScanFilter_init_int_eq(char *col, long tupleNum, int w
     }
 }
 
+__global__ static void genScanFilter_init_int_eq_idx(char *col, int *idx, int *st, int *ed, int where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con;
+
+    for(long i = *st + tid; i < *ed; i += stride){
+        con = ((int *)col)[idx[i]] == where;
+        filter[idx[i]] = con;
+    }
+
+}
+
 __global__ static void genScanFilter_init_int_neq(char *col, long tupleNum, int where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1938,6 +1950,19 @@ __global__ static void countScanNum(int *filter, long tupleNum, int * count){
 
 }
 
+__global__ static void countScanNum_idx(int *filter, int *index, int *st, int *ed, int *count)
+{
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int localCount = 0;
+
+    for(long i = tid + *st; i< *ed; i += stride){
+        localCount += filter[index[i]];
+    }
+
+    count[tid] = localCount;
+}
+
 /*
  * scan_dict_other: generate the result for dictionary-compressed column.
  */
@@ -1992,6 +2017,20 @@ __global__ static void scan_other(char *col, int colSize, long tupleNum, int *ps
     }
 }
 
+__global__ static void scan_other_idx(char *col, int colSize, int *idx, int *st, int *ed, int *psum, long resultNum, int * filter, char * result){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int pos = psum[tid]  * colSize;
+
+    for(long i = tid + *st; i < *ed;i+=stride){
+
+        if(filter[idx[i]] == 1){
+            memcpy(result+pos,col+idx[i]*colSize,colSize);
+            pos += colSize;
+        }
+    }
+}
+
 
 __global__ static void scan_int(char *col, int colSize, long tupleNum, int *psum, long resultNum, int * filter, char * result){
     int stride = blockDim.x * gridDim.x;
@@ -2002,6 +2041,19 @@ __global__ static void scan_int(char *col, int colSize, long tupleNum, int *psum
 
         if(filter[i] == 1){
             ((int*)result)[localCount] = ((int*)col)[i];
+            localCount ++;
+        }
+    }
+}
+
+__global__ static void scan_int_idx(char *col, int colSize, int *idx, int *st, int *ed, int *psum, long resultNum, int * filter, char * result){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int localCount = psum[tid] ;
+
+    for(long i = tid + *st; i < *ed;i+=stride){
+        if(filter[idx[i]] == 1){
+            ((int*)result)[localCount] = ((int*)col)[idx[i]];
             localCount ++;
         }
     }
@@ -2210,7 +2262,27 @@ __global__ void static indexScanPackResult(int* posIdx_d, int* bitmapRes_d, int 
  *  A new table node
  */
 
-struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false, const bool results_in_mempool = false){
+
+__global__ static void pr_int_array(int *arr, int size)
+{
+    int stride = blockDim.x * gridDim.x;
+    int offset = blockIdx.x * blockDim.x + threadIdx.x;
+    for(int i = offset; i < size; i += stride)
+        printf("%d, ", arr[i]);
+    printf("\n");
+}
+
+__global__ static void set_zero(int *filter, long  inNum){
+    int stride = blockDim.x * gridDim.x;
+    int offset = blockIdx.x * blockDim.x + threadIdx.x;
+    //int global_index = threadIdx.x + blockDim.x * threadIdx.y;
+    for (int i = offset; i<inNum; i += stride){
+        filter[i] = 0;
+    }
+}
+
+
+struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false, const bool results_in_mempool = false, int *idx = NULL, int *st = NULL, int *ed = NULL){
 
     //Start timer (total tableScan())
     struct timespec startTableScanTotal,endTableScanTotal;
@@ -2278,6 +2350,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
 
     if(blockNum<2048)
         grid = blockNum;
+
+    if(idx != NULL) {
+        int h_st, h_ed;
+        CUDA_SAFE_CALL( cudaMemcpy(&h_st, st, sizeof(int), cudaMemcpyDeviceToHost) );
+        CUDA_SAFE_CALL( cudaMemcpy(&h_ed, ed, sizeof(int), cudaMemcpyDeviceToHost) );
+        grid = (h_ed - h_st) / block.x + 1;
+    }
 
     int threadNum = grid.x * block.x;
     int attrNum = sn->whereAttrNum;
@@ -2484,13 +2563,13 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
                     struct timespec startS3, endS3;
                     clock_gettime(CLOCK_REALTIME,&startS3);
                     
-                    if (idxPos >= 0){ 
+                    // if (idxPos >= 0){
 
                         //Regular scan
                         //genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
 
                         //Index scan!
-                        res->tupleNum = indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
+                        // res->tupleNum = indexScanInt(sn->tn, index, idxPos, whereValue, gpuFilter, pp);
                         
                         /* DEBUG CODE - DO NOT REMOVE FOR NOW */
                         // int* originalRes = (int *)malloc(sizeof(int) * totalTupleNum);
@@ -2503,7 +2582,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
                         //     }
                         // }
                         // free(originalRes);
-
+                    if(idx != NULL){
+                        genScanFilter_init_int_eq_idx<<<grid, block>>>(column[whereIndex], idx, st, ed, whereValue, gpuFilter);
                     }else{
                         genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                     }
@@ -3007,14 +3087,21 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     * Count the number of tuples that meets the predicats for each thread
     * and calculate the prefix sum.
     */
-    
+
     //Start timer for Count Step 4.1 - Count selected rows kernels
     struct timespec startCountS1, endCountS1;
     clock_gettime(CLOCK_REALTIME,&startCountS1);
 
-    countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
+    // countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
 
     //Stop timer for Count Step 4.1 - Count selected rows kernels
+
+
+    if(idx == NULL)
+        countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
+    else{
+        countScanNum_idx<<<grid, block>>>(gpuFilter, idx, st, ed, gpuCount);
+    }
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME, &endCountS1);
     pp->countScanKernel_countS1 += (endCountS1.tv_sec - startCountS1.tv_sec)* BILLION + endCountS1.tv_nsec - startCountS1.tv_nsec;
@@ -3022,7 +3109,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     //Start timer for Count Step 4.2 - scanImpl time
     struct timespec startCountS2, endCountS2;
     clock_gettime(CLOCK_REALTIME,&startCountS2);
-    
     scanImpl(gpuCount,threadNum, gpuPsum, pp);
 
     //Stop timer for Count Step 4.2 - scanImpl time
@@ -3046,7 +3132,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &gpuPsum[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));    
     count = tmp1+tmp2;
     res->tupleNum = count;
-    
+
     //End timer for Step 5 - Count result (PreScan)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME, &endS5);
@@ -3132,10 +3218,17 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
             int index = sn->outputIndex[i];
             int format = sn->tn->dataFormat[index];
             if(format == UNCOMPRESSED){
-                if (sn->tn->attrSize[index] == sizeof(int))
-                    scan_int<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], totalTupleNum, gpuPsum, count, gpuFilter, result[i]);
-                else
-                    scan_other<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], totalTupleNum,gpuPsum, count, gpuFilter,result[i]);
+                if (sn->tn->attrSize[index] == sizeof(int)){
+                    if(idx == NULL)
+                        scan_int<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], totalTupleNum, gpuPsum, count, gpuFilter, result[i]);
+                    else
+                        scan_int_idx<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], idx, st, ed, gpuPsum, count, gpuFilter, result[i]);
+                }else{
+                    if(idx == NULL)
+                        scan_other<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], totalTupleNum,gpuPsum, count, gpuFilter,result[i]);
+                    else
+                        scan_other_idx<<<grid,block>>>(scanCol[i], sn->tn->attrSize[index], idx, st, ed, gpuPsum, count, gpuFilter,result[i]);
+                }
 
             }else if(format == DICT){
                 struct dictHeader * dheader = (struct dictHeader *)sn->tn->content[index];
@@ -3240,18 +3333,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp, const bo
     pp->tableScanCount ++;
 
     return res;
-}
-
-/*
- * Assign numbers 0 to inNum in a buffer using the device. 
- */
-__global__ static void assign_index(int *col, long  inNum){
-    int stride = blockDim.x * gridDim.x;
-    int offset = blockIdx.x * blockDim.x + threadIdx.x;
-    //int global_index = threadIdx.x + blockDim.x * threadIdx.y;
-    for (int i = offset; i<inNum; i += stride){
-        col[i] = i;
-    }
 }
 
 /*

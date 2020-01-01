@@ -68,8 +68,8 @@ static inline void resize_gpu_mempool(gpu_mempool *pool, size_t new_size)
     char *tmp;
     CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&tmp, new_size) );
     CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(tmp, pool->base, pool->free - pool->base, cudaMemcpyDeviceToDevice) );
-    CUDA_SAFE_CALL_NO_SYNC( cudaFree(pool->free) );
     pool->free = tmp + (pool->free - pool->base);
+    CUDA_SAFE_CALL_NO_SYNC( cudaFree(pool->base) );
     pool->base = tmp;
     pool->size = new_size;
 }

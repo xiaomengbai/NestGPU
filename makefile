@@ -45,10 +45,10 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # -- Optimizations --
 
 #Baseline
-GPU_OPT := --base
+#GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
-#GPU_OPT := --idx
+GPU_OPT := --idx
 # -------------------
 
 # build test/dbgen/dbgen for generating tables
