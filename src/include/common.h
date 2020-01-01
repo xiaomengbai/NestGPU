@@ -365,6 +365,18 @@ struct statistic{
     // Step 2 - Build hashTable
     double joinProf_step2_buildHash;
 
+    // Step 2.1 - Allocate memory
+    double joinProf_step21_allocateMem;
+
+    // Step 2.2 - Count_hash_num
+    double joinProf_step22_Count_hash_num;
+
+    // Step 2.3 - scanImpl
+    double joinProf_step23_scanImpl;
+    
+    // Step 2.4 - build_hash_table (+ memCopy op)
+    double joinProf_step24_buildhash_kernel_memcopy;
+
     // Step 3 - Join
     double joinProf_step3_join;
 

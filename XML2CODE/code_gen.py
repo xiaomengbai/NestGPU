@@ -615,7 +615,7 @@ def generate_code(tree):
     print >>fo, indent + "struct timespec start, end;"
     print >>fo, indent + "struct timespec diskStart, diskEnd;"
     print >>fo, indent + "double diskTotal = 0;"
-    
+
     print >>fo, indent + "clock_gettime(CLOCK_REALTIME,&start);"
     print >>fo, indent + "struct statistic pp;"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
@@ -656,6 +656,10 @@ def generate_code(tree):
     print >>fo, indent + "pp.join_callTimes = 0;"
     print >>fo, indent + "pp.joinProf_step1_allocateMem = 0;"
     print >>fo, indent + "pp.joinProf_step2_buildHash = 0;"
+    print >>fo, indent + "pp.joinProf_step21_allocateMem = 0;"
+    print >>fo, indent + "pp.joinProf_step22_Count_hash_num = 0;"
+    print >>fo, indent + "pp.joinProf_step23_scanImpl = 0;"
+    print >>fo, indent + "pp.joinProf_step24_buildhash_kernel_memcopy = 0;"
     print >>fo, indent + "pp.joinProf_step3_join = 0;"
     print >>fo, indent + "pp.joinProf_step4_deallocate = 0;\n"
     
@@ -715,10 +719,14 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"\\n\");"
 
     print >>fo, indent + "printf(\"<---HashJoin()--->\\n\");"
-    print >>fo, indent + "printf(\"Total time                                        : %lf\\n\", pp.join_totalTime/(1000*1000));"
-    print >>fo, indent + "printf(\"Calls                                             : %d\\n\", pp.join_callTimes);\n"
+    print >>fo, indent + "printf(\"Total time      : %lf\\n\", pp.join_totalTime/(1000*1000));"
+    print >>fo, indent + "printf(\"Calls           : %d\\n\", pp.join_callTimes);\n"
     print >>fo, indent + "printf(\"Step 1 - Allocate memory for intermediate results : %lf\\n\", pp.joinProf_step1_allocateMem/(1000*1000));"
     print >>fo, indent + "printf(\"Step 2 - Build hashTable                          : %lf\\n\", pp.joinProf_step2_buildHash/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 2.1 - Allocate memory                        : %lf\\n\", pp.joinProf_step21_allocateMem/(1000*1000));"    
+    print >>fo, indent + "printf(\"Step 2.2 - Count_hash_num                         : %lf\\n\", pp.joinProf_step22_Count_hash_num/(1000*1000));"    
+    print >>fo, indent + "printf(\"Step 2.3 - scanImpl                               : %lf\\n\", pp.joinProf_step23_scanImpl/(1000*1000));"    
+    print >>fo, indent + "printf(\"Step 2.4 - build_hash_table (+ memCopy op)        : %lf\\n\", pp.joinProf_step24_buildhash_kernel_memcopy/(1000*1000));"    
     print >>fo, indent + "printf(\"Step 3 - Join                                     : %lf\\n\", pp.joinProf_step3_join/(1000*1000));"
     print >>fo, indent + "printf(\"Step 4 - De-allocate memory                       : %lf\\n\", pp.joinProf_step4_deallocate/(1000*1000));"
     print >>fo, indent + "printf(\"<----------------->\");"

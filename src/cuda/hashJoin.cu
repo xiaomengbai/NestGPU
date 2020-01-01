@@ -662,6 +662,10 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
      *  build hash table on GPU
     */
 
+    //Start timer for Step 2.1 - Allocate memory
+    struct timespec startS21, endS21;
+    clock_gettime(CLOCK_REALTIME,&startS21);
+
     int *gpu_psum1 = NULL;
 
     int hsize = jNode->rightTable->tupleNum;
@@ -684,8 +688,36 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
         gpu_dim = jNode->rightTable->content[jNode->rightKeyIndex];
     }
 
+    //Stop for Step 2.1 - Allocate memory
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS21);
+    pp->joinProf_step21_allocateMem += (endS21.tv_sec - startS21.tv_sec)* BILLION + endS21.tv_nsec - startS21.tv_nsec;
+        
+    //Start timer for Step 2.2 - Count_hash_num
+    struct timespec startS22, endS22;
+    clock_gettime(CLOCK_REALTIME,&startS22);
+
     count_hash_num<<<grid,block>>>(gpu_dim,jNode->rightTable->tupleNum,gpu_hashNum,hsize);
+    
+    //Stop for Step 2.2 - Count_hash_num
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS22);
+    pp->joinProf_step22_Count_hash_num += (endS22.tv_sec - startS22.tv_sec)* BILLION + endS22.tv_nsec - startS22.tv_nsec;
+        
+    //Start timer for Step 2.3 - scanImpl
+    struct timespec startS23, endS23;
+    clock_gettime(CLOCK_REALTIME,&startS23);
+
     scanImpl(gpu_hashNum,hsize,gpu_psum, pp);
+
+    //Stop for Step 2.3 - scanImpl
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS23);
+    pp->joinProf_step23_scanImpl += (endS23.tv_sec - startS23.tv_sec)* BILLION + endS23.tv_nsec - startS23.tv_nsec;
+            
+    //Start timer for Step 2.4 - build_hash_table (+ memCopy op)
+    struct timespec startS24, endS24;
+    clock_gettime(CLOCK_REALTIME,&startS24);
 
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpu_psum1,gpu_psum,sizeof(int)*hsize,cudaMemcpyDeviceToDevice));
 
@@ -696,12 +728,15 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
 
     CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_psum1));
 
-
+    //Stop for  Step 2.4 - build_hash_table (+ memCopy op)
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS24);
+    pp->joinProf_step24_buildhash_kernel_memcopy += (endS24.tv_sec - startS24.tv_sec)* BILLION + endS24.tv_nsec - startS24.tv_nsec;
+            
     //Stop for Step 2 - Build hashTable
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME, &endS2);
     pp->joinProf_step2_buildHash += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
-    
 
     //Start timer for Step 3 - Join
     struct timespec startS3, endS3;
@@ -710,6 +745,10 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
    /*
     *  join on GPU
     */
+
+    //Start timer for Step 3.1 - Allocate memory
+    struct timespec startS31, endS31;
+    clock_gettime(CLOCK_REALTIME,&startS31);
 
     threadNum = grid.x * block.x;
 
