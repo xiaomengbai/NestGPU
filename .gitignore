@@ -64,3 +64,4 @@ Thumbs.db
 test/tpch_psql/load_data/*.tbl
 test/tpch_psql/postgresql*
 test/tpch_psql/*.output
+others/config_project_env.sh
