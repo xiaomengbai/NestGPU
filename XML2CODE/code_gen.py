@@ -529,7 +529,7 @@ def generate_code(tree):
         print >>fo, "#include \"../include/cpuCudaLib.h\""
         print >>fo, "#include \"../include/gpuCudaLib.h\""
         #print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *);"
-        print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *, bool, bool, bool);"
+        print >>fo, "extern struct tableNode* tableScan(struct scanNode *,struct statistic *, bool, bool, bool, int *, int *, int *);"
         #Indexing functions
         print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         if joinType == 0:
@@ -556,6 +556,11 @@ def generate_code(tree):
         print >>fo, "extern struct tableNode* groupBy(struct groupByNode *, struct clContext *, struct statistic *);"
         print >>fo, "extern struct tableNode* orderBy(struct orderByNode *, struct clContext *, struct statistic *);"
         print >>fo, "extern char * materializeCol(struct materializeNode * mn, struct clContext *, struct statistic *);"
+
+    if "--idx" in optimization:
+        print >>fo, "#include <thrust/execution_policy.h>"
+        print >>fo, "#include <thrust/system/cuda/execution_policy.h>"
+        print >>fo, "#include <thrust/binary_search.h>"
 
     indent = baseIndent
     print >>fo, "\n#define CHECK_POINTER(p) do {\\"
@@ -829,6 +834,81 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
         for pair in value:
             print >>fo, indent + "transferTableColumnToGPU(" + t_name + ", " + str(fullIndexList.index(pair[0])) + ");"
 
+
+    # Begin semi-join correlated columns in a sub-query
+    def __extract_correlated_pairs(node, pair_list):
+        if node.where_condition is not None and node.where_condition.where_condition_exp is not None:
+            where_exp = node.where_condition.where_condition_exp
+            is_passed_in_par = lambda par: isinstance(par, ystree.YConsExp) and par.ref_col is not None
+            def __extract_correlated_pairs_exp(exp, _pair_list):
+                if isinstance(exp, ystree.YFuncExp) and len(exp.parameter_list) == 2 and any(map(is_passed_in_par, exp.parameter_list)):
+                    if is_passed_in_par(exp.parameter_list[0]):
+                        if isinstance(node, ystree.TableNode):
+                            pair_list.append((exp.parameter_list[0], exp.parameter_list[1]))
+                        # may consider TwoJoinNode and trace to a leaf node for the real table name
+                        # elif isinstance(node, ystree.TwoJoinNode)
+                    else:
+                        if isinstance(node, ystree.TableNode):
+                            pair_list.append((exp.parameter_list[1], exp.parameter_list[0]))
+
+            def extract_correlated_pairs_exp(_pair_list):
+                return lambda e: __extract_correlated_pairs_exp(e, _pair_list)
+
+            ystree.__traverse_exp_map__(where_exp, extract_correlated_pairs_exp(pair_list))
+
+    def extract_correlated_pairs(pair_list):
+        return lambda n: __extract_correlated_pairs(n, pair_list)
+
+    correlated_pairs = []
+    if "--idx" in optimization:
+        __traverse_tree(sub_tree, extract_correlated_pairs(correlated_pairs))
+
+    if len(correlated_pairs) > 0:
+        print >>fo, ""
+        print >>fo, indent + "char *passed_in_col, *correlated_col;"
+        print >>fo, indent + "char *correlated_col_sort;\n"
+
+    for pair in correlated_pairs:
+        if isinstance(pair[1], ystree.YRawColExp):
+            # check if a column has been pre-loaded
+            is_col_preloaded = lambda col: loaded_table_list[col.table_name] is not None and any(map(lambda c: col.compare(c[1]), loaded_table_list[col.table_name]))
+            col_idx_preloaded = lambda col: map(lambda c: col.compare(c[1]), loaded_table_list[col.table_name]).index(True)
+            if is_col_preloaded(pair[0].ref_col) and is_col_preloaded(pair[1]):
+                passed_in_idx = indexDict[pair[0].ref_col.table_name + "." + str(pair[0].ref_col.column_name)]
+                correlated_table_node = pair[1].table_name.lower() + "Table"
+                correlated_idx = col_idx_preloaded(pair[1])
+                # may consider different data type
+                index_type = "(int *)"
+                print >>fo, indent + "// Semi-join ", pair[0].ref_col.table_name + "." + str(pair[0].ref_col.column_name), " and ", pair[1].table_name + "." + str(pair[1].column_name)
+                print >>fo, indent + "if(" + tableName + "->dataPos[" + str(passed_in_idx) + "] == MEM)"
+                print >>fo, indent + baseIndent + "transferTableColumnToGPU(" + tableName + ", " + str(passed_in_idx) + ");"
+                print >>fo, indent + "passed_in_col = " + "(char *)(" + tableName + "->content[" +  str(passed_in_idx) + "]);"
+                print >>fo, indent + "correlated_col = " + correlated_table_node + "->content[" + str(correlated_idx) + "];\n"
+
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&correlated_col_sort, " + correlated_table_node + "->attrTotalSize[" + str(correlated_idx) + "]) );\n"
+
+                print >>fo, indent + "if(" + correlated_table_node + "->dataPos[" + str(correlated_idx) + "] == MEM)"
+                print >>fo, indent + baseIndent + "CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(correlated_col_sort, correlated_col, " + correlated_table_node + "->attrTotalSize[" + str(correlated_idx) + "], cudaMemcpyHostToDevice) );"
+                print >>fo, indent + "else if(" + correlated_table_node + "->dataPos[" + str(correlated_idx) + "] == GPU)"
+                print >>fo, indent + baseIndent + "CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(correlated_col_sort, correlated_col, " + correlated_table_node + "->attrTotalSize[" + str(correlated_idx) + "], cudaMemcpyDeviceToDevice) );\n"
+
+                correlated_indices = pair[1].table_name.lower() + str(pair[1].column_name) + "_idx"
+                print >>fo, indent + "int *" + correlated_indices + ";"
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&" + correlated_indices + ", " + correlated_table_node + "->tupleNum * sizeof(int)) );"
+                print >>fo, indent + "assign_index<<<2048, 256>>>(" + correlated_indices + ", " + correlated_table_node + "->tupleNum);"
+                print >>fo, indent + "thrust::sort_by_key(thrust::device, " + index_type + "correlated_col_sort, " + index_type + "correlated_col_sort + " + correlated_table_node + "->tupleNum, " + correlated_indices + ");\n"
+
+                passed_in_lo = pair[0].ref_col.table_name.lower() + str(pair[0].ref_col.column_name) + "_lo"
+                passed_in_hi = pair[0].ref_col.table_name.lower() + str(pair[0].ref_col.column_name) + "_hi"
+                print >>fo, indent + "int *" + passed_in_lo + ", *" + passed_in_hi + ";"
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&" + passed_in_lo + ", " + tableName + "->tupleNum * sizeof(int)) );"
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&" + passed_in_hi + ", " + tableName + "->tupleNum * sizeof(int)) );\n"
+
+                print >>fo, indent + "thrust::lower_bound(thrust::device, " + index_type + "correlated_col_sort, " + index_type + "correlated_col_sort + " + correlated_table_node + "->tupleNum, " + index_type + "passed_in_col, " + index_type + "passed_in_col + " + tableName + "->tupleNum, " + passed_in_lo + ");"
+                print >>fo, indent + "thrust::upper_bound(thrust::device, " + index_type + "correlated_col_sort, " + index_type + "correlated_col_sort + " + correlated_table_node + "->tupleNum, " + index_type + "passed_in_col, " + index_type + "passed_in_col + " + tableName + "->tupleNum, " + passed_in_hi + ");\n"
+
+                print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaFree(correlated_col_sort) );\n"
+
     print >>fo, indent + "char *free_pos = freepos_mempool();"
     print >>fo, indent + "char *free_gpu_pos = freepos_gpu_mempool(&gpu_inter_mp);";
     print >>fo, indent + "for(int tupleid = 0; tupleid < " + tupleNum + "; tupleid++){"
@@ -864,6 +944,17 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     for col in pass_in_cols:
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
         #print >>fo, indent + "free(" + pass_in_var + ");"
+
+    for pair in correlated_pairs:
+        if isinstance(pair[1], ystree.YRawColExp):
+            correlated_indices = pair[1].table_name.lower() + str(pair[1].column_name) + "_idx"
+            print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaFree(" + correlated_indices + ") );"
+            passed_in_lo = pair[0].ref_col.table_name.lower() + str(pair[0].ref_col.column_name) + "_lo"
+            passed_in_hi = pair[0].ref_col.table_name.lower() + str(pair[0].ref_col.column_name) + "_hi"
+            print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaFree(" + passed_in_lo + ") );"
+            print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaFree(" + passed_in_hi + ") );"
+
+
     print >>fo, ""
 
 """
@@ -1446,7 +1537,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
             print >>fo, indent + "size_t new_size = joinRes->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
             print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size);"
             print >>fo, indent + "char *origin_pos = freepos_gpu_mempool(&gpu_inner_mp);"
-            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true" + (", true" if lvl > 0 else ", false") + ");"
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true" + (", true" if lvl > 0 else ", false") + ", NULL, NULL, NULL);"
             print >>fo, indent + "freeto_gpu_mempool(&gpu_inner_mp, origin_pos);"
         else:
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
@@ -1654,6 +1745,9 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         else:
             print >>fo, indent + "(" + relName + ".filter)->andOr = EXP;"
 
+        indices = []
+        los = []
+        his = []
         for i in range(0, len(whereList)):
             colIndex = -1
             for j in range(0, len(newWhereList)):
@@ -1701,6 +1795,11 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
             elif ctype == "INT":
                 if isinstance(conList[i], ystree.YRawColExp):
                     con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
+                    # Get index here
+                    if "--idx" in optimization:
+                        indices.append(whereList[i].table_name.lower() + str(whereList[i].column_name) + "_idx")
+                        los.append(conList[i].table_name.lower() + str(conList[i].column_name) + "_lo")
+                        his.append(conList[i].table_name.lower() + str(conList[i].column_name) + "_hi")
                 else:
                     con_value = conList[i]
                 print >>fo, indent + "{"
@@ -1729,7 +1828,10 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
             print >>fo, indent + "size_t new_size = " + tnName + "->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
             print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size);"
             print >>fo, indent + "char *origin_pos = freepos_gpu_mempool(&gpu_inner_mp);"
-            print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true"  + (", true" if lvl > 0 else ", false") + ");"
+            if len(indices) > 0:
+                print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true"  + (", true" if lvl > 0 else ", false") + ", " + indices[0] + ", " + los[0] + " + tupleid, " + his[0] + " + tupleid);"
+            else:
+                print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true"  + (", true" if lvl > 0 else ", false") + ", NULL, NULL, NULL);"
             print >>fo, indent + "freeto_gpu_mempool(&gpu_inner_mp, origin_pos);"
         else:
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
@@ -1797,31 +1899,6 @@ def generate_col_lists(col_lists):
 def generate_code_for_loading_tables(fo, indent, tree):
     global loaded_table_list
     global cols_to_index
-
-    # check if a TableNode has new columns to load
-    # def __gen_col_lists(tn, col_lists):
-    #     if not isinstance(tn, ystree.TableNode):
-    #         return
-
-    #     indexList = []
-    #     colList = []
-    #     generate_col_list(tn, indexList, colList)
-
-    #     if tn.table_name in col_lists:
-    #         oldList = col_lists[tn.table_name]
-    #         oldIndexList, oldColList = unmerge(oldList)
-    #         for i in range(0, len(indexList)):
-    #             if indexList[i] not in oldIndexList:
-    #                 oldIndexList.append(indexList[i])
-    #                 oldColList.append(colList[i])
-
-    #         indexList = oldIndexList
-    #         colList = oldColList
-
-    #     col_lists[tn.table_name] = merge(indexList, colList)
-
-    # def generate_col_lists(col_lists):
-    #     return lambda tn: __gen_col_lists(tn, col_lists)
 
     # traverse all query plan trees to find tables and their columns
     __traverse_tree(tree, generate_col_lists(loaded_table_list))

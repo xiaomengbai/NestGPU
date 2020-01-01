@@ -151,5 +151,13 @@ __device__ static char * gpuStrcat(char * dest, const char * src){
     return dest;
 }
 
+__global__ static void assign_index(int *col, long  inNum){
+    int stride = blockDim.x * gridDim.x;
+    int offset = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for (int i = offset; i<inNum; i += stride){
+        col[i] = i;
+    }
+}
 
 #endif
