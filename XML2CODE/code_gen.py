@@ -534,7 +534,7 @@ def generate_code(tree):
         print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         if joinType == 0:
             #print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);"
-            print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *, bool);"
+            print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *, bool, bool, bool);"
         else:
             print >>fo, "extern struct tableNode* inviJoin(struct joinNode *, struct statistic *);"
         print >>fo, "extern struct tableNode* groupBy(struct groupByNode *,struct statistic *);"
@@ -1449,7 +1449,18 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
     print >>fo, indent + "struct tableNode *joinRes;"
     if CODETYPE == 0:
-        print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &pp, true);\n"
+        print >>fo, indent + "// space required on GPU for inner data structures of HashJoin()"
+        print >>fo, indent + "int hsize = " + jName + ".rightTable->tupleNum; NP2(hsize);"
+        print >>fo, indent + "size_t new_size_join = (gpu_inner_mp.free - gpu_inner_mp.base);"
+        print >>fo, indent + "new_size_join += 3 * hsize * sizeof(int) + " + jName + ".rightTable->tupleNum * 2 * sizeof(int); // (gpu_hashNum + gpu_psum + gpu_psum1) + gpu_bucket"
+        print >>fo, indent + "int threadNum = dim3(4096).x * dim3(256).x;"
+        print >>fo, indent + "new_size_join += sizeof(int) * threadNum * 2; // gpu_count + gpu_resPsum"
+        print >>fo, indent + "long filterSize = " + jName + ".leftTable->attrSize[" + jName + ".leftKeyIndex] * " + jName + ".leftTable->tupleNum;"
+        print >>fo, indent + "new_size_join += filterSize * 3; // gpuFactFilter + filterNum + filterPsum"
+        print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size_join);"
+        print >>fo, indent + "char *origin_pos_join = freepos_gpu_mempool(&gpu_inner_mp);"
+        print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &pp, true, true, " + ("true" if lvl > 0 else "false") + ");"
+        print >>fo, indent + "freeto_gpu_mempool(&gpu_inner_mp, origin_pos_join);\n"
     else:
         print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &context, &pp);\n"
 
@@ -1571,7 +1582,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         if CODETYPE == 0:
             # print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
             print >>fo, indent + "// space required on GPU: gpuFilter + gpuPsum + gpuCount + gpuExp + padding"
-            print >>fo, indent + "size_t new_size = joinRes->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
+            print >>fo, indent + "size_t new_size = (gpu_inner_mp.free - gpu_inner_mp.base) + joinRes->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
             print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size);"
             print >>fo, indent + "char *origin_pos = freepos_gpu_mempool(&gpu_inner_mp);"
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, true, true" + (", true" if lvl > 0 else ", false") + ", NULL, NULL, NULL);"
@@ -1862,7 +1873,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         if CODETYPE == 0:
             # print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp);"
             print >>fo, indent + "// space required on GPU: gpuFilter + gpuPsum + gpuCount + gpuExp + padding"
-            print >>fo, indent + "size_t new_size = " + tnName + "->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
+            print >>fo, indent + "size_t new_size = (gpu_inner_mp.free - gpu_inner_mp.base) + " + tnName + "->tupleNum * sizeof(int) + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(int) * dim3(2048).x * dim3(256).x + sizeof(struct whereExp) + 128;"
             print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size);"
             print >>fo, indent + "char *origin_pos = freepos_gpu_mempool(&gpu_inner_mp);"
             if len(indices) > 0:

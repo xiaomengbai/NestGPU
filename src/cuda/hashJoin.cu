@@ -584,7 +584,7 @@ __global__ void static joinDim_other(int *resPsum, char * dim, int attrSize, lon
  *  A new table node
  */
 
-struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const bool use_mempool = false){
+struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false, const bool results_in_mempool = false){
 
 
     //Start total timer
@@ -690,12 +690,24 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
     int hsize = jNode->rightTable->tupleNum;
     NP2(hsize);
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_hashNum,sizeof(int)*hsize));
+    if(!use_gpu_mempool)
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_hashNum,sizeof(int)*hsize));
+    else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_hashNum, sizeof(int) * hsize);
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(gpu_hashNum,0,sizeof(int)*hsize));
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_psum,hsize*sizeof(int)));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpu_bucket, 2*primaryKeySize));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_psum1,hsize*sizeof(int)));
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_psum,hsize*sizeof(int)));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpu_bucket, 2*primaryKeySize));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_psum1,hsize*sizeof(int)));
+    } else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_psum,   hsize * sizeof(int));
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_bucket, 2 * primaryKeySize);
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_psum1,  hsize * sizeof(int));
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
 
     int dataPos = jNode->rightTable->dataPos[jNode->rightKeyIndex];
 
@@ -745,7 +757,8 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
     if (dataPos == MEM || dataPos == MMAP || dataPos == PINNED)
         CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_dim));
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_psum1));
+    if(!use_gpu_mempool)
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_psum1));
 
     //Stop for  Step 2.4 - build_hash_table (+ memCopy op)
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
@@ -771,9 +784,14 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
 
     threadNum = grid.x * block.x;
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_count,sizeof(int)*threadNum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_resPsum,sizeof(int)*threadNum));
-
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_count,sizeof(int)*threadNum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_resPsum,sizeof(int)*threadNum));
+    } else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_count,   sizeof(int) * threadNum);
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_resPsum, sizeof(int) * threadNum);
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
     int *gpuFactFilter = NULL, *filterNum = NULL, * JRes = NULL, * filterPsum = NULL;
 
     dataPos = jNode->leftTable->dataPos[jNode->leftKeyIndex];
@@ -790,11 +808,18 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
         gpu_fact = jNode->leftTable->content[jNode->leftKeyIndex];
     }
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuFactFilter,filterSize));
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuFactFilter,filterSize));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&filterNum,filterSize));
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&filterPsum,filterSize));
+    } else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuFactFilter, filterSize);
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&filterNum,     filterSize);
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&filterPsum,    filterSize);
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(gpuFactFilter,0,filterSize));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&filterNum,filterSize));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(filterNum,0,filterSize));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&filterPsum,filterSize));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(filterPsum,0,filterSize));
 
     //Stop for Step 3.1 - Allocate memory
@@ -871,7 +896,14 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
     struct timespec startS33, endS33;
     clock_gettime(CLOCK_REALTIME,&startS33);
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&JRes,res->tupleNum * sizeof(int)));
+    if(!use_gpu_mempool)
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&JRes,res->tupleNum * sizeof(int)));
+    else{
+        size_t new_size = (gpu_inner_mp.free - gpu_inner_mp.base) + res->tupleNum * sizeof(int);
+        resize_gpu_mempool(&gpu_inner_mp, new_size);
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&JRes, res->tupleNum * sizeof(int));
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(JRes,0,res->tupleNum * sizeof(int)));
 
     probe_join_result<<<grid,block>>>(gpu_hashNum, gpu_psum, gpu_bucket, gpu_fact, jNode->leftTable->tupleNum,filterPsum,JRes,hsize);
@@ -894,7 +926,8 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
         CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_fact));
     }
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_bucket));
+    if(!use_gpu_mempool)
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_bucket));
 
     for(int i=0; i<res->totalAttr; i++){
         int index, pos;
@@ -954,8 +987,12 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
             leftRight = 1;
         }
 
-
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_result,resSize));
+        if(!results_in_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_result,resSize));
+        } else {
+            resize_gpu_mempool(&gpu_inter_mp, gpu_inter_mp.free - gpu_inter_mp.base + resSize);
+            alloc_gpu_mempool(&gpu_inter_mp, (char **) &gpu_result, resSize);
+        }
 
         if(leftRight == 0){
             if(format == UNCOMPRESSED){
@@ -1093,12 +1130,18 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
 
     }
 
-    CUDA_SAFE_CALL(cudaFree(gpuFactFilter));
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL(cudaFree(gpuFactFilter));
+        CUDA_SAFE_CALL(cudaFree(filterNum));
+        CUDA_SAFE_CALL(cudaFree(filterPsum));
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_count));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_hashNum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_psum));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_resPsum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_count));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_hashNum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_psum));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_resPsum));
+
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(JRes));
+    }
 
     //Stop for Step 4 - De-allocate memory
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
