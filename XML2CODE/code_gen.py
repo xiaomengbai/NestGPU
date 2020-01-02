@@ -666,6 +666,9 @@ def generate_code(tree):
     print >>fo, indent + "pp.joinProf_step23_scanImpl = 0;"
     print >>fo, indent + "pp.joinProf_step24_buildhash_kernel_memcopy = 0;"
     print >>fo, indent + "pp.joinProf_step3_join = 0;"
+    print >>fo, indent + "pp.joinProf_step31_allocateMem = 0;"
+    print >>fo, indent + "pp.joinProf_step32_exclusiveScan = 0;"
+    print >>fo, indent + "pp.joinProf_step33_prob = 0;"
     print >>fo, indent + "pp.joinProf_step4_deallocate = 0;\n"
     
     #Create mem pool
@@ -733,6 +736,9 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"Step 2.3 - scanImpl                               : %lf\\n\", pp.joinProf_step23_scanImpl/(1000*1000));"    
     print >>fo, indent + "printf(\"Step 2.4 - build_hash_table (+ memCopy op)        : %lf\\n\", pp.joinProf_step24_buildhash_kernel_memcopy/(1000*1000));"    
     print >>fo, indent + "printf(\"Step 3 - Join                                     : %lf\\n\", pp.joinProf_step3_join/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 3.1 - Allocate memory                        : %lf\\n\", pp.joinProf_step31_allocateMem/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 3.2 - Exclusive scan                         : %lf\\n\", pp.joinProf_step32_exclusiveScan/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 3.3 - Prob and memcpy ops                    : %lf\\n\", pp.joinProf_step33_prob/(1000*1000));" 
     print >>fo, indent + "printf(\"Step 4 - De-allocate memory                       : %lf\\n\", pp.joinProf_step4_deallocate/(1000*1000));"
     print >>fo, indent + "printf(\"<----------------->\");"
     print >>fo, indent + "printf(\"\\n\");"

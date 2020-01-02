@@ -778,12 +778,20 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
     CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&filterPsum,filterSize));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(filterPsum,0,filterSize));
 
+    //Stop for Step 3.1 - Allocate memory
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS31);
+    pp->joinProf_step31_allocateMem += (endS31.tv_sec - startS31.tv_sec)* BILLION + endS31.tv_nsec - startS31.tv_nsec;
+    
+    //Start timer for Step 3.2 - Exclusive scan
+    struct timespec startS32, endS32;
+    clock_gettime(CLOCK_REALTIME,&startS32);
+
     if(format == UNCOMPRESSED)
     {
         count_join_result<<<grid,block>>>(gpu_hashNum, gpu_psum, gpu_bucket, gpu_fact, jNode->leftTable->tupleNum, gpu_count,filterNum,hsize);
         thrust::exclusive_scan(thrust::device, filterNum, filterNum + jNode->leftTable->tupleNum, filterPsum); 
     }
-
     else if(format == DICT){
         int dNum;
         struct dictHeader * dheader = NULL;
@@ -833,16 +841,29 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
     res->tupleNum = tmp1 + tmp2;
     //printf("[INFO]Number of join results: %d\n",res->tupleNum);
 
+    //Stop for Step 3.2 - Exclusive scan
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS32);
+    pp->joinProf_step32_exclusiveScan += (endS32.tv_sec - startS32.tv_sec)* BILLION + endS32.tv_nsec - startS32.tv_nsec;
+    
+    //Start timer for Step 3.3 - Prob and memcpy ops
+    struct timespec startS33, endS33;
+    clock_gettime(CLOCK_REALTIME,&startS33);
+
     CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&JRes,res->tupleNum * sizeof(int)));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(JRes,0,res->tupleNum * sizeof(int)));
 
     probe_join_result<<<grid,block>>>(gpu_hashNum, gpu_psum, gpu_bucket, gpu_fact, jNode->leftTable->tupleNum,filterPsum,JRes,hsize);
 
+    //Stop for Step 3.3 - Prob and memcpy ops
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS33);
+    pp->joinProf_step33_prob += (endS33.tv_sec - startS33.tv_sec)* BILLION + endS33.tv_nsec - startS33.tv_nsec;
+    
     //Stop for Step 3 - Join
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME, &endS3);
     pp->joinProf_step3_join += (endS3.tv_sec - startS3.tv_sec)* BILLION + endS3.tv_nsec - startS3.tv_nsec;
-
     
     //Start timer for Step 4 - De-allocate memory
     struct timespec startS4, endS4;

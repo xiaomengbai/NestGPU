@@ -380,9 +380,17 @@ struct statistic{
     // Step 3 - Join
     double joinProf_step3_join;
 
+    //Step 3.1 - Allocate memory
+    double joinProf_step31_allocateMem;
+
+    //Step 3.2 - Exclusive scan
+    double joinProf_step32_exclusiveScan;  
+
+    //Step 3.3 - Prob and memcpy ops
+    double joinProf_step33_prob; 
+
     // Step 4 - De-allocate memory
     double joinProf_step4_deallocate;
-
     // ===============================
 };
 
