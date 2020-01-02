@@ -533,7 +533,8 @@ def generate_code(tree):
         #Indexing functions
         print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         if joinType == 0:
-            print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);"
+            #print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);"
+            print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *, bool);"
         else:
             print >>fo, "extern struct tableNode* inviJoin(struct joinNode *, struct statistic *);"
         print >>fo, "extern struct tableNode* groupBy(struct groupByNode *,struct statistic *);"
@@ -1448,7 +1449,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
     print >>fo, indent + "struct tableNode *joinRes;"
     if CODETYPE == 0:
-        print >>fo, indent + "joinRes = hashJoin(&" + jName + ",&pp);\n"
+        print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &pp, true);\n"
     else:
         print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &context, &pp);\n"
 

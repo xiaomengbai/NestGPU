@@ -32,6 +32,8 @@
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
 
+#include "../include/mempool.h"
+
 /*
  * Count the number of dimension keys for each bucket.
  */
@@ -48,7 +50,7 @@ __global__ static void count_hash_num(char *dim, long  inNum,int *num,int hsize)
 }
 
 /*
- * All the buckets are stored in a continues memory region.
+ * All the buckets are stored in a continuos memory region.
  * The starting position of each bucket is stored in the psum array.
  * For star schema quereis, the size of fact table is usually much
  * larger than the size of the dimension table. In this case, hash probing is much more
@@ -582,7 +584,7 @@ __global__ void static joinDim_other(int *resPsum, char * dim, int attrSize, lon
  *  A new table node
  */
 
-struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
+struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const bool use_mempool = false){
 
 
     //Start total timer
@@ -612,24 +614,41 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
     else
         grid = defaultBlock;
 
-    res = (struct tableNode*) malloc(sizeof(struct tableNode));
-    CHECK_POINTER(res);
+    if(!use_mempool) {
+        res = (struct tableNode*) malloc(sizeof(struct tableNode));
+        CHECK_POINTER(res);
+    }else{
+        res = (struct tableNode *) alloc_mempool(sizeof(struct tableNode));
+        MEMPOOL_CHECK();
+    }
+
     res->totalAttr = jNode->totalAttr;
     res->tupleSize = jNode->tupleSize;
-    res->attrType = (int *) malloc(res->totalAttr * sizeof(int));
-    CHECK_POINTER(res->attrType);
-    res->attrSize = (int *) malloc(res->totalAttr * sizeof(int));
-    CHECK_POINTER(res->attrSize);
-    res->attrIndex = (int *) malloc(res->totalAttr * sizeof(int));
-    CHECK_POINTER(res->attrIndex);
-    res->attrTotalSize = (int *) malloc(res->totalAttr * sizeof(int));
-    CHECK_POINTER(res->attrTotalSize);
-    res->dataPos = (int *) malloc(res->totalAttr * sizeof(int));
-    CHECK_POINTER(res->dataPos);
-    res->dataFormat = (int *) malloc(res->totalAttr * sizeof(int));
-    CHECK_POINTER(res->dataFormat);
-    res->content = (char **) malloc(res->totalAttr * sizeof(char *));
-    CHECK_POINTER(res->content);
+    if(!use_mempool) {
+        res->attrType = (int *) malloc(res->totalAttr * sizeof(int));
+        CHECK_POINTER(res->attrType);
+        res->attrSize = (int *) malloc(res->totalAttr * sizeof(int));
+        CHECK_POINTER(res->attrSize);
+        res->attrIndex = (int *) malloc(res->totalAttr * sizeof(int));
+        CHECK_POINTER(res->attrIndex);
+        res->attrTotalSize = (int *) malloc(res->totalAttr * sizeof(int));
+        CHECK_POINTER(res->attrTotalSize);
+        res->dataPos = (int *) malloc(res->totalAttr * sizeof(int));
+        CHECK_POINTER(res->dataPos);
+        res->dataFormat = (int *) malloc(res->totalAttr * sizeof(int));
+        CHECK_POINTER(res->dataFormat);
+        res->content = (char **) malloc(res->totalAttr * sizeof(char *));
+        CHECK_POINTER(res->content);
+    }else{
+        res->attrType = (int *) alloc_mempool(res->totalAttr * sizeof(int));
+        res->attrSize = (int *) alloc_mempool(res->totalAttr * sizeof(int));
+        res->attrIndex = (int *) alloc_mempool(res->totalAttr * sizeof(int));
+        res->attrTotalSize = (int *) alloc_mempool(res->totalAttr * sizeof(int));
+        res->dataPos = (int *) alloc_mempool(res->totalAttr * sizeof(int));
+        res->dataFormat = (int *) alloc_mempool(res->totalAttr * sizeof(int));
+        res->content = (char **) alloc_mempool(res->totalAttr * sizeof(char *));
+        MEMPOOL_CHECK();
+    }
 
     for(int i=0;i<jNode->leftOutputAttrNum;i++){
         int pos = jNode->leftPos[i];
@@ -790,7 +809,9 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp){
     if(format == UNCOMPRESSED)
     {
         count_join_result<<<grid,block>>>(gpu_hashNum, gpu_psum, gpu_bucket, gpu_fact, jNode->leftTable->tupleNum, gpu_count,filterNum,hsize);
-        thrust::exclusive_scan(thrust::device, filterNum, filterNum + jNode->leftTable->tupleNum, filterPsum); 
+        //thrust::exclusive_scan(thrust::device, filterNum, filterNum + jNode->leftTable->tupleNum, filterPsum);
+        scanImpl(filterNum, jNode->leftTable->tupleNum, filterPsum, pp);
+
     }
     else if(format == DICT){
         int dNum;
