@@ -537,7 +537,7 @@ def generate_code(tree):
             print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *, bool, bool, bool);"
         else:
             print >>fo, "extern struct tableNode* inviJoin(struct joinNode *, struct statistic *);"
-        print >>fo, "extern struct tableNode* groupBy(struct groupByNode *,struct statistic *);"
+        print >>fo, "extern struct tableNode* groupBy(struct groupByNode *,struct statistic *, bool, bool);"
         print >>fo, "extern struct tableNode* orderBy(struct orderByNode *, struct statistic *);"
         print >>fo, "extern char* materializeCol(struct materializeNode * mn, struct statistic *);"
 
@@ -1220,7 +1220,24 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opValue = " + str(exp.cons_value) + ";"
 
     if CODETYPE == 0:
-        print >>fo, indent + resultNode + " = groupBy(gbNode, &pp);"
+        print >>fo, indent + "// space required on GPU for inner data structures of GroupBy()"
+        print >>fo, indent + "size_t new_size_groupby = (gpu_inner_mp.free - gpu_inner_mp.base);"
+        print >>fo, indent + "new_size_groupby += gbNode->table->totalAttr * sizeof(char *); //gpuContent"
+        print >>fo, indent + "int gbConstant = (gbNode->groupByColNum == 1 && gbNode->groupByIndex[0] == -1);"
+        print >>fo, indent + "if (gbConstant != 1) {"
+        print >>fo, indent + baseIndent + "new_size_groupby += 3 * sizeof(int) * gbNode->groupByColNum; // gpuGbType + gpuGbSize + gpuGbIndex"
+        print >>fo, indent + baseIndent + "new_size_groupby += sizeof(int) * gbNode->table->tupleNum; // gpuGbKey"
+        print >>fo, indent + baseIndent + "new_size_groupby += 3 * sizeof(int) * HSIZE; // gpu_hashNum + gpu_groupNum + gpu_psum"
+        print >>fo, indent + baseIndent + "new_size_groupby += sizeof(int); // gpuGbCount"
+        print >>fo, indent + "}"
+        print >>fo, indent + "new_size_groupby += sizeof(char *) * gbNode->outputAttrNum; // gpuResult"
+        print >>fo, indent + "new_size_groupby += 2 * sizeof(int) * gbNode->outputAttrNum; // gpuGbType + gpuGbSize"
+        print >>fo, indent + "new_size_groupby += sizeof(struct groupByExp) * gbNode->outputAttrNum; // gpuGbExp"
+        print >>fo, indent + "new_size_groupby += (sizeof(struct mathExp) * 2) * gbNode->outputAttrNum; // tmpMath"
+        print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size_groupby);"
+        print >>fo, indent + "char *origin_pos_groupby = freepos_gpu_mempool(&gpu_inner_mp);"
+        print >>fo, indent + resultNode + " = groupBy(gbNode, &pp, true, true);"
+        print >>fo, indent + "freeto_gpu_mempool(&gpu_inner_mp, origin_pos_groupby);\n"
     else:
         print >>fo, indent + resultNode + " = groupBy(gbNode, &context, &pp);"
 

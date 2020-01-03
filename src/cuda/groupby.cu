@@ -22,6 +22,7 @@
 #include "../include/common.h"
 #include "../include/gpuCudaLib.h"
 #include "../include/cudaHash.h"
+#include "../include/mempool.h"
 #include "scanImpl.cu"
 
 /*
@@ -254,7 +255,7 @@ __global__ static void init_int_array(int *array, int array_size, int init_value
  *  a new table node
  */
 
-struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
+struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const bool use_mempool = false, const bool use_gpu_mempool = false){
 
     struct timespec start,end;
     clock_gettime(CLOCK_REALTIME,&start);
@@ -272,22 +273,40 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
     int gbCount;
     int gbConstant = 0;
 
-    struct tableNode *res = (struct tableNode *) malloc(sizeof(struct tableNode));
-    CHECK_POINTER(res);
+    struct tableNode *res = NULL;
+    if(!use_mempool) {
+        res = (struct tableNode *) malloc(sizeof(struct tableNode));
+        CHECK_POINTER(res);
+    } else {
+        res = (struct tableNode *) alloc_mempool(sizeof(struct tableNode));
+        MEMPOOL_CHECK();
+    }
+
     res->tupleSize = gb->tupleSize;
     res->totalAttr = gb->outputAttrNum;
-    res->attrType = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrType);
-    res->attrSize = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrSize);
-    res->attrTotalSize = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->attrTotalSize);
-    res->dataPos = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->dataPos);
-    res->dataFormat = (int *) malloc(sizeof(int) * res->totalAttr);
-    CHECK_POINTER(res->dataFormat);
-    res->content = (char **) malloc(sizeof(char **) * res->totalAttr);
-    CHECK_POINTER(res->content);
+
+    if(!use_mempool) {
+        res->attrType = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrType);
+        res->attrSize = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrSize);
+        res->attrTotalSize = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrTotalSize);
+        res->dataPos = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->dataPos);
+        res->dataFormat = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->dataFormat);
+        res->content = (char **) malloc(sizeof(char **) * res->totalAttr);
+        CHECK_POINTER(res->content);
+    } else {
+        res->attrType = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->attrSize = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->attrTotalSize = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->dataPos = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->dataFormat = (int *) alloc_mempool(sizeof(int) * res->totalAttr);
+        res->content = (char **) alloc_mempool(sizeof(char **) * res->totalAttr);
+        MEMPOOL_CHECK();
+    }
 
     for(int i=0;i<res->totalAttr;i++){
         res->attrType[i] = gb->attrType[i];
@@ -311,9 +330,20 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
 
     int *gpu_hashNum = NULL, *gpu_psum = NULL, *gpuGbCount = NULL, *gpu_groupNum = NULL;
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuContent, gb->table->totalAttr * sizeof(char *)));
-    column = (char **) malloc(sizeof(char *) * gb->table->totalAttr);
-    CHECK_POINTER(column);
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuContent, gb->table->totalAttr * sizeof(char *)));
+    } else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuContent, gb->table->totalAttr * sizeof(char *));
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
+
+    if(!use_mempool) {
+        column = (char **) malloc(sizeof(char *) * gb->table->totalAttr);
+        CHECK_POINTER(column);
+    } else {
+        column = (char **) alloc_mempool(sizeof(char *) * gb->table->totalAttr);
+        MEMPOOL_CHECK();
+    }
 
     for(int i=0;i<gb->table->totalAttr;i++){
         int attrSize = gb->table->attrSize[i];
@@ -329,33 +359,70 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
 
     if(gbConstant != 1){
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbType, sizeof(int) * gb->groupByColNum));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbType, sizeof(int) * gb->groupByColNum));
+        } else {
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbType, sizeof(int) * gb->groupByColNum);
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbType,gb->groupByType, sizeof(int) * gb->groupByColNum, cudaMemcpyHostToDevice));
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbSize, sizeof(int) * gb->groupByColNum));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbSize, sizeof(int) * gb->groupByColNum));
+        } else {
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbSize, sizeof(int) * gb->groupByColNum);
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbSize,gb->groupBySize, sizeof(int) * gb->groupByColNum, cudaMemcpyHostToDevice));
 
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbKey, gb->table->tupleNum * sizeof(int)));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbKey, gb->table->tupleNum * sizeof(int)));
+        } else {
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbKey, sizeof(int) * gb->groupByColNum);
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        }
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbIndex, sizeof(int) * gb->groupByColNum));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbIndex, sizeof(int) * gb->groupByColNum));
+        } else {
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbIndex, sizeof(int) * gb->groupByColNum);
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbIndex, gb->groupByIndex,sizeof(int) * gb->groupByColNum, cudaMemcpyHostToDevice));
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_hashNum,sizeof(int)*HSIZE));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_hashNum,sizeof(int)*HSIZE));
+        } else {
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_hashNum, sizeof(int) * HSIZE);
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemset(gpu_hashNum,0,sizeof(int)*HSIZE));
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_groupNum,sizeof(int)*HSIZE));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_groupNum,sizeof(int)*HSIZE));
+        } else {
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_groupNum, sizeof(int) * HSIZE);
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemset(gpu_groupNum,0,sizeof(int)*HSIZE));
 
         build_groupby_key<<<grid,block>>>(gpuContent,gpuGbColNum, gpuGbIndex, gpuGbType,gpuGbSize,gpuTupleNum, gpuGbKey, gpu_hashNum, gpu_groupNum);
         CUDA_SAFE_CALL_NO_SYNC(cudaDeviceSynchronize());
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbType));
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbSize));
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbIndex));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbType));
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbSize));
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbIndex));
+        }
 
         gbCount = 1;
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbCount,sizeof(int)));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbCount,sizeof(int)));
+        } else {
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbCount, sizeof(int));
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemset(gpuGbCount, 0, sizeof(int)));
 
         count_group_num<<<grid,block>>>(gpu_hashNum, HSIZE, gpuGbCount);
@@ -363,11 +430,18 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
 
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&gbCount, gpuGbCount, sizeof(int), cudaMemcpyDeviceToHost));
 
-        CUDA_SAFE_CALL(cudaMalloc((void**)&gpu_psum,HSIZE*sizeof(int)));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL(cudaMalloc((void**)&gpu_psum,HSIZE*sizeof(int)));
+        } else {
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_psum, HSIZE * sizeof(int));
+            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        }
         scanImpl(gpu_hashNum,HSIZE,gpu_psum,pp);
 
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbCount));
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_hashNum));
+        if (!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbCount));
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_hashNum));
+        }
     }
 
     if(gbConstant == 1)
@@ -379,10 +453,20 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
 
     char ** gpuResult = NULL;
     char ** result = NULL;
-    
-    result = (char **)malloc(sizeof(char*)*res->totalAttr);
-    CHECK_POINTER(result);
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuResult, sizeof(char *)* res->totalAttr));
+
+    if(!use_mempool) {
+        result = (char **)malloc(sizeof(char*)*res->totalAttr);
+        CHECK_POINTER(result);
+    } else {
+        result = (char **) alloc_mempool(sizeof(char *) * res->totalAttr);
+        MEMPOOL_CHECK();
+    }
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuResult, sizeof(char *)* res->totalAttr));
+    } else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuResult, sizeof(char *) * res->totalAttr);
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
 
     for(int i=0; i<res->totalAttr;i++){
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&result[i], res->tupleNum * res->attrSize[i]));
@@ -399,19 +483,37 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
     }
 
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbType, sizeof(int)*res->totalAttr));
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbType, sizeof(int)*res->totalAttr));
+    } else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbType, sizeof(int) * res->totalAttr);
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbType, res->attrType, sizeof(int)*res->totalAttr, cudaMemcpyHostToDevice));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbSize, sizeof(int)*res->totalAttr));
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbSize, res->attrSize, sizeof(int)*res->totalAttr, cudaMemcpyHostToDevice));
-
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbSize, sizeof(int)*res->totalAttr));
+    } else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbSize, sizeof(int) * res->totalAttr);
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
     struct groupByExp *gpuGbExp;
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuGbExp, sizeof(struct groupByExp)*res->totalAttr));
+    if(!use_gpu_mempool){
+        CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpuGbExp, sizeof(struct groupByExp)*res->totalAttr));
+    } else {
+        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbExp, sizeof(struct groupByExp) * res->totalAttr);
+        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+    }
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbExp, gb->gbExp, sizeof(struct groupByExp)*res->totalAttr, cudaMemcpyHostToDevice));
     for(int i=0;i<res->totalAttr;i++){
         struct mathExp * tmpMath;
         if(gb->gbExp[i].exp.opNum == 2){
-            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&tmpMath, 2* sizeof(struct mathExp)));
+            if(!use_gpu_mempool) {
+                CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&tmpMath, 2* sizeof(struct mathExp)));
+            } else {
+                alloc_gpu_mempool(&gpu_inner_mp, (char **)&tmpMath, 2 * sizeof(struct mathExp));
+                GPU_MEMPOOL_CHECK(gpu_inner_mp);
+            }
             CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tmpMath,(struct mathExp*)gb->gbExp[i].exp.exp,2*sizeof(struct mathExp), cudaMemcpyHostToDevice));
             CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&(gpuGbExp[i].exp.exp), &tmpMath, sizeof(struct mathExp *), cudaMemcpyHostToDevice));
         }
@@ -421,9 +523,11 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
 
     if(gbConstant !=1){
         agg_cal<<<grid,block>>>(gpuContent, gpuGbColNum, gpuGbExp, gpuGbType, gpuGbSize, gpuTupleNum, gpuGbKey, gpu_psum, gpu_groupNum,gpuResult);
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbKey));
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_psum));
-        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_groupNum));
+        if(!use_gpu_mempool) {
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbKey));
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_psum));
+            CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_groupNum));
+        }
     }else
         agg_cal_cons<<<grid,block>>>(gpuContent, gpuGbColNum, gpuGbExp, gpuTupleNum,gpuResult);
 
@@ -431,12 +535,15 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp){
         if(gb->table->dataPos[i]==MEM)
             CUDA_SAFE_CALL_NO_SYNC(cudaFree(column[i]));
     }
-    free(column);
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuContent));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbType));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbSize));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbExp));
-    CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuResult));
+    if(!use_mempool)
+        free(column);
+    if(!use_gpu_mempool) {
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuContent));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbType));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbSize));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbExp));
+        CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuResult));
+    }
 
     clock_gettime(CLOCK_REALTIME,&end);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
