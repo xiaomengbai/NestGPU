@@ -19,7 +19,7 @@
 
 #define BILLION     1000000000
 #define BLOCKNUM    (100*1024*1024)
-#define HSIZE 97131072
+#define HSIZE 131072
 #define FLOAT_MAX 0x7f800000
 #define FLOAT_MIN 0xff800000
 
@@ -391,6 +391,37 @@ struct statistic{
 
     // Step 4 - De-allocate memory
     double joinProf_step4_deallocate;
+    // ===============================
+
+
+    // ========= groupBy() =========
+
+    double groupby_totalTime;
+    int groupby_callTimes;
+
+    //Step 1 - Allocate memory for intermediate results
+    double groupby_step1_allocMem;
+
+    //Step 2 - Copy data to GPU
+    double groupby_step2_copyToDevice;
+    
+    //Step 3 - build_groupby_key kernel
+    double groupby_step3_buildGroupByKey;
+
+    //Step 4 - Count number of groups
+    double groupby_step4_groupCount;
+
+    //Step 5 - Allocate memory for result
+    double groupby_step5_AllocRes;
+
+    //Step 6 - Copy columns to device
+    double groupby_step6_copyDataCols;
+
+    //Step 7 - Calculate aggregate values
+    double groupby_step7_computeAgg;
+
+    //Step 8 - De-allocate memory
+    double groupby_step8_deallocate;
     // ===============================
 };
 

@@ -257,8 +257,14 @@ __global__ static void init_int_array(int *array, int array_size, int init_value
 
 struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const bool use_mempool = false, const bool use_gpu_mempool = false){
 
-    struct timespec start,end;
-    clock_gettime(CLOCK_REALTIME,&start);
+    //Start total timer
+    struct timespec startS0, endS0;
+    clock_gettime(CLOCK_REALTIME,&startS0);
+
+    //Start timer for Step 1 - Allocate memory for intermediate results
+    struct timespec startS1, endS1;
+    clock_gettime(CLOCK_REALTIME,&startS1);
+
     int *gpuGbIndex = NULL, gpuTupleNum, gpuGbColNum;
     int *gpuGbType = NULL, *gpuGbSize = NULL;
 
@@ -321,7 +327,6 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         gbConstant = 1;
     }
 
-
     dim3 grid(1024);
     dim3 block(128);
     int blockNum = gb->table->tupleNum / block.x + 1;
@@ -345,6 +350,15 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         MEMPOOL_CHECK();
     }
 
+    //Stop for Step 1 - Allocate memory for intermediate results
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS1);
+    pp->groupby_step1_allocMem += (endS1.tv_sec - startS1.tv_sec)* BILLION + endS1.tv_nsec - startS1.tv_nsec;
+    
+    //Start timer for Step 2 - Copy data to GPU
+    struct timespec startS2, endS2;
+    clock_gettime(CLOCK_REALTIME,&startS2);
+
     for(int i=0;i<gb->table->totalAttr;i++){
         int attrSize = gb->table->attrSize[i];
         if(gb->table->dataPos[i]==MEM){
@@ -357,7 +371,16 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         }
     }
 
+    //Stop for Step 2 - Copy data to GPU
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS2);
+    pp->groupby_step2_copyToDevice += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
+            
     if(gbConstant != 1){
+
+        //Start timer for Step 3 - build_groupby_key kernel
+        struct timespec startS3, endS3;
+        clock_gettime(CLOCK_REALTIME,&startS3);
 
         if (!use_gpu_mempool) {
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbType, sizeof(int) * gb->groupByColNum));
@@ -373,7 +396,6 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
             GPU_MEMPOOL_CHECK(gpu_inner_mp);
         }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbSize,gb->groupBySize, sizeof(int) * gb->groupByColNum, cudaMemcpyHostToDevice));
-
 
         if (!use_gpu_mempool) {
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbKey, gb->table->tupleNum * sizeof(int)));
@@ -425,6 +447,15 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         }
         CUDA_SAFE_CALL_NO_SYNC(cudaMemset(gpuGbCount, 0, sizeof(int)));
 
+        //Stop for Step 3 - build_groupby_key kernel
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS3);
+        pp->groupby_step3_buildGroupByKey += (endS3.tv_sec - startS3.tv_sec)* BILLION + endS3.tv_nsec - startS3.tv_nsec;
+    
+        //Start timer for Step 4 - count_group_num
+        struct timespec startS4, endS4;
+        clock_gettime(CLOCK_REALTIME,&startS4);
+
         count_group_num<<<grid,block>>>(gpu_hashNum, HSIZE, gpuGbCount);
         CUDA_SAFE_CALL_NO_SYNC(cudaDeviceSynchronize());
 
@@ -442,14 +473,22 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
             CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuGbCount));
             CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_hashNum));
         }
+
+        //Stop for 4 - Count number of groups
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS4);
+        pp->groupby_step4_groupCount += (endS4.tv_sec - startS4.tv_sec)* BILLION + endS4.tv_nsec - startS4.tv_nsec;
     }
 
     if(gbConstant == 1)
         res->tupleNum = 1;
     else
         res->tupleNum = gbCount;
-
     //printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
+
+    //Start timer for Step 5 - Allocate memory for result
+    struct timespec startS5, endS5;
+    clock_gettime(CLOCK_REALTIME,&startS5);
 
     char ** gpuResult = NULL;
     char ** result = NULL;
@@ -468,6 +507,15 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         GPU_MEMPOOL_CHECK(gpu_inner_mp);
     }
 
+    //Stop for 5 - Allocate memory for result
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS5);
+    pp->groupby_step5_AllocRes += (endS5.tv_sec - startS5.tv_sec)* BILLION + endS5.tv_nsec - startS5.tv_nsec;
+
+    //Start timer for Step 6 - Copy columns to device
+    struct timespec startS6, endS6;
+    clock_gettime(CLOCK_REALTIME,&startS6);
+
     for(int i=0; i<res->totalAttr;i++){
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&result[i], res->tupleNum * res->attrSize[i]));
         CUDA_SAFE_CALL_NO_SYNC(cudaMemset(result[i], 0, res->tupleNum * res->attrSize[i]));
@@ -481,7 +529,6 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         else if(gb->gbExp[i].func == MAX && res->attrSize[i] == sizeof(int))
             init_int_array<<<grid, block>>>((int *)result[i], res->tupleNum, FLOAT_MIN);
     }
-
 
     if(!use_gpu_mempool) {
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbType, sizeof(int)*res->totalAttr));
@@ -521,6 +568,15 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
 
     gpuGbColNum = res->totalAttr;
 
+    //Stop for 6 - Copy columns to device
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS6);
+    pp->groupby_step6_copyDataCols += (endS6.tv_sec - startS6.tv_sec)* BILLION + endS6.tv_nsec - startS6.tv_nsec;
+
+    //Start timer for Step 7 - Calculate aggregate values
+    struct timespec startS7, endS7;
+    clock_gettime(CLOCK_REALTIME,&startS7);
+
     if(gbConstant !=1){
         agg_cal<<<grid,block>>>(gpuContent, gpuGbColNum, gpuGbExp, gpuGbType, gpuGbSize, gpuTupleNum, gpuGbKey, gpu_psum, gpu_groupNum,gpuResult);
         if(!use_gpu_mempool) {
@@ -530,6 +586,16 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         }
     }else
         agg_cal_cons<<<grid,block>>>(gpuContent, gpuGbColNum, gpuGbExp, gpuTupleNum,gpuResult);
+
+
+    //Stop for 7 - Calculate aggregate values
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS7);
+    pp->groupby_step7_computeAgg += (endS7.tv_sec - startS7.tv_sec)* BILLION + endS7.tv_nsec - startS7.tv_nsec;
+
+    //Start timer for Step 8 - De-allocate memory
+    struct timespec startS8, endS8;
+    clock_gettime(CLOCK_REALTIME,&startS8);
 
     for(int i=0; i<gb->table->totalAttr;i++){
         if(gb->table->dataPos[i]==MEM)
@@ -545,9 +611,17 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuResult));
     }
 
-    clock_gettime(CLOCK_REALTIME,&end);
-    double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
-    //printf("GroupBy Time: %lf\n", timeE/(1000*1000));
+    //Stop for 8 - De-allocate memory
+    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+    clock_gettime(CLOCK_REALTIME, &endS8);
+    pp->groupby_step8_deallocate += (endS8.tv_sec - startS8.tv_sec)* BILLION + endS8.tv_nsec - startS8.tv_nsec;
+    
+    //Stop total timer
+    clock_gettime(CLOCK_REALTIME, &endS0);
+    pp->groupby_totalTime += (endS0.tv_sec - startS0.tv_sec)* BILLION + endS0.tv_nsec - startS0.tv_nsec;
+    
+    //Increase count call
+    pp->groupby_callTimes++;
 
     return res;
 }

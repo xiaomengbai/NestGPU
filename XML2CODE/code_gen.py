@@ -672,6 +672,18 @@ def generate_code(tree):
     print >>fo, indent + "pp.joinProf_step33_prob = 0;"
     print >>fo, indent + "pp.joinProf_step4_deallocate = 0;\n"
     
+    #For groupBy profiling
+    print >>fo, indent + "pp.groupby_totalTime = 0;"
+    print >>fo, indent + "pp.groupby_callTimes = 0;"
+    print >>fo, indent + "pp.groupby_step1_allocMem = 0;"
+    print >>fo, indent + "pp.groupby_step2_copyToDevice = 0;"
+    print >>fo, indent + "pp.groupby_step3_buildGroupByKey = 0;"
+    print >>fo, indent + "pp.groupby_step4_groupCount = 0;"
+    print >>fo, indent + "pp.groupby_step5_AllocRes = 0;"
+    print >>fo, indent + "pp.groupby_step6_copyDataCols = 0;"
+    print >>fo, indent + "pp.groupby_step7_computeAgg = 0;"
+    print >>fo, indent + "pp.groupby_step8_deallocate = 0;\n"
+    
     #Create mem pool
     print >>fo, indent + "init_mempool();";
     print >>fo, indent + "init_gpu_mempool(&gpu_inner_mp);";
@@ -741,6 +753,20 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"Step 3.2 - Exclusive scan                         : %lf\\n\", pp.joinProf_step32_exclusiveScan/(1000*1000));"
     print >>fo, indent + "printf(\"Step 3.3 - Prob and memcpy ops                    : %lf\\n\", pp.joinProf_step33_prob/(1000*1000));" 
     print >>fo, indent + "printf(\"Step 4 - De-allocate memory                       : %lf\\n\", pp.joinProf_step4_deallocate/(1000*1000));"
+    print >>fo, indent + "printf(\"<----------------->\");"
+    print >>fo, indent + "printf(\"\\n\");"
+
+    print >>fo, indent + "printf(\"<---GroupBy()--->\\n\");"
+    print >>fo, indent + "printf(\"Total time      : %lf\\n\", pp.groupby_totalTime/(1000*1000));"
+    print >>fo, indent + "printf(\"Calls           : %d\\n\", pp.groupby_callTimes);\n"
+    print >>fo, indent + "printf(\"Step 1 - Allocate memory for intermediate results : %lf\\n\", pp.groupby_step1_allocMem/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 2 - Copy data to GPU                         : %lf\\n\", pp.groupby_step2_copyToDevice/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 3 - Build Group By Key                       : %lf\\n\", pp.groupby_step3_buildGroupByKey/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 4 - Count number of groups                   : %lf\\n\", pp.groupby_step4_groupCount/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 5 - Allocate memory for result               : %lf\\n\", pp.groupby_step5_AllocRes/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 6 - Copy columns to device                   : %lf\\n\", pp.groupby_step6_copyDataCols/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 7 - Calculate aggregate values               : %lf\\n\", pp.groupby_step7_computeAgg/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 8 - De-allocate memory                       : %lf\\n\", pp.groupby_step8_deallocate/(1000*1000));"
     print >>fo, indent + "printf(\"<----------------->\");"
     print >>fo, indent + "printf(\"\\n\");"
 
