@@ -576,6 +576,9 @@ class YRawColExp(YExpBase):
 #Sub-types could be: TableNode, SelectProjectNode, GroupByNode, OrderByNode, TwoJoinNode, MultipleJoinNode
 class QueryPlanTreeBase(object):
 
+    name = None
+    correlated = False
+
     source = None
     i_am_the_tree = None
 
@@ -750,7 +753,9 @@ class OrderByNode(QueryPlanTreeBase):
             i = i + y
             i = i + ","
 
-        print pb, "OrderByNode", "[" + xes + "]", "[" + i + "]"
+        name = "None" if self.name is None else self.name
+        star = "*" if self.correlated else ""
+        print pb, star + "OrderByNode", "(" + name + ")", "[" + xes + "]", "[" + i + "]"
 
 
         self.child.debug(level + 1)
@@ -849,7 +854,9 @@ class GroupByNode(QueryPlanTreeBase):
         if self.having_clause is not None:
             hs = self.having_clause.where_condition_exp.evaluate()
 
-        print pb, "GroupByNode", "[" + sscs + "]", "[" + self.group_by_clause.converted_exp_str + "]", "[" + hs + "]"
+        name = "None" if self.name is None else self.name
+        star = "*" if self.correlated else ""
+        print pb, star + "GroupByNode", "(" + name + ")", "[" + sscs + "]", "[" + self.group_by_clause.converted_exp_str + "]", "[" + hs + "]"
         self.child.debug(level + 1)
 
 
@@ -920,8 +927,9 @@ class SelectProjectNode(QueryPlanTreeBase):
         else:
             swc = self.where_condition.converted_exp_str
 
-
-        print pb, "SelectProjectNode", self.table_alias, "[" + sscs + "]", "[" + swc + "]"
+        name = "None" if self.name is None else self.name
+        star = "*" if self.correlated else ""
+        print pb, star + "SelectProjectNode", "(" + name + ")", self.table_alias, "[" + sscs + "]", "[" + swc + "]"
         self.child.debug(level + 1)
 
 
@@ -974,7 +982,9 @@ class TableNode(QueryPlanTreeBase):
         tmp_str_select_list = "[" + sscs + "]"
         tmp_str_where_condition = "[" + str(swc) + "]"
 
-        print pb, "TableNode", self.table_name, "{" + self.table_alias + "}", tmp_str_select_list, tmp_str_where_condition
+        name = "None" if self.name is None else self.name
+        star = "*" if self.correlated else ""
+        print pb, star + "TableNode", "(" + name + ")", self.table_name, "{" + self.table_alias + "}", tmp_str_select_list, tmp_str_where_condition
 
 
 class TwoJoinNode(QueryPlanTreeBase):
@@ -1129,8 +1139,9 @@ class TwoJoinNode(QueryPlanTreeBase):
             if self.join_condition is not None and self.join_condition.where_condition_exp is not None:
                 oc = "[Implicit]: " + self.join_condition.where_condition_exp.evaluate()
 
-
-        print pb, "TwoJoinNode", "[" + sscs + "]", "[" + swc + "]", "[" + oc + "]"
+        name = "None" if self.name is None else self.name
+        star = "*" if self.correlated else ""
+        print pb, star + "TwoJoinNode", "(" + name + ")", "[" + sscs + "]", "[" + swc + "]", "[" + oc + "]"
 
         self.left_child.debug(level + 1)
 

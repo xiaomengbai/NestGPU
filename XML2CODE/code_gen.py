@@ -671,7 +671,6 @@ def generate_code(tree):
     print >>fo, indent + "pp.joinProf_step32_exclusiveScan = 0;"
     print >>fo, indent + "pp.joinProf_step33_prob = 0;"
     print >>fo, indent + "pp.joinProf_step4_deallocate = 0;\n"
-    
     #For groupBy profiling
     print >>fo, indent + "pp.groupby_totalTime = 0;"
     print >>fo, indent + "pp.groupby_callTimes = 0;"
@@ -683,13 +682,28 @@ def generate_code(tree):
     print >>fo, indent + "pp.groupby_step6_copyDataCols = 0;"
     print >>fo, indent + "pp.groupby_step7_computeAgg = 0;"
     print >>fo, indent + "pp.groupby_step8_deallocate = 0;\n"
-    
+
     #Create mem pool
     print >>fo, indent + "init_mempool();";
     print >>fo, indent + "init_gpu_mempool(&gpu_inner_mp);";
     print >>fo, indent + "init_gpu_mempool(&gpu_inter_mp);\n";
 
     generate_code_for_loading_tables(fo, indent, tree)
+
+    global loaded_table_list
+    for sub_tree in ystree.subqueries:
+	# traverse all query plan trees to find tables and their columns
+	columns_to_gpu = {}
+	__traverse_tree(sub_tree, generate_col_lists(columns_to_gpu))
+	for key, value in columns_to_gpu.items():
+            # should consider if a column is not pre-loaded
+            fullIndexList, fullColList = unmerge(loaded_table_list[key])
+            t_name = key.lower() + "Table"
+            for pair in value:
+		print >>fo, indent + "transferTableColumnToGPU(" + t_name + ", " + str(fullIndexList.index(pair[0])) + ");"
+
+    map(lambda t: generate_code_for_non_correlated_subquery(fo, indent, t), ystree.subqueries)
+    print pre_executed_nodes
 
     generate_code_for_a_tree(fo, tree, 0)
 
@@ -1020,6 +1034,45 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
 
     print >>fo, ""
 
+def name_tree_nodes(tree):
+    if isinstance(tree, ystree.TwoJoinNode):
+	name_tree_nodes(tree.left_child)
+	name_tree_nodes(tree.right_child)
+	tree.name = tree.left_child.name + "_" + tree.right_child.name
+    elif isinstance(tree, ystree.GroupByNode):
+	name_tree_nodes(tree.child)
+	tree.name = "gb_" + tree.child.name
+    elif isinstance(tree, ystree.OrderByNode):
+	name_tree_nodes(tree.child)
+	tree.name = "ob_" + tree.child.name
+    elif isinstance(tree, ystree.SelectProjectNode):
+	name_tree_nodes(tree.child)
+	tree.name = "sp_" + tree.child.name
+    elif isinstance(tree, ystree.TableNode):
+	tableName = tree.table_name.lower()
+	nodeName = tableName[0:2] if table_abbr[tableName] == None else table_abbr[tableName]
+	nodeName = nodeName + str(table_refs[tableName])
+	table_refs[tableName] += 1
+	tree.name = nodeName
+
+def check_tree_correlated(tree):
+    if isinstance(tree, ystree.TwoJoinNode):
+	check_tree_correlated(tree.left_child)
+	check_tree_correlated(tree.right_child)
+	tree.correlated = tree.left_child.correlated or tree.right_child.correlated
+    if isinstance(tree, ystree.GroupByNode) or isinstance(tree, ystree.OrderByNode) or isinstance(tree, ystree.SelectProjectNode):
+	check_tree_correlated(tree.child)
+	tree.correlated = tree.child
+    elif isinstance(tree, ystree.TableNode):
+	if tree.where_condition is not None:
+            whereList = []
+            relList = []
+            conList = []
+            get_where_attr(tree.where_condition.where_condition_exp, whereList, relList, conList)
+	    if any(map(lambda x: isinstance(x, ystree.YRawColExp), conList)):
+		tree.correlated = True
+
+
 """
 gpudb_code_gen: entry point for code generation.
 """
@@ -1061,6 +1114,10 @@ def gpudb_code_gen(argv):
     os.chdir(resultDir)
     os.chdir(codeDir)
 
+    name_tree_nodes(tree_node)
+    map(lambda t: name_tree_nodes(t), ystree.subqueries)
+    map(lambda t: check_tree_correlated(t), ystree.subqueries)
+
     if len(sys.argv) >= 3:
         if len(sys.argv) > 3:
             global optimization
@@ -1084,18 +1141,26 @@ def generate_code_for_a_node(fo, indent, lvl, node):
 
 def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
 
+    global pre_executed_nodes
+    if spn.name in pre_executed_nodes:
+	return spn.name
+
     inputNode = generate_code_for_a_node(fo, indent, lvl, spn.child)
 
     return inputNode
 
 def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
 
+    global pre_executed_nodes
+    if obn.name in pre_executed_nodes:
+	return obn.name
+
     inputNode = generate_code_for_a_node(fo, indent, lvl, obn.child)
 
     orderby_exp_list = obn.order_by_clause.orderby_exp_list
     odLen = len(orderby_exp_list)
 
-    resultNode = inputNode + "_ob"
+    resultNode = obn.name
     print >>fo, indent + "struct tableNode * " + resultNode + ";"
 
     print >>fo, indent + "{\n"
@@ -1140,6 +1205,10 @@ def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
 
 def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 
+    global pre_executed_nodes
+    if gbn.name in pre_executed_nodes:
+	return gbn.name
+
     inputNode = generate_code_for_a_node(fo, indent, lvl, gbn.child)
 
     gb_exp_list = gbn.group_by_clause.groupby_exp_list
@@ -1147,7 +1216,7 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
     selectLen = len(select_list)
     gbLen = len(gb_exp_list)
 
-    resultNode = inputNode + "_gb"
+    resultNode = gbn.name
     print >>fo, indent + "struct tableNode * " + resultNode + ";"
 
     print >>fo, indent + "{\n"
@@ -1278,6 +1347,10 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 
 def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
+    global pre_executed_nodes
+    if jn.name in pre_executed_nodes:
+	return jn.name
+
     leftName, rightName = generate_code_for_a_node(fo, indent, lvl, jn.left_child), generate_code_for_a_node(fo, indent, lvl, jn.right_child)
     var_subqRes = "subqRes" + str(lvl)
 
@@ -1285,7 +1358,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         print 1/0
 
     print >>fo, indent + "// Join two tables: " + leftName + ", " + rightName # conditions?
-    resName = leftName + "_" + rightName
+    resName = jn.name
     print >>fo, indent + "struct tableNode *" + resName + ";\n"
 
     print >>fo, indent + "{\n"
@@ -1667,10 +1740,12 @@ table_refs = {
 
 def generate_code_for_a_table_node(fo, indent, lvl, tn):
     global loaded_table_list
+    global pre_executed_nodes
 
-    resName =  tn.table_name.lower()[0:2] if table_abbr[tn.table_name.lower()] == None else table_abbr[tn.table_name.lower()]
-    resName = resName + str(table_refs[tn.table_name.lower()])
-    table_refs[tn.table_name.lower()] = table_refs[tn.table_name.lower()] + 1
+    if tn.name in pre_executed_nodes:
+	return tn.name
+
+    resName = tn.name
     tnName = tn.table_name.lower() + "Table"
     var_subqRes = "subqRes" + str(lvl)
     print >>fo, indent + "// Process the TableNode for " + tn.table_name.upper()
@@ -1986,6 +2061,17 @@ def __gen_col_lists(tn, col_lists):
 def generate_col_lists(col_lists):
     return lambda tn: __gen_col_lists(tn, col_lists)
 
+pre_executed_nodes = {}
+def generate_code_for_non_correlated_subquery(fo, indent, tree):
+    if tree.correlated:
+	if isinstance(tree, ystree.TwoJoinNode):
+	    generate_code_for_non_correlated_subquery(fo, indent, tree.left_child)
+	    generate_code_for_non_correlated_subquery(fo, indent, tree.right_child)
+	elif isinstance(tree, ystree.GroupByNode) or isinstance(tree, ystree.OrderByNode) or isinstance(tree, ystree.SelectProjectNode):
+	    generate_code_for_non_correlated_subquery(fo, indent, tree.child)
+    else: # tree.correlated is False
+	generate_code_for_a_node(fo, indent, 0, tree)
+	pre_executed_nodes[tree.name] = True
 
 def generate_code_for_loading_tables(fo, indent, tree):
     global loaded_table_list
