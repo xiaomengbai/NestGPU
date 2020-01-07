@@ -400,7 +400,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         if (!use_gpu_mempool) {
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbKey, gb->table->tupleNum * sizeof(int)));
         } else {
-            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbKey, sizeof(int) * gb->groupByColNum);
+            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbKey,  gb->table->tupleNum * sizeof(int));
             GPU_MEMPOOL_CHECK(gpu_inner_mp);
         }
 
@@ -543,6 +543,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp, const
         alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuGbSize, sizeof(int) * res->totalAttr);
         GPU_MEMPOOL_CHECK(gpu_inner_mp);
     }
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbSize, res->attrSize, sizeof(int)*res->totalAttr, cudaMemcpyHostToDevice));
     struct groupByExp *gpuGbExp;
 
     if(!use_gpu_mempool){
