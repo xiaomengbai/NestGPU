@@ -534,13 +534,13 @@ def generate_code(tree):
         print >>fo, "extern void createIndex (struct tableNode *, int, int, struct statistic *);"
         if joinType == 0:
             #print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *);"
-            print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *, bool, bool, bool);"
+            print >>fo, "extern struct tableNode* hashJoin(struct joinNode *, struct statistic *, bool, bool, bool, int *);"
+            print >>fo, "extern int *buildColumnHash(struct tableNode *, int, struct statistic *);"
         else:
             print >>fo, "extern struct tableNode* inviJoin(struct joinNode *, struct statistic *);"
         print >>fo, "extern struct tableNode* groupBy(struct groupByNode *,struct statistic *, bool, bool);"
         print >>fo, "extern struct tableNode* orderBy(struct orderByNode *, struct statistic *);"
         print >>fo, "extern char* materializeCol(struct materializeNode * mn, struct statistic *);"
-
     else:
         print >>fo, "#include <CL/cl.h>"
         print >>fo, "#include <string>"
@@ -703,8 +703,21 @@ def generate_code(tree):
 		print >>fo, indent + "transferTableColumnToGPU(" + t_name + ", " + str(fullIndexList.index(pair[0])) + ");"
 
     map(lambda t: generate_code_for_non_correlated_subquery(fo, indent, t), ystree.subqueries)
-    print pre_executed_nodes
+    for table,node in pre_executed_nodes.items():
+        if isinstance(node.parent, ystree.TwoJoinNode):
+            leftIndex, rightIndex = get_join_indices(node.parent)
+            if leftIndex == None or rightIndex == None:
+                print "Join Indices do not match!"
+                exit(-1)
 
+            if node.parent.left_child.name == table:
+                hashIndex = leftIndex
+            else:
+                hashIndex = rightIndex
+
+            print >>fo, indent + "int *" + table + "_hash = buildColumnHash(" + table + ", " + str(hashIndex) + ", &pp);"
+
+    print >>fo, "\n"
     generate_code_for_a_tree(fo, tree, 0)
 
     print >>fo, "\n";
@@ -1345,6 +1358,52 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 
     return resultNode
 
+
+def get_join_indices(jn):
+    pkList = jn.get_pk()
+
+    if (len(pkList[0]) != len(pkList[1])):
+        print "ERROR: the join indices do not match!"
+        exit(-1)
+
+    leftIndex = None
+    rightIndex = None
+    if joinType == 0:
+        for exp in pkList[0]:
+            leftIndex = 0
+            if isinstance(jn.left_child, ystree.TableNode):
+                leftIndex = -1
+                for tmp in jn.left_child.select_list.tmp_exp_list:
+                    if exp.column_name == tmp.column_name:
+                        leftIndex = jn.left_child.select_list.tmp_exp_list.index(tmp)
+                        break
+                if leftIndex == -1:
+                    print 1/0
+            else:
+                leftIndex = exp.column_name
+
+    elif joinType == 1:
+        for exp in pkList[0]:
+            newExp = ystree.__trace_to_leaf__(jn, exp, True)
+            leftIndex = newExp.column_name
+
+
+    for exp in pkList[1]:
+        rightIndex = 0
+        if isinstance(jn.right_child, ystree.TableNode):
+            rightIndex = -1
+            for tmp in jn.right_child.select_list.tmp_exp_list:
+                if exp.column_name == tmp.column_name:
+                    rightIndex = jn.right_child.select_list.tmp_exp_list.index(tmp)
+                    break
+            if rightIndex == -1:
+                print 1/0
+        else:
+            rightIndex = exp.column_name
+
+    return leftIndex,rightIndex
+
+
 def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
     global pre_executed_nodes
@@ -1464,46 +1523,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
                             rPosList.append(index)
                             index = index + 1
 
-    pkList = jn.get_pk()
-
-    if (len(pkList[0]) != len(pkList[1])):
-        print "ERROR: the join indices do not match!"
-        exit(-1)
-
-    leftIndex = None
-    rightIndex = None
-    if joinType == 0:
-        for exp in pkList[0]:
-            leftIndex = 0
-            if isinstance(jn.left_child, ystree.TableNode):
-                leftIndex = -1
-                for tmp in jn.left_child.select_list.tmp_exp_list:
-                    if exp.column_name == tmp.column_name:
-                        leftIndex = jn.left_child.select_list.tmp_exp_list.index(tmp)
-                        break
-                if leftIndex == -1:
-                    print 1/0
-            else:
-                leftIndex = exp.column_name
-
-    elif joinType == 1:
-        for exp in pkList[0]:
-            newExp = ystree.__trace_to_leaf__(jn, exp, True)
-            leftIndex = newExp.column_name
-
-
-    for exp in pkList[1]:
-        rightIndex = 0
-        if isinstance(jn.right_child, ystree.TableNode):
-            rightIndex = -1
-            for tmp in jn.right_child.select_list.tmp_exp_list:
-                if exp.column_name == tmp.column_name:
-                    rightIndex = jn.right_child.select_list.tmp_exp_list.index(tmp)
-                    break
-            if rightIndex == -1:
-                print 1/0
-        else:
-            rightIndex = exp.column_name
+    leftIndex, rightIndex = get_join_indices(jn)
 
     if leftIndex is None or rightIndex is None:
         print "ERROR: Failed to find join indices for two tables"
@@ -1575,7 +1595,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         print >>fo, indent + "new_size_join += filterSize * 3; // gpuFactFilter + filterNum + filterPsum"
         print >>fo, indent + "resize_gpu_mempool(&gpu_inner_mp, new_size_join);"
         print >>fo, indent + "char *origin_pos_join = freepos_gpu_mempool(&gpu_inner_mp);"
-        print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &pp, true, true, " + ("true" if lvl > 0 else "false") + ");"
+        print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &pp, true, true, " + ("true" if lvl > 0 else "false") + ", " + (rightName + "_hash" if lvl > 0 else "NULL") + ");"
         print >>fo, indent + "freeto_gpu_mempool(&gpu_inner_mp, origin_pos_join);\n"
     else:
         print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &context, &pp);\n"
@@ -2071,7 +2091,7 @@ def generate_code_for_non_correlated_subquery(fo, indent, tree):
 	    generate_code_for_non_correlated_subquery(fo, indent, tree.child)
     else: # tree.correlated is False
 	generate_code_for_a_node(fo, indent, 0, tree)
-	pre_executed_nodes[tree.name] = True
+	pre_executed_nodes[tree.name] = tree
 
 def generate_code_for_loading_tables(fo, indent, tree):
     global loaded_table_list
