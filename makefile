@@ -26,6 +26,10 @@ SCHEMA := $(TPCH_SCHEMA)
 # Testing query
 #SQL_FILE := $(TPCH_TEST_DIR)/test.sql
 
+# Simple type with X nested levels
+#SQL_FILE := $(TPCH_TEST_DIR)/simpleX1.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/simpleX2.sql
+
 # TPC-H Q2
 SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
@@ -45,10 +49,10 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # -- Optimizations --
 
 #Baseline
-#GPU_OPT := --base
+GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
-GPU_OPT := --idx
+#GPU_OPT := --idx
 # -------------------
 
 # build test/dbgen/dbgen for generating tables
