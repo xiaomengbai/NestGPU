@@ -358,6 +358,8 @@ struct statistic{
 
     double join_totalTime;
     int join_callTimes;
+    int join_leftTableSize;
+    int join_rightTableSize;
 
     // Step 1 - Allocate memory for intermediate results
     double joinProf_step1_allocateMem;
@@ -423,6 +425,12 @@ struct statistic{
     //Step 8 - De-allocate memory
     double groupby_step8_deallocate;
     // ===============================
+
+    // ============ SUB() ============
+    int outerTableSize;
+    int resultTableSize;
+    // ===============================
+
 };
 
 

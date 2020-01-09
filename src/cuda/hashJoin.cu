@@ -832,6 +832,19 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
     clock_gettime(CLOCK_REALTIME, &endS2);
     pp->joinProf_step2_buildHash += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
 
+    //Update stats from the largest join
+    if (jNode->leftTable->tupleNum >= pp->join_leftTableSize 
+           && jNode->rightTable->tupleNum >= pp->join_rightTableSize){
+        pp->join_leftTableSize = jNode->leftTable->tupleNum;
+        pp->join_rightTableSize = jNode->rightTable->tupleNum;
+    }
+
+    // printf("<JOIN RES>\n");
+    // printf("Left Table           : %d\n", jNode->leftTable->tupleNum);
+    // printf("Right Table          : %d\n", jNode->rightTable->tupleNum);
+    // printf("<JOIN RES>\n");
+
+
     //Start timer for Step 3 - Join
     struct timespec startS3, endS3;
     clock_gettime(CLOCK_REALTIME,&startS3);

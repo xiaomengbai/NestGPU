@@ -626,6 +626,9 @@ def generate_code(tree):
     print >>fo, indent + "struct statistic pp;"
     print >>fo, indent + "pp.total = pp.kernel = pp.pcie = 0;\n"
 
+    #For sub profiling
+    print >>fo, indent + "pp.outerTableSize = pp.resultTableSize = 0;\n"
+
     #For tableScan profiling
     print >>fo, indent + "pp.buildIndexTotal = 0;"
     print >>fo, indent + "pp.tableScanTotal = 0;"
@@ -660,6 +663,8 @@ def generate_code(tree):
     #For join profiling
     print >>fo, indent + "pp.join_totalTime = 0;"
     print >>fo, indent + "pp.join_callTimes = 0;"
+    print >>fo, indent + "pp.join_leftTableSize = 0;"
+    print >>fo, indent + "pp.join_rightTableSize = 0;"
     print >>fo, indent + "pp.joinProf_step1_allocateMem = 0;"
     print >>fo, indent + "pp.joinProf_step2_buildHash = 0;"
     print >>fo, indent + "pp.joinProf_step21_allocateMem = 0;"
@@ -671,6 +676,7 @@ def generate_code(tree):
     print >>fo, indent + "pp.joinProf_step32_exclusiveScan = 0;"
     print >>fo, indent + "pp.joinProf_step33_prob = 0;"
     print >>fo, indent + "pp.joinProf_step4_deallocate = 0;\n"
+
     #For groupBy profiling
     print >>fo, indent + "pp.groupby_totalTime = 0;"
     print >>fo, indent + "pp.groupby_callTimes = 0;"
@@ -735,6 +741,12 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"<--Build index time-->         : %lf\\n\", pp.buildIndexTotal/(1000*1000));\n"
     print >>fo, indent + "printf(\"\\n\");"
 
+    print >>fo, indent + "printf(\"<---SUB()--->\\n\");"
+    print >>fo, indent + "printf(\"Outer table size           : %d\\n\", pp.outerTableSize);\n"
+    print >>fo, indent + "printf(\"Result table size          : %d\\n\", pp.resultTableSize);\n"
+    print >>fo, indent + "printf(\"<----------------->\");"
+    print >>fo, indent + "printf(\"\\n\");"
+
     print >>fo, indent + "printf(\"<---TableScan()--->\\n\");"
     print >>fo, indent + "printf(\"Total time      : %lf\\n\", pp.tableScanTotal/(1000*1000));"
     print >>fo, indent + "printf(\"Calls           : %d\\n\", pp.tableScanCount);\n"
@@ -767,8 +779,10 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"\\n\");"
 
     print >>fo, indent + "printf(\"<---HashJoin()--->\\n\");"
-    print >>fo, indent + "printf(\"Total time      : %lf\\n\", pp.join_totalTime/(1000*1000));"
-    print >>fo, indent + "printf(\"Calls           : %d\\n\", pp.join_callTimes);\n"
+    print >>fo, indent + "printf(\"Total time                : %lf\\n\", pp.join_totalTime/(1000*1000));"
+    print >>fo, indent + "printf(\"Calls                     : %d\\n\", pp.join_callTimes);\n"
+    print >>fo, indent + "printf(\"Left table Size           : %d\\n\", pp.join_leftTableSize);\n"
+    print >>fo, indent + "printf(\"Right table Size          : %d\\n\", pp.join_rightTableSize);\n"
     print >>fo, indent + "printf(\"Step 1 - Allocate memory for intermediate results : %lf\\n\", pp.joinProf_step1_allocateMem/(1000*1000));"
     print >>fo, indent + "printf(\"Step 2 - Build hashTable                          : %lf\\n\", pp.joinProf_step2_buildHash/(1000*1000));"
     print >>fo, indent + "printf(\"Step 2.1 - Allocate memory                        : %lf\\n\", pp.joinProf_step21_allocateMem/(1000*1000));"    
@@ -1019,6 +1033,7 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     generate_code_for_a_tree(fo, sub_tree, lvl + 1)
 
     print >>fo, indent + baseIndent * 2 + ""
+    
     if constant_len_res:
         print >>fo, indent + baseIndent * 2 + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
     else:
@@ -1028,6 +1043,11 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
         print >>fo, indent + baseIndent * 2 + "mempcpy(((char **)" + var_subqRes + ")[tupleid] + sizeof(int), final, " + subq_res_size + " * mn.table->tupleNum);"
     print >>fo, indent + baseIndent * 2 + "freeto_mempool(free_pos);"
     print >>fo, indent + baseIndent * 2 + "freeto_gpu_mempool(&gpu_inter_mp, free_gpu_pos);"
+
+    #Add loop info 
+    print >>fo, indent + baseIndent * 2 + "pp.outerTableSize = "+tableName+"->tupleNum;"
+    print >>fo, indent + baseIndent * 2 + "pp.resultTableSize = mn.table->tupleNum;"
+
     print >>fo, indent + baseIndent + "}"
     print >>fo, indent + "}"
 
