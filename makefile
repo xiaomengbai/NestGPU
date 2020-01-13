@@ -45,7 +45,6 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q18.sql
 # ---------------
 
-
 # -- Optimizations --
 
 #Baseline
@@ -59,16 +58,15 @@ GPU_OPT := --base
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 2
-#index works for 0.01, 0.1, 0.5, 1 (out of memory)
+TABLE_SCALE := 0.5
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
 	$(MAKE) -C $(DBGEN_DIR)
 
 # target: tables
-#   genrerate tables
-TABLES := supplier part customer nation region partsupp
+#   genrerate tablesm
+TABLES := supplier part customer partsupp orders lineitem nation region 
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
@@ -91,7 +89,7 @@ $(DATA_DIR)/part.tbl: $(DBGEN) $(DBGEN_DIST)
 	$(DBGEN) $(DBGEN_OPTS) -T p
 	mv part.tbl $(DATA_DIR)/part.tbl
 	mv partsupp.tbl $(DATA_DIR)/partsupp.tbl
-
+	
 $(DATA_DIR):
 	mkdir -p $(DATA_DIR)
 
