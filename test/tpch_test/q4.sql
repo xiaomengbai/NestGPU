@@ -1,14 +1,14 @@
---TPC-H Q4 (Type J)
+--TPC-H Q4 (Type J - Original)
 select
    o_orderpriority,
    count(*) as order_count 
 from
    orders 
 where
---   o_orderdate >= date '[DATE]'
---   and o_orderdate < date '[DATE]' + interval '3' month 
+   o_orderdate >= 'date'
+   and o_orderdate < date '[DATE]' + interval '3' month 
    and exists (
-       select 
+      select 
              *
        from 
              lineitem

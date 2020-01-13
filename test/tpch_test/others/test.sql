@@ -1,26 +1,31 @@
--- SIMPLE TPC-H query (WORKS)
+-- Test SUPPLIER table 
 -- select * from supplier;
 
--- SIMPLE TPC-H query (WORKS)
+-- Test PART table 
 -- select * from part;
 
--- SIMPLE TPC-H query (WORKS)
+-- Test CUSTOMER table 
 -- select * from customer;
 
--- SIMPLE TPC-H query (WORKS)
+-- Test NATION table
 -- select * from nation;
 
--- SIMPLE TPC-H query (WORKS)
+-- Test REGION table
 -- select * from region;
 
--- SIMPLE TPC-H query (WORKS)
+-- Test PARTSUPP table
 -- select * from partsupp;
 
+-- Test ORDERS table
+-- select * from orders;
+
+-- Test LINEITEM table
+-- select * from lineitem;
 
 -- Testing order by
-select c_custkey
-from customer
-order by c_custkey;
+--select c_custkey
+--from customer
+--order by c_custkey;
 
 -- Testing "FILTER"
 -- select *
@@ -60,9 +65,9 @@ order by c_custkey;
 
 
 -- Tesing "SUBQUERY" (Type J)
---select c_name
---from customer;
---where c_nationkey in (select s_nationkey from supplier where s_suppkey > 98);
+select c_name
+from customer;
+where c_nationkey in (select s_nationkey from supplier where s_suppkey > 98);
 
 
 -- Tesing "SUBQUERY" (Type A)

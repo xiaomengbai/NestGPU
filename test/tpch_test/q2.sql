@@ -35,9 +35,9 @@ where
        and n_regionkey = r_regionkey
        and r_name = 'ASIA'
     )
-order by
-  s_acctbal,
-  n_name,
-  s_name,
-  p_partkey
+-- order by
+--   s_acctbal,
+--   n_name,
+--   s_name,
+--   p_partkey
 ;

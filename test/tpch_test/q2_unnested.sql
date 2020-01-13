@@ -39,9 +39,9 @@ select
    and r_name = 'ASIA'
    and ps_supplycost = t1_min_supplycost
    and p_partkey = t1_partkey
- order by
-   s_acctbal,
-   n_name,
-   s_name,
-   p_partkey
+--  order by
+--    s_acctbal,
+--    n_name,
+--    s_name,
+--    p_partkey
 ;

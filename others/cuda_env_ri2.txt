@@ -14,3 +14,7 @@ make gpudb
 
 --Run GPUDB (without makefile)
 ./src/cuda/GPUDATABASE  --datadir test/tables
+
+
+--Monitor memory
+nvidia-smi -lms > log.txt
