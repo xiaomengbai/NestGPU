@@ -839,12 +839,6 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
         pp->join_rightTableSize = jNode->rightTable->tupleNum;
     }
 
-    // printf("<JOIN RES>\n");
-    // printf("Left Table           : %d\n", jNode->leftTable->tupleNum);
-    // printf("Right Table          : %d\n", jNode->rightTable->tupleNum);
-    // printf("<JOIN RES>\n");
-
-
     //Start timer for Step 3 - Join
     struct timespec startS3, endS3;
     clock_gettime(CLOCK_REALTIME,&startS3);
