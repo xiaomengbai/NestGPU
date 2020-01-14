@@ -1766,7 +1766,9 @@ table_abbr = {
     "customer" : "cu",
     "nation" : "na",
     "region" : "re",
-    "partsupp" : "ps"
+    "partsupp" : "ps",
+    "orders" : "od",
+    "lineitem" : "li"
     }
 
 table_refs = {
@@ -1775,7 +1777,9 @@ table_refs = {
     "customer" : 0,
     "nation" : 0,
     "region" : 0,
-    "partsupp" : 0
+    "partsupp" : 0,
+    "orders" : 0,
+    "lineitem" : 0
     }
 
 def generate_code_for_a_table_node(fo, indent, lvl, tn):
@@ -1982,7 +1986,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 indexDict = {}
                 for j in range(0, len(indexList)):
                     indexDict[ tn.table_name + "." + str(indexList[j])] = j
-                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], "header.tupleNum", tnName, indexDict, tn, "MEM")
+                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, tn, "MEM")
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"

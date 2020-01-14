@@ -90,7 +90,7 @@ $(DATA_DIR)/part.tbl: $(DBGEN) $(DBGEN_DIST)
 	$(DBGEN) $(DBGEN_OPTS) -T p
 	mv part.tbl $(DATA_DIR)/part.tbl
 	mv partsupp.tbl $(DATA_DIR)/partsupp.tbl
-	
+
 $(DATA_DIR):
 	mkdir -p $(DATA_DIR)
 
