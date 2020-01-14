@@ -1,7 +1,7 @@
 -- ======= WORKING QUERIES =======
 
 -- Test SUPPLIER table [WORKS]
-select * from supplier;
+-- select * from supplier;
 
 -- Test PART table [WORKS]
 -- select * from part;
@@ -57,7 +57,7 @@ select * from supplier;
 -- ======= NOT WORKING QUERIES =======
 
 -- Test ORDERS table [NOT WORKING]
--- select * from orders;
+select * from orders;
 
 -- Test LINEITEM table [NOT WORKING]
 -- select * from lineitem;
