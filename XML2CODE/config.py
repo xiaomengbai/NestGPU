@@ -38,6 +38,9 @@ joinType = 0
 POS = 0
 CODETYPE = 0
 SOA = 0
+HostMempool = 1
+DeviceMempool = 1
+SubResMempool = 1
 
 """
 OpenCL specific configurable variables:

@@ -36,7 +36,7 @@ else
     LDFLAGS   := -lcudart -lrt
 endif
 
-SRCS := tableScan.cu inviJoin.cu hashJoin.cu cuckoo.cu materialize.cu groupby.cu orderBy.cu driver.cu mempool.cu
+SRCS := tableScan.cu inviJoin.cu hashJoin.cu cuckoo.cu materialize.cu groupby.cu orderBy.cu driver.cu Mempool.cu
 OBJS := $(SRCS:.cu=.o)
 DEPS := $(SRCS:.cu=.d)
 

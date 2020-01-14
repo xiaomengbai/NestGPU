@@ -32,7 +32,7 @@
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>
 
-#include "../include/mempool.h"
+#include "../include/Mempool.h"
 
 /*
  * Count the number of dimension keys for each bucket.
@@ -637,7 +637,8 @@ int *buildColumnHash(struct tableNode *tNode, int colId, struct statistic *pp)
  *  A new table node
  */
 
-struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const bool use_mempool = false, const bool use_gpu_mempool = false, const bool results_in_mempool = false, int *rightTableHash = NULL){
+struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp,
+                            Mempool *host_mp = NULL, Mempool *dev_mp = NULL, Mempool *res_mp = NULL, int *rightTableHash = NULL){
 
 
     //Start total timer
@@ -667,17 +668,15 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
     else
         grid = defaultBlock;
 
-    if(!use_mempool) {
+    if(host_mp == NULL) {
         res = (struct tableNode*) malloc(sizeof(struct tableNode));
         CHECK_POINTER(res);
-    }else{
-        res = (struct tableNode *) alloc_mempool(sizeof(struct tableNode));
-        MEMPOOL_CHECK();
-    }
+    }else
+        res = (struct tableNode *) host_mp->alloc(sizeof(struct tableNode));
 
     res->totalAttr = jNode->totalAttr;
     res->tupleSize = jNode->tupleSize;
-    if(!use_mempool) {
+    if(host_mp == NULL) {
         res->attrType = (int *) malloc(res->totalAttr * sizeof(int));
         CHECK_POINTER(res->attrType);
         res->attrSize = (int *) malloc(res->totalAttr * sizeof(int));
@@ -693,14 +692,13 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
         res->content = (char **) malloc(res->totalAttr * sizeof(char *));
         CHECK_POINTER(res->content);
     }else{
-        res->attrType = (int *) alloc_mempool(res->totalAttr * sizeof(int));
-        res->attrSize = (int *) alloc_mempool(res->totalAttr * sizeof(int));
-        res->attrIndex = (int *) alloc_mempool(res->totalAttr * sizeof(int));
-        res->attrTotalSize = (int *) alloc_mempool(res->totalAttr * sizeof(int));
-        res->dataPos = (int *) alloc_mempool(res->totalAttr * sizeof(int));
-        res->dataFormat = (int *) alloc_mempool(res->totalAttr * sizeof(int));
-        res->content = (char **) alloc_mempool(res->totalAttr * sizeof(char *));
-        MEMPOOL_CHECK();
+        res->attrType = (int *) host_mp->alloc(res->totalAttr * sizeof(int));
+        res->attrSize = (int *) host_mp->alloc(res->totalAttr * sizeof(int));
+        res->attrIndex = (int *) host_mp->alloc(res->totalAttr * sizeof(int));
+        res->attrTotalSize = (int *) host_mp->alloc(res->totalAttr * sizeof(int));
+        res->dataPos = (int *) host_mp->alloc(res->totalAttr * sizeof(int));
+        res->dataFormat = (int *) host_mp->alloc(res->totalAttr * sizeof(int));
+        res->content = (char **) host_mp->alloc(res->totalAttr * sizeof(char *));
     }
 
     for(int i=0;i<jNode->leftOutputAttrNum;i++){
@@ -743,12 +741,10 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
     NP2(hsize);
 
     if(rightTableHash == NULL) {
-        if(!use_gpu_mempool)
+        if(dev_mp == NULL)
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_hashNum,sizeof(int)*hsize));
-        else {
-            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_hashNum, sizeof(int) * hsize);
-            GPU_MEMPOOL_CHECK(gpu_inner_mp);
-        }
+        else
+            gpu_hashNum = (int *) dev_mp->alloc(sizeof(int) * hsize);
         CUDA_SAFE_CALL_NO_SYNC(cudaMemset(gpu_hashNum,0,sizeof(int)*hsize));
     } else {
         gpu_hashNum = rightTableHash;
@@ -756,15 +752,14 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
 
     int dataPos = jNode->rightTable->dataPos[jNode->rightKeyIndex];
     if(rightTableHash == NULL) {
-        if(!use_gpu_mempool) {
+        if(dev_mp == NULL) {
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_psum,hsize*sizeof(int)));
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpu_bucket, 2*primaryKeySize));
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_psum1,hsize*sizeof(int)));
         } else {
-            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_psum,   hsize * sizeof(int));
-            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_bucket, 2 * primaryKeySize);
-            alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_psum1,  hsize * sizeof(int));
-            GPU_MEMPOOL_CHECK(gpu_inner_mp);
+            gpu_psum   = (int *)  dev_mp->alloc(hsize * sizeof(int));
+            gpu_bucket = (char *) dev_mp->alloc(2 * primaryKeySize);
+            gpu_psum1  = (int *)  dev_mp->alloc(hsize * sizeof(int));
         }
 
         if(dataPos == MEM || dataPos == MMAP || dataPos == PINNED){
@@ -819,7 +814,7 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
         if (dataPos == MEM || dataPos == MMAP || dataPos == PINNED)
             CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_dim));
 
-        if(!use_gpu_mempool)
+        if(dev_mp == NULL)
             CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_psum1));
     }
     //Stop for  Step 2.4 - build_hash_table (+ memCopy op)
@@ -853,13 +848,12 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
 
     threadNum = grid.x * block.x;
 
-    if(!use_gpu_mempool) {
+    if(dev_mp == NULL) {
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_count,sizeof(int)*threadNum));
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_resPsum,sizeof(int)*threadNum));
     } else {
-        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_count,   sizeof(int) * threadNum);
-        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpu_resPsum, sizeof(int) * threadNum);
-        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        gpu_count   = (int *) dev_mp->alloc(sizeof(int) * threadNum);
+        gpu_resPsum = (int *) dev_mp->alloc(sizeof(int) * threadNum);
     }
     int *gpuFactFilter = NULL, *filterNum = NULL, * JRes = NULL, * filterPsum = NULL;
 
@@ -877,15 +871,14 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
         gpu_fact = jNode->leftTable->content[jNode->leftKeyIndex];
     }
 
-    if(!use_gpu_mempool) {
+    if(dev_mp == NULL) {
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuFactFilter,filterSize));
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&filterNum,filterSize));
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&filterPsum,filterSize));
     } else {
-        alloc_gpu_mempool(&gpu_inner_mp, (char **)&gpuFactFilter, filterSize);
-        alloc_gpu_mempool(&gpu_inner_mp, (char **)&filterNum,     filterSize);
-        alloc_gpu_mempool(&gpu_inner_mp, (char **)&filterPsum,    filterSize);
-        GPU_MEMPOOL_CHECK(gpu_inner_mp);
+        gpuFactFilter = (int *) dev_mp->alloc(filterSize);
+        filterNum     = (int *) dev_mp->alloc(filterSize);
+        filterPsum    = (int *) dev_mp->alloc(filterSize);
     }
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(gpuFactFilter,0,filterSize));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(filterNum,0,filterSize));
@@ -903,7 +896,7 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
     if(format == UNCOMPRESSED)
     {
         count_join_result<<<grid,block>>>(gpu_hashNum, gpu_psum, gpu_bucket, gpu_fact, jNode->leftTable->tupleNum, gpu_count,filterNum,hsize);
-        //thrust::exclusive_scan(thrust::device, filterNum, filterNum + jNode->leftTable->tupleNum, filterPsum);
+        // thrust::exclusive_scan(thrust::device, filterNum, filterNum + jNode->leftTable->tupleNum, filterPsum);
         scanImpl(filterNum, jNode->leftTable->tupleNum, filterPsum, pp);
 
     }
@@ -965,14 +958,10 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
     struct timespec startS33, endS33;
     clock_gettime(CLOCK_REALTIME,&startS33);
 
-    if(!use_gpu_mempool)
+    if(dev_mp == NULL)
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&JRes,res->tupleNum * sizeof(int)));
-    else{
-        size_t new_size = (gpu_inner_mp.free - gpu_inner_mp.base) + res->tupleNum * sizeof(int);
-        resize_gpu_mempool(&gpu_inner_mp, new_size);
-        alloc_gpu_mempool(&gpu_inner_mp, (char **)&JRes, res->tupleNum * sizeof(int));
-        GPU_MEMPOOL_CHECK(gpu_inner_mp);
-    }
+    else
+        JRes = (int *) dev_mp->alloc(res->tupleNum * sizeof(int));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemset(JRes,0,res->tupleNum * sizeof(int)));
 
     probe_join_result<<<grid,block>>>(gpu_hashNum, gpu_psum, gpu_bucket, gpu_fact, jNode->leftTable->tupleNum,filterPsum,JRes,hsize);
@@ -995,7 +984,7 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
         CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_fact));
     }
 
-    if(!use_gpu_mempool && rightTableHash == NULL)
+    if(dev_mp == NULL && rightTableHash == NULL)
         CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpu_bucket));
 
     for(int i=0; i<res->totalAttr; i++){
@@ -1056,12 +1045,10 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
             leftRight = 1;
         }
 
-        if(!results_in_mempool) {
+        if(res_mp == NULL)
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&gpu_result,resSize));
-        } else {
-            resize_gpu_mempool(&gpu_inter_mp, gpu_inter_mp.free - gpu_inter_mp.base + resSize);
-            alloc_gpu_mempool(&gpu_inter_mp, (char **) &gpu_result, resSize);
-        }
+        else
+            gpu_result = (char *) res_mp->alloc(resSize);
 
         if(leftRight == 0){
             if(format == UNCOMPRESSED){
@@ -1199,7 +1186,7 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp, const 
 
     }
 
-    if(!use_gpu_mempool) {
+    if(dev_mp == NULL) {
         CUDA_SAFE_CALL(cudaFree(gpuFactFilter));
         CUDA_SAFE_CALL(cudaFree(filterNum));
         CUDA_SAFE_CALL(cudaFree(filterPsum));
