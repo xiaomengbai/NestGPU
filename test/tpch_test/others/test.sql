@@ -1,82 +1,73 @@
--- Test SUPPLIER table 
--- select * from supplier;
+-- ======= WORKING QUERIES =======
 
--- Test PART table 
+-- Test SUPPLIER table [WORKS]
+select * from supplier;
+
+-- Test PART table [WORKS]
 -- select * from part;
 
--- Test CUSTOMER table 
+-- Test CUSTOMER table [WORKS]
 -- select * from customer;
 
--- Test NATION table
+-- Test NATION table [WORKS]
 -- select * from nation;
 
--- Test REGION table
+-- Test REGION table [WORKS]
 -- select * from region;
 
--- Test PARTSUPP table
+-- Test PARTSUPP table [WORKS]
 -- select * from partsupp;
 
--- Test ORDERS table
--- select * from orders;
-
--- Test LINEITEM table
--- select * from lineitem;
-
--- Testing order by
---select c_custkey
---from customer
---order by c_custkey;
-
--- Testing "FILTER"
+-- Testing "FILTER" INT [WORKS]
 -- select *
 -- from customer
--- where c_city = 'BRAZIL';
+-- where C_CUSTKEY = 74991;
 
-
--- Testing "COUNT"
--- select count(*)
+-- Testing "FILTER" TEXT [WORKS]
+-- select *
 -- from customer
--- where c_city = 'BRAZIL';
+-- where C_NAME = 'Customer#000075000';
 
-
--- Testing "JOIN"
--- select c_name, c_city, s_name, s_city
--- from customer, supplier
--- where c_city = s_city and c_nation = 'MOROCCO';
-
-
---Testing "MIN"
---select min(c_custkey), c_nation
---from customer
---group by c_nation;
-
-
--- Testing "TEXT COMPARISON"
--- select c_name, c_nation
+-- Testing ">" [WORKS]
+-- select *
 -- from customer
--- where c_nation like '%O%N';
--- like '%MO%CO%';
+-- where C_CUSTKEY > 74990;
 
+-- Testing "JOIN" [WORKS]
+-- select  P_NAME
+-- from PART, PARTSUPP
+-- where P_PARTKEY = PS_PARTKEY;
 
--- Tesing "SUBQUERY" (Type N)
--- select c_name
+-- Testing 3-way "JOIN" [WORKS]
+-- select  P_NAME, S_NAME
+-- from PART, PARTSUPP, SUPPLIER
+-- where P_PARTKEY = PS_PARTKEY
+--     and PS_SUPPKEY = S_SUPPKEY;
+
+--Testing GROUP BY [WORKS]
+-- select P_BRAND, min(P_RETAILPRICE)
+-- from PART
+-- group by P_BRAND;
+
+-- Testing "TEXT COMPARISON" [WORKS]
+-- select C_NAME, C_COMMENT
+-- from CUSTOMER
+-- where C_COMMENT like 'fin%';
+
+-- ======= NOT WORKING QUERIES =======
+
+-- Test ORDERS table [NOT WORKING]
+-- select * from orders;
+
+-- Test LINEITEM table [NOT WORKING]
+-- select * from lineitem;
+
+-- Testing order by [NOT WORKING -> Assertion `odNode->table->tupleNum < 1024']
+-- select c_custkey
 -- from customer
--- where c_city in (select s_city from supplier where s_region = 'AMERICA');
+-- order by c_custkey;
 
-
--- Tesing "SUBQUERY" (Type J)
-select c_name
-from customer;
-where c_nationkey in (select s_nationkey from supplier where s_suppkey > 98);
-
-
--- Tesing "SUBQUERY" (Type A)
--- select c_name
+-- Testing "COUNT" and ">" [NOT WORKING]
+-- select COUNT(*)
 -- from customer
--- where c_custkey > (select max(s_suppkey) from supplier where s_region = 'AMERICA');
-
-
--- Subquery example (Type JA)
---select c_name, c_nation, c_city 
---from customer
---where  c_custkey < (select avg(s_suppkey) from supplier where c_nationkey = s_nationkey and s_suppkey < (select avg(p_partkey) from part where p_size < 20)));
+-- where C_CUSTKEY > 74990;
