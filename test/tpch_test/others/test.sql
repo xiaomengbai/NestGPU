@@ -1,7 +1,7 @@
 -- ======= WORKING QUERIES =======
 
 -- Test SUPPLIER table [WORKS]
--- select * from supplier;
+select * from supplier;
 
 -- Test PART table [WORKS]
 -- select * from part;
@@ -17,6 +17,12 @@
 
 -- Test PARTSUPP table [WORKS]
 -- select * from partsupp;
+
+-- Test ORDERS table [WORKS]
+-- select * from orders;
+
+-- Test LINEITEM table [NOT WORKING]
+-- select * from lineitem;
 
 -- Testing "FILTER" INT [WORKS]
 -- select *
@@ -55,12 +61,6 @@
 -- where C_COMMENT like 'fin%';
 
 -- ======= NOT WORKING QUERIES =======
-
--- Test ORDERS table [NOT WORKING]
-select * from orders;
-
--- Test LINEITEM table [NOT WORKING]
--- select * from lineitem;
 
 -- Testing order by [NOT WORKING -> Assertion `odNode->table->tupleNum < 1024']
 -- select c_custkey

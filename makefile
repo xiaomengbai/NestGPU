@@ -22,9 +22,23 @@ TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
 
+# --- Synthetic Queries ---
+#SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJ.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJ_unnested.sql
+
+#SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJA.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJA_unnested.sql
+# ---------------
+
+# --- Testing Queries ---
+#SQL_FILE := $(TPCH_TEST_DIR)/others/test.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/others/test_sub.sql
+# ---------------
+
+
 # --- TPC-H Queries ---
 # TPC-H Q2 (WORKING)
-#SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
@@ -36,13 +50,6 @@ SCHEMA := $(TPCH_SCHEMA)
 
 # TPC-H Q18
 #SQL_FILE := $(TPCH_TEST_DIR)/q18.sql
-# ---------------
-
-# --- Testing Queries ---
-
-# Testing query
-#SQL_FILE := $(TPCH_TEST_DIR)/others/test.sql
-SQL_FILE := $(TPCH_TEST_DIR)/others/test_sub.sql
 # ---------------
 
 
