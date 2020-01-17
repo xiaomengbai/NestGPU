@@ -26,6 +26,9 @@ SCHEMA := $(TPCH_SCHEMA)
 #SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJ.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJ_unnested.sql
 
+#SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJ2.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJ2_unnested.sql
+
 #SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJA.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJA_unnested.sql
 # ---------------
@@ -37,7 +40,7 @@ SCHEMA := $(TPCH_SCHEMA)
 
 
 # --- TPC-H Queries ---
-# TPC-H Q2 (WORKING)
+# TPC-H Q2 
 SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
@@ -66,7 +69,7 @@ GPU_OPT := --base
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 0.5
+TABLE_SCALE := 2
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
