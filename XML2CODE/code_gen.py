@@ -46,6 +46,7 @@ CODETYPE = config.CODETYPE
 HostMempool = config.HostMempool
 DeviceMempool = config.HostMempool
 SubResMempool = config.SubResMempool
+SubCache = config.SubCache
 
 PID = config.PID
 DTYPE = config.DTYPE
@@ -527,6 +528,7 @@ def generate_code(tree):
 
     print >>fo, "#include \"../include/schema.h\""
     print >>fo, "#include \"../include/Mempool.h\""
+    print >>fo, "#include <map>"
 
     if CODETYPE == 0:
         print >>fo, "#include \"../include/cpuCudaLib.h\""
@@ -1024,6 +1026,12 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
 
     if SubResMempool == 1:
 	print >>fo, indent + "char *free_gpu_pos = gpu_inter_mp.freepos();"
+
+    # TODO: need to consider more than one correlated columns
+    if SubCache == 1 and len(pass_in_cols) == 1:
+        col = pass_in_cols[0]
+        print >>fo, indent + "std::map<" + to_ctype(col.column_type).lower() + ", float> cache;"
+
     print >>fo, indent + "for(int tupleid = 0; tupleid < " + tupleNum + "; tupleid++){"
 
     for col in pass_in_cols:
@@ -1037,14 +1045,24 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
             print "ERROR: Unknown pass in value position: ", passInPos
             exit(99)
 
+    # may also consider IN
+    if SubCache == 1 and len(pass_in_cols) == 1:
+        col = pass_in_cols[0]
+        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+        print >>fo, indent + "if(cache.find(*(" + to_ctype(col.column_type).lower() + " *)" + pass_in_var + ") == cache.end())"
+
     print >>fo, indent + baseIndent + "{"
 
     generate_code_for_a_tree(fo, sub_tree, lvl + 1)
 
     print >>fo, indent + baseIndent * 2 + ""
-    
+
     if constant_len_res:
         print >>fo, indent + baseIndent * 2 + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
+        if SubCache == 1 and len(pass_in_cols) == 1:
+            col = pass_in_cols[0]
+            pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+            print >>fo, indent + baseIndent * 2 + "cache[*(" + to_ctype(col.column_type).lower() + " *)" + pass_in_var + "] = *(float *)final;"
     else:
         print >>fo, indent + baseIndent * 2 + "((char **)" + var_subqRes + ")[tupleid] = (char *)malloc(sizeof(int) + " + subq_res_size + " * mn.table->tupleNum);"
         print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
@@ -1061,6 +1079,14 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     print >>fo, indent + baseIndent * 2 + "pp.resultTableSize = mn.table->tupleNum;"
 
     print >>fo, indent + baseIndent + "}"
+
+    if SubCache == 1 and len(pass_in_cols) == 1:
+        col = pass_in_cols[0]
+        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+        print >>fo, indent + baseIndent + "else {"
+        print >>fo, indent + baseIndent * 2 + "memcpy(" + var_subqRes + " + tupleid * sizeof(float), &(cache[*(" + to_ctype(col.column_type).lower() + " *)" + pass_in_var + "]), sizeof(float));"
+        print >>fo, indent + baseIndent + "}"
+
     print >>fo, indent + "}"
 
     for col in pass_in_cols:

@@ -41,6 +41,7 @@ SOA = 0
 HostMempool = 1
 DeviceMempool = 1
 SubResMempool = 1
+SubCache = 1
 
 """
 OpenCL specific configurable variables:

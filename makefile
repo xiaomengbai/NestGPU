@@ -41,9 +41,9 @@ SCHEMA := $(TPCH_SCHEMA)
 
 # --- TPC-H Queries ---
 # TPC-H Q2
-#SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
-SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 # TPC-H Q4
 #SQL_FILE := $(TPCH_TEST_DIR)/q4.sql
