@@ -52,8 +52,8 @@ void Mempool::resize(size_t newsize)
 
 char *Mempool::alloc(size_t _size)
 {
-    while(_size > freesize())
-        resize(size * 2);
+    // while(_size > freesize())
+    //     resize(size * 2);
 
     char *tmp = free;
     free = free + _size;

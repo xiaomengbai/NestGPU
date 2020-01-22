@@ -31,7 +31,7 @@
 
 #define CUDA_SAFE_CALL( call) do {                                        \
     CUDA_SAFE_CALL_NO_SYNC(call);                                            \
-    cudaError err = cudaThreadSynchronize();                                 \
+    cudaError err = cudaDeviceSynchronize();                                 \
     if( cudaSuccess != err) {                                                \
         fprintf(stderr, "Cuda error in file '%s' in line %i : %s.\n",        \
                 __FILE__, __LINE__, cudaGetErrorString( err) );              \
@@ -99,29 +99,29 @@ __device__ static char * gpuItoa(int value, char* result, int base){
 
 }
 
- 
-/* 
- *  * string copy using one gpu thread. 
- *   */ 
- 
-__device__ static char * gpuStrcpy(char * dst, const char * src){ 
- 
-    char * orig = dst; 
-    while(*src) 
-            *dst++ = *src++; 
-    *dst = '\0'; 
- 
-    return orig; 
-} 
- 
-__device__ static char* gpuStrncat(char *dest, const char *src, size_t n) 
-{ 
-    int dest_len = 0; 
-    int i; 
- 
-    char * tmp = dest; 
-    while(*tmp != '\0'){ 
-        tmp++; 
+
+/*
+ *  * string copy using one gpu thread.
+ *   */
+
+__device__ static char * gpuStrcpy(char * dst, const char * src){
+
+    char * orig = dst;
+    while(*src)
+            *dst++ = *src++;
+    *dst = '\0';
+
+    return orig;
+}
+
+__device__ static char* gpuStrncat(char *dest, const char *src, size_t n)
+{
+    int dest_len = 0;
+    int i;
+
+    char * tmp = dest;
+    while(*tmp != '\0'){
+        tmp++;
         dest_len ++;
     }
 

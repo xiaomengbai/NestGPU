@@ -172,7 +172,7 @@ static void freeMathExp(struct mathExp exp, const bool free_flag = true){
         freeMathExp(((struct mathExp *)exp.exp)[0], free_flag);
         freeMathExp(((struct mathExp *)exp.exp)[1], free_flag);
         if(free_flag) free(((struct mathExp *)exp.exp));
-        exp.exp = NULL;
+        exp.exp = 0;
     }
 }
 
@@ -300,5 +300,90 @@ static void transferTableColumnToCPU(struct tableNode *tn, int i)
         tn->content[i] = tmp;
         tn->dataPos[i] = MEM;
     }
+}
+
+static int tableScanGPUMemSize(struct scanNode *sn)
+{
+    int memsize = 0;
+    dim3 grid(2048);
+    dim3 block(256);
+    int tupleNum = sn->tn->tupleNum;
+    int blockNum = sn->tn->tupleNum / block.x + 1;
+    if(blockNum<2048)
+        grid = blockNum;
+    int threadNum = grid.x * block.x;
+
+    memsize += sizeof(int) * tupleNum;
+    memsize += 2 * sizeof(int) * threadNum;
+    memsize += sizeof(struct whereExp);
+
+    return memsize;
+};
+
+static int hashJoinGPUMemSize(joinNode *jn, bool prehash)
+{
+    int memsize = 0;
+    int hsize = jn->rightTable->tupleNum;
+    long primaryKeySize = sizeof(int) * jn->rightTable->tupleNum;
+    NP2(hsize);
+    int defaultBlock = 4096;
+
+    dim3 grid(defaultBlock);
+    dim3 block(256);
+
+    int blockNum;
+    int threadNum;
+
+    blockNum = jn->leftTable->tupleNum / block.x + 1;
+    if(blockNum < defaultBlock)
+        grid = blockNum;
+    else
+        grid = defaultBlock;
+
+    threadNum = grid.x * block.x;
+
+    long filterSize = jn->leftTable->attrSize[jn->leftKeyIndex] * jn->leftTable->tupleNum;
+
+    if(!prehash) {
+        memsize += sizeof(int) * hsize; // gpu_hashNum
+        memsize += hsize * sizeof(int); // gpu_psum + gpu_psum1
+        memsize += 2 * primaryKeySize; // gpu_bucket
+    }
+
+    memsize += sizeof(int) * threadNum * 2; // gpu_count + gpu_resPsum
+    memsize += filterSize * 3; // gpuFactFilter + filterNum + filterPsum
+    memsize += sizeof(int) * (jn->leftTable->tupleNum + jn->rightTable->tupleNum); // JRes
+
+    return memsize;
+}
+
+static int groupByGPUMemSize(struct groupByNode *gb)
+{
+    int memsize = 0;
+
+    int gpuGbColNum;
+    int gbConstant = 0;
+
+    gpuGbColNum = gb->groupByColNum;
+
+    if(gpuGbColNum == 1 && gb->groupByIndex[0] == -1){
+        gbConstant = 1;
+    }
+
+    memsize += gb->table->totalAttr * sizeof(char *); //gpuContent
+    if(gbConstant != 1){
+        memsize += sizeof(int) * gb->groupByColNum * 3; // gpuGbType + gpuGbSize + gpuGbIndex
+        memsize += sizeof(int) * gb->table->tupleNum; // gpuGbKey
+        memsize += sizeof(int) * HSIZE * 3; // gpu_hashNum + gpu_groupNum + gpu_psum
+        memsize += sizeof(int); // gpuGbCount
+    }
+    memsize += sizeof(char *) * gb->outputAttrNum; // gpuResult
+    memsize += sizeof(int) * gb->outputAttrNum * 2; // gpuGbType + gpuGbSize
+    memsize += sizeof(struct groupByExp) * gb->outputAttrNum; // gpuGbExp;
+    for(int i = 0;i < gb->outputAttrNum; i++)
+        if(gb->gbExp[i].exp.opNum == 2)
+            memsize += 2 * sizeof(struct mathExp); // tmpMath
+
+    return memsize;
 }
 #endif

@@ -34,6 +34,7 @@ select
    and s_suppkey = ps_suppkey
    and p_size = 20
    and p_type like 'MEDIUM%'
+--   and p_brand = 'Brand#41'
    and s_nationkey = n_nationkey
    and n_regionkey = r_regionkey
    and r_name = 'ASIA'

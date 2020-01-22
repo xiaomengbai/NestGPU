@@ -1340,7 +1340,7 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
             print >>fo, indent + "gbNode->tupleSize += "+inputNode + "->attrSize[" + str(colIndex) + "];"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].func = NOOP;"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.op = NOOP;"
-            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.exp = NULL;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.exp = 0;"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opNum = 1;"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opType = COLUMN;"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opValue = " + str(exp.column_name) + ";"
@@ -1359,7 +1359,7 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].func = NOOP;"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.op = NOOP;"
-            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.exp = NULL;"
+            print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.exp = 0;"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opNum = 1;"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opType = CONS;"
             print >>fo, indent + "gbNode->gbExp[" + str(i) + "].exp.opValue = " + str(exp.cons_value) + ";"
@@ -1368,6 +1368,9 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 	h_mp = "&host_mempool" if HostMempool == 1 else "NULL"
 	d_inner_mp = "&gpu_inner_mp" if DeviceMempool == 1 else "NULL"
 	if DeviceMempool == 1:
+            print >>fo, indent + "int dev_memsize = groupByGPUMemSize(gbNode);"
+            print >>fo, indent + "if(gpu_inner_mp.freesize() < dev_memsize)"
+            print >>fo, indent + baseIndent + "gpu_inner_mp.resize(gpu_inner_mp.usedsize() + dev_memsize);"
             print >>fo, indent + "char *origin_pos_groupby = gpu_inner_mp.freepos();"
         print >>fo, indent + resultNode + " = groupBy(gbNode, &pp, " + h_mp + ", " + d_inner_mp + ");"
 	if DeviceMempool == 1:
@@ -1621,7 +1624,10 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 	d_inner_mp = "&gpu_inner_mp" if DeviceMempool == 1 else "NULL"
 	d_res_mp = "&gpu_inter_mp" if lvl > 0 and SubResMempool == 1 else "NULL"
         if DeviceMempool == 1:
-	    print >>fo, indent + "char *origin_pos_join = gpu_inner_mp.freepos();"
+            print >>fo, indent + "int dev_memsize = hashJoinGPUMemSize(&" + jName + ", " + ("true" if lvl > 0 else "false") +");"
+            print >>fo, indent + "if(gpu_inner_mp.freesize() < dev_memsize)"
+            print >>fo, indent + baseIndent + "gpu_inner_mp.resize(gpu_inner_mp.usedsize() + dev_memsize);"
+            print >>fo, indent + "char *origin_pos_join = gpu_inner_mp.freepos();"
         print >>fo, indent + "joinRes = hashJoin(&" + jName + ", &pp, " + h_mp + ", " + d_inner_mp + ", " + d_res_mp + ", " + (rightName + "_hash" if lvl > 0 else "NULL") + ");"
         if DeviceMempool == 1:
             print >>fo, indent + "gpu_inner_mp.freeto(origin_pos_join);\n"
@@ -1749,6 +1755,9 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 	    d_inner_mp = "&gpu_inner_mp" if DeviceMempool == 1 else "NULL"
 	    d_res_mp = "&gpu_inter_mp" if lvl > 0 and SubResMempool == 1 else "NULL"
             if DeviceMempool == 1:
+                print >>fo, indent + "dev_memsize = tableScanGPUMemSize(&" + relName + ");"
+                print >>fo, indent + "if(gpu_inner_mp.freesize() < dev_memsize)"
+                print >>fo, indent + baseIndent + "gpu_inner_mp.resize(gpu_inner_mp.usedsize() + dev_memsize);"
 		print >>fo, indent + "char *origin_pos = gpu_inner_mp.freepos();"
             print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, " + h_mp + ", " + d_inner_mp + ", " + d_res_mp + ", NULL, NULL, NULL);"
 	    if DeviceMempool == 1:
@@ -2050,6 +2059,9 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 	    d_inner_mp = "&gpu_inner_mp" if DeviceMempool == 1 else "NULL"
 	    d_res_mp = "&gpu_inter_mp" if lvl > 0 and SubResMempool == 1 else "NULL"
             if DeviceMempool == 1:
+                print >>fo, indent + "int dev_memsize = tableScanGPUMemSize(&" + relName + ");"
+                print >>fo, indent + "if(gpu_inner_mp.freesize() < dev_memsize)"
+                print >>fo, indent + baseIndent + "gpu_inner_mp.resize(gpu_inner_mp.usedsize() + dev_memsize);"
 		print >>fo, indent + "char *origin_pos = gpu_inner_mp.freepos();"
             if len(indices) > 0:
                 print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, " + h_mp + ", " + d_inner_mp + ", "  + d_res_mp + ", " + indices[0] + ", " + los[0] + " + tupleid, " + his[0] + " + tupleid);"

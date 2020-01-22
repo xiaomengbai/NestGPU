@@ -40,10 +40,10 @@ SCHEMA := $(TPCH_SCHEMA)
 
 
 # --- TPC-H Queries ---
-# TPC-H Q2 
-SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+# TPC-H Q2
+#SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
-#SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 # TPC-H Q4
 #SQL_FILE := $(TPCH_TEST_DIR)/q4.sql
@@ -59,17 +59,17 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # -- Optimizations --
 
 #Baseline
-GPU_OPT := --base
+#GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
-#GPU_OPT := --idx
+GPU_OPT := --idx
 # -------------------
 
 # build test/dbgen/dbgen for generating tables
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 0.5
+TABLE_SCALE := 2
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
@@ -77,7 +77,7 @@ $(DBGEN):
 
 # target: tables
 #   genrerate tablesm
-TABLES := supplier part customer partsupp orders lineitem nation region 
+TABLES := supplier part customer partsupp orders lineitem nation region
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
