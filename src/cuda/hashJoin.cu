@@ -942,9 +942,12 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp,
 
     int tmp1, tmp2;
 
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1,&gpu_count[threadNum-1],sizeof(int),cudaMemcpyDeviceToHost));
-    scanImpl(gpu_count,threadNum,gpu_resPsum, pp);
-    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2,&gpu_resPsum[threadNum-1],sizeof(int),cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1, &filterNum[jNode->leftTable->tupleNum - 1], sizeof(int), cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &filterPsum[jNode->leftTable->tupleNum - 1], sizeof(int), cudaMemcpyDeviceToHost));
+
+    // CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1,&gpu_count[threadNum-1],sizeof(int),cudaMemcpyDeviceToHost));
+    // scanImpl(gpu_count,threadNum,gpu_resPsum, pp);
+    // CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2,&gpu_resPsum[threadNum-1],sizeof(int),cudaMemcpyDeviceToHost));
 
     res->tupleNum = tmp1 + tmp2;
     //printf("[INFO]Number of join results: %d\n",res->tupleNum);
