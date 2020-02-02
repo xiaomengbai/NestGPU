@@ -19,13 +19,7 @@ select
        min(ps_supplycost) as t1_min_supplycost,
        ps_partkey as t1_partkey
      from
-       partsupp, supplier,
-       nation, region
-     where
-       s_suppkey = ps_suppkey
-       and s_nationkey = n_nationkey
-       and n_regionkey = r_regionkey
-       and r_name = 'ASIA'
+       partsupp
      group by
        ps_partkey
    ) t1

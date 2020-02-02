@@ -48,7 +48,7 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # TPC-H Q4
 #SQL_FILE := $(TPCH_TEST_DIR)/q4.sql
 
-# TPC-H Q16
+#TPC-H Q16
 #SQL_FILE := $(TPCH_TEST_DIR)/q16.sql
 
 # TPC-H Q18
@@ -59,10 +59,10 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 # -- Optimizations --
 
 #Baseline
-#GPU_OPT := --base
+GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
-GPU_OPT := --idx
+#GPU_OPT := --idx
 # -------------------
 
 # build test/dbgen/dbgen for generating tables
@@ -77,7 +77,8 @@ $(DBGEN):
 
 # target: tables
 #   genrerate tablesm
-TABLES := supplier part customer partsupp orders lineitem nation region
+#TABLES := supplier part customer partsupp orders lineitem nation region
+TABLES := supplier part customer partsupp nation region
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
