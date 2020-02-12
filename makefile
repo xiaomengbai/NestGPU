@@ -38,12 +38,13 @@ SCHEMA := $(TPCH_SCHEMA)
 #SQL_FILE := $(TPCH_TEST_DIR)/others/test_sub.sql
 # ---------------
 
-
 # --- TPC-H Queries ---
-# TPC-H Q2
+# TPC-H Q2 
 SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
-#SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
+
+#SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested_simple.sql
 
 # TPC-H Q4
 #SQL_FILE := $(TPCH_TEST_DIR)/q4.sql
@@ -55,11 +56,46 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q18.sql
 # ---------------
 
+# --- Cost model queries ---
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/scan.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/scan_like_size.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/scan_like_brand.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/scan_point.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join2.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-m4.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-m8.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/agg.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/groupby.sql
+# ---------------
+
+# --- Final exp queries ---
+#Q1 -> Modified TPC-H Q2 that works (comparable performance) [Type JA]
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf1.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf1_unnested.sql
+
+#Q2 -> Modified TPC-H Q2 that works with smaller outer table (better performance) [Type JA]
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf2_selective.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf2_selective_unnested.sql
+
+#Q3 -> Modified TPC-H Q2 that works with inner outer table (worst performance, more memory) [Type JA]
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf3_mem.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf3_mem_unnested.sql
+
+#Q4 -> Modified TPC-H Q2 that works with bigger outer table (large outer loop makes sense) [Type JA]
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf4_idx.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf4_idx_unnested.sql
+
+#Q5 -> Modified TPC-H Q2 that works with skew (skew) [Type JA] << Introduce Skew in ps_suppkey>> {Scale: 1,5,10,15,20}
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf5_skew.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf5_skew_unnested.sql
+# ---------------
 
 # -- Optimizations --
 
 #Baseline
-GPU_OPT := --base
+#GPU_OPT := --base
 
 #Nested indexes (sort and prefix)
 #GPU_OPT := --idx
@@ -69,7 +105,7 @@ GPU_OPT := --base
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 2
+TABLE_SCALE := 20
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
@@ -77,8 +113,8 @@ $(DBGEN):
 
 # target: tables
 #   genrerate tablesm
-#TABLES := supplier part customer partsupp orders lineitem nation region
-TABLES := supplier part customer partsupp nation region
+#TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
+TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)

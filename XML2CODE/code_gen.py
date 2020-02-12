@@ -866,6 +866,7 @@ def generate_code_for_a_tree(fo, tree, lvl):
     if CODETYPE == 0:
         print >>fo, indent + "char *final = materializeCol(&mn, &pp);"
 
+        # Sofoklis Note: Do not print results at all (for debug)
         if lvl == 0:
             print >>fo, indent + "printMaterializedTable(mn, final);"
 
