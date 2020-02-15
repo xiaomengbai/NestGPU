@@ -40,7 +40,7 @@ SCHEMA := $(TPCH_SCHEMA)
 
 # --- TPC-H Queries ---
 # TPC-H Q2 
-SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
@@ -90,6 +90,11 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #Q5 -> Modified TPC-H Q2 that works with skew (skew) [Type JA] << Introduce Skew in ps_suppkey>> {Scale: 1,5,10,15,20}
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf5_skew.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf5_skew_unnested.sql
+
+
+#Q5 -> Modified TPC-H Q2 that works with skew (skew) [Type JA] << Introduce Skew in ps_suppkey>> {Scale: 1,5,10,15,20}
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2.sql
+SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2_unnested.sql
 # ---------------
 
 # -- Optimizations --
@@ -105,7 +110,7 @@ GPU_OPT := --base
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 2
+TABLE_SCALE := 10
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):

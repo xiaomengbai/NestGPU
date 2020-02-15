@@ -20,7 +20,13 @@ select
        min(s_acctbal) as t1_min_acctbal,
        s_suppkey as t1_suppkey
      from
-      supplier
+      supplier,
+      nation, 
+      region
+     where
+        s_nationkey = n_nationkey
+        and n_regionkey = r_regionkey
+        and r_name = 'ASIA'
      group by
        s_suppkey
    ) t1
