@@ -36,24 +36,30 @@ __global__ static void build_groupby_key(char ** content, int gbColNum, int * gb
 
     for(long i = offset; i< tupleNum; i+= stride){
         char buf[128] = {0};
-        for (int j=0; j< gbColNum; j++){
-            char tbuf[32]={0};
-            int index = gbIndex[j];
+        int hkey;
+        if(gbColNum == 1 && gbIndex[0] != -1 && gbType[0] == INT) {
+            int k = ((int *)(content[gbIndex[0]]))[i];
+            hkey = k % HSIZE;
+        }else{
+            for (int j=0; j< gbColNum; j++){
+                char tbuf[32]={0};
+                int index = gbIndex[j];
 
-            if (index == -1){
-                gpuItoa(1,tbuf,10);
-                gpuStrncat(buf,tbuf,1);
+                if (index == -1){
+                    gpuItoa(1,tbuf,10);
+                    gpuStrncat(buf,tbuf,1);
 
-            }else if (gbType[j] == STRING){
-                gpuStrncat(buf, content[index] + i*gbSize[j], gbSize[j]);
+                }else if (gbType[j] == STRING){
+                    gpuStrncat(buf, content[index] + i*gbSize[j], gbSize[j]);
 
-            }else if (gbType[j] == INT){
-                int key = ((int *)(content[index]))[i];
-                gpuItoa(key,tbuf,10);
-                gpuStrcat(buf,tbuf);
+                }else if (gbType[j] == INT){
+                    int key = ((int *)(content[index]))[i];
+                    gpuItoa(key,tbuf,10);
+                    gpuStrcat(buf,tbuf);
+                }
             }
+            hkey = StringHash(buf) % HSIZE;
         }
-        int hkey = StringHash(buf) % HSIZE;
         key[i]= hkey;
         num[hkey] = 1;
         atomicAdd(&(groupNum[hkey]), 1);
@@ -195,7 +201,9 @@ __global__ static void agg_cal(char ** content, int colNum, struct groupByExp* e
     for(int i=index;i<tupleNum;i+=stride){
 
         int hKey = key[i];
+//        int offset = atomicAdd(&(psum[hKey]), 1);
         int offset = psum[hKey];
+
 
         for(int j=0;j<colNum;j++){
             int func = exp[j].func;
@@ -317,8 +325,10 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
         res->attrSize[i] = gb->attrSize[i];
         res->dataFormat[i] = UNCOMPRESSED;
     }
-    
+
     gpuTupleNum = gb->table->tupleNum;
+    int alignedGpuTupleNum = gpuTupleNum;
+    NP2(alignedGpuTupleNum);
     gpuGbColNum = gb->groupByColNum;
 
     if(gpuGbColNum == 1 && gb->groupByIndex[0] == -1){
@@ -327,7 +337,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
 
     dim3 grid(1024);
     dim3 block(128);
-    int blockNum = gb->table->tupleNum / block.x + 1;
+    int blockNum = gpuTupleNum / block.x + 1;
     if(blockNum < 1024)
         grid = blockNum;
 
@@ -357,7 +367,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
         int attrSize = gb->table->attrSize[i];
         if(gb->table->dataPos[i]==MEM){
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)& column[i], attrSize * gb->table->tupleNum));
-            CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(column[i], gb->table->content[i], attrSize *gb->table->tupleNum, cudaMemcpyHostToDevice));
+            CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(column[i], gb->table->content[i], attrSize * gb->table->tupleNum, cudaMemcpyHostToDevice));
 
             CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&gpuContent[i], &column[i], sizeof(char *), cudaMemcpyHostToDevice));
         }else{
@@ -389,9 +399,9 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuGbSize,gb->groupBySize, sizeof(int) * gb->groupByColNum, cudaMemcpyHostToDevice));
 
         if (dev_mp == NULL)
-            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbKey, gb->table->tupleNum * sizeof(int)));
+            CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbKey, alignedGpuTupleNum * sizeof(int)));
         else
-            gpuGbKey = (int *) dev_mp->alloc(gb->table->tupleNum * sizeof(int));
+            gpuGbKey = (int *) dev_mp->alloc(alignedGpuTupleNum * sizeof(int));
 
         if (dev_mp == NULL)
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbIndex, sizeof(int) * gb->groupByColNum));
@@ -463,7 +473,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
         res->tupleNum = 1;
     else
         res->tupleNum = gbCount;
-    //printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
+//    printf("[INFO]Number of groupBy results: %ld\n",res->tupleNum);
 
     //Start timer for Step 5 - Allocate memory for result
     struct timespec startS5, endS5;
@@ -498,13 +508,14 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
         res->content[i] = result[i]; 
         res->dataPos[i] = GPU;
         res->attrTotalSize[i] = res->tupleNum * res->attrSize[i];
-        CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&gpuResult[i], &result[i], sizeof(char *), cudaMemcpyHostToDevice));
+        //CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&gpuResult[i], &result[i], sizeof(char *), cudaMemcpyHostToDevice));
 
         if(gb->gbExp[i].func == MIN && res->attrSize[i] == sizeof(int))
             init_int_array<<<grid, block>>>((int *)result[i], res->tupleNum, FLOAT_MAX);
         else if(gb->gbExp[i].func == MAX && res->attrSize[i] == sizeof(int))
             init_int_array<<<grid, block>>>((int *)result[i], res->tupleNum, FLOAT_MIN);
     }
+    CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(gpuResult, result, sizeof(char *) * res->totalAttr, cudaMemcpyHostToDevice) );
 
     if(dev_mp == NULL)
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuGbType, sizeof(int)*res->totalAttr));
