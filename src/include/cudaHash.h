@@ -14,4 +14,16 @@ __device__ static unsigned int StringHash(const char* s)
     return hash;
 }
 
+__device__ static unsigned int StringHashInt(const char *s)
+{
+    unsigned int hash = 0;
+    int c;
+
+    while((c = *s++))
+    {
+        hash = hash == 0 ? (c - 30) : hash * 10 + (c - 30);
+    }
+    return hash;
+}
+
 #endif

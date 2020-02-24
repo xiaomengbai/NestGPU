@@ -37,10 +37,11 @@ __global__ static void build_groupby_key(char ** content, int gbColNum, int * gb
     for(long i = offset; i< tupleNum; i+= stride){
         char buf[128] = {0};
         int hkey;
-        if(gbColNum == 1 && gbIndex[0] != -1 && gbType[0] == INT) {
-            int k = ((int *)(content[gbIndex[0]]))[i];
-            hkey = k % HSIZE;
-        }else{
+        // if(gbColNum == 1 && gbIndex[0] != -1 && gbType[0] == INT) {
+        //     int k = ((int *)(content[gbIndex[0]]))[i];
+        //     hkey = k % HSIZE;
+        // }else
+        {
             for (int j=0; j< gbColNum; j++){
                 char tbuf[32]={0};
                 int index = gbIndex[j];
@@ -58,7 +59,10 @@ __global__ static void build_groupby_key(char ** content, int gbColNum, int * gb
                     gpuStrcat(buf,tbuf);
                 }
             }
-            hkey = StringHash(buf) % HSIZE;
+            if(gbColNum == 1 && gbIndex[0] != -1 && gbType[0] == INT)
+                hkey = StringHashInt(buf) % HSIZE;
+            else
+                hkey = StringHash(buf) % HSIZE;
         }
         key[i]= hkey;
         num[hkey] = 1;

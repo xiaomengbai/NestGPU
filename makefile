@@ -39,9 +39,9 @@ SCHEMA := $(TPCH_SCHEMA)
 # ---------------
 
 # --- TPC-H Queries ---
-# TPC-H Q2 
+# TPC-H Q2
 #SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
-#SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested_simple.sql
@@ -94,7 +94,7 @@ SCHEMA := $(TPCH_SCHEMA)
 
 #Q5 -> Modified TPC-H Q2 that works with skew (skew) [Type JA] << Introduce Skew in ps_suppkey>> {Scale: 1,5,10,15,20}
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2.sql
-SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2_unnested.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2_unnested.sql
 # ---------------
 
 # -- Optimizations --
