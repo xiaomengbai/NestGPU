@@ -41,7 +41,7 @@ SCHEMA := $(TPCH_SCHEMA)
 # --- TPC-H Queries ---
 # TPC-H Q2
 #SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
-SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested_simple.sql
@@ -83,6 +83,14 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf3_mem.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf3_mem_unnested.sql
 
+#Q32 -> Modified TPC-H Q2 that works with inner outer table (worst performance, more memory) [Type JA]
+SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf32_mem.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf32_mem_unnested.sql
+
+#Q33 -> Modified TPC-H Q2 that works with inner outer table (worst performance, more memory) [Type JA]
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf33_mem.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf33_mem_unnested.sql
+
 #Q4 -> Modified TPC-H Q2 that works with bigger outer table (large outer loop makes sense) [Type JA]
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf4_idx.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf4_idx_unnested.sql
@@ -90,7 +98,6 @@ SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 #Q5 -> Modified TPC-H Q2 that works with skew (skew) [Type JA] << Introduce Skew in ps_suppkey>> {Scale: 1,5,10,15,20}
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf5_skew.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf5_skew_unnested.sql
-
 
 #Q5 -> Modified TPC-H Q2 that works with skew (skew) [Type JA] << Introduce Skew in ps_suppkey>> {Scale: 1,5,10,15,20}
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2.sql
@@ -118,8 +125,9 @@ $(DBGEN):
 
 # target: tables
 #   genrerate tablesm
-#TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
-TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
+TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
+#TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
+
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
