@@ -84,7 +84,7 @@ SCHEMA := $(TPCH_SCHEMA)
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf3_mem_unnested.sql
 
 #Q32 -> Modified TPC-H Q2 that works with inner outer table (worst performance, more memory) [Type JA]
-SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf32_mem.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf32_mem.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf32_mem_unnested.sql
 
 #Q33 -> Modified TPC-H Q2 that works with inner outer table (worst performance, more memory) [Type JA]
@@ -102,6 +102,9 @@ SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf32_mem.sql
 #Q5 -> Modified TPC-H Q2 that works with skew (skew) [Type JA] << Introduce Skew in ps_suppkey>> {Scale: 1,5,10,15,20}
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2_unnested.sql
+
+#Q7 -> Modified TPC-H Q2 that cannot be unnested
+SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf7.sql
 # ---------------
 
 # -- Optimizations --
@@ -117,7 +120,7 @@ GPU_OPT := --base
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 10
+TABLE_SCALE := 1
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
@@ -125,8 +128,9 @@ $(DBGEN):
 
 # target: tables
 #   genrerate tablesm
-TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
-#TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
+#TABLES := supplier partsupp
+#TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
+TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
 
 
 DATA_DIR := test/tables
