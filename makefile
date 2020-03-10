@@ -120,17 +120,30 @@ GPU_OPT := --base
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 1
-DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
+DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF
 
 $(DBGEN):
 	$(MAKE) -C $(DBGEN_DIR)
 
 # target: tables
-#   genrerate tablesm
-#TABLES := supplier partsupp
-#TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
-TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
+#   genrerate tables
+TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
+#TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
+
+DEFAULT_SCALE := 1
+
+SUPPLIER_SCALE := 2
+PART_SCALE     := 3
+CUSTOMER_SCALE := 4
+
+SUPPLIER_SCALE ?= $(DEFAULT_SCALE)
+PART_SCALE     ?= $(DEFAULT_SCALE)
+CUSTOMER_SCALE ?= $(DEFAULT_SCALE)
+PARTSUPP_SCALE ?= $(DEFAULT_SCALE)
+ORDERS_SCALE   ?= $(DEFAULT_SCALE)
+LINEITEM_SCALE ?= $(DEFAULT_SCALE)
+NATION_SCALE   ?= $(DEFAULT_SCALE)
+REGION_SCALE   ?= $(DEFAULT_SCALE)
 
 
 DATA_DIR := test/tables
@@ -141,7 +154,7 @@ tables: $(TABLE_FILES)
 define GEN_TABLE_RULE
 $$(DATA_DIR)/$(tname).tbl: $$(DBGEN) $$(DBGEN_DIST)
 	mkdir -p $$(DATA_DIR)
-	$$(DBGEN) $$(DBGEN_OPTS) -T $(shell echo $(tname) | head -c 1)
+	$$(DBGEN) $$(DBGEN_OPTS) -s $$($(shell echo $(tname) | tr a-z A-Z)_SCALE) -T $(shell echo $(tname) | head -c 1)
 	mv $(tname).tbl $$@
 endef
 
@@ -151,7 +164,7 @@ $(foreach tname,$(filter-out part,$(TABLES)), \
 
 $(DATA_DIR)/part.tbl: $(DBGEN) $(DBGEN_DIST)
 	mkdir -p $(DATA_DIR)
-	$(DBGEN) $(DBGEN_OPTS) -T p
+	$(DBGEN) $(DBGEN_OPTS) -s $(PART_SCALE) -T p
 	mv part.tbl $(DATA_DIR)/part.tbl
 	mv partsupp.tbl $(DATA_DIR)/partsupp.tbl
 
