@@ -747,7 +747,7 @@ __global__ static void genScanFilter_init_int_lth_vec(char *col, long tupleNum, 
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con = ((int*)col)[i] < where[i];
+        con = __int2float_rd( ((int *)col)[i] ) < __int_as_float( where[i] );
         filter[i] = con;
     }
 }
@@ -2635,8 +2635,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                     genScanFilter_init_float_neq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if(rel == GTH_VEC)
                     genScanFilter_init_float_gth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
-                else if(rel == LTH_VEC)
+                else if(rel == LTH_VEC) {
+                    printf("here~\n");
                     genScanFilter_init_float_lth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
+                }
                 else if(rel == GEQ_VEC)
                     genScanFilter_init_float_geq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if (rel == LEQ_VEC)

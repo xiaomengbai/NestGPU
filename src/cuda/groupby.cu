@@ -98,7 +98,7 @@ __device__ static float calMathExp(char **content, struct mathExp exp, int pos){
 
     if(exp.op == NOOP){
         if (exp.opType == CONS)
-            res = exp.opValue;
+            res = *(float *)&exp.opValue;
         else if(exp.opType == COLUMN_INTEGER){
             int index = exp.opValue;
             res = ((int *)(content[index]))[pos];
@@ -185,6 +185,8 @@ __global__ static void agg_cal_cons(char ** content, int colNum, struct groupByE
     {
         int func = exp[i].func;
         if (func == SUM)
+            atomicAdd(&((float *)result[i])[0], buf[i]);
+        else if (func == AVG)
             atomicAdd(&((float *)result[i])[0], buf[i]);
         else if (func == MAX)
             atomicMaxFloat(&((float *)result[i])[0], buf[i]);

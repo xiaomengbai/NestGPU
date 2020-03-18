@@ -1,21 +1,14 @@
 .PHONY: clean build
 
 PSQL_DIR := postgresql-12.1
-TABLES := part.tbl supplier.tbl partsupp.tbl customer.tbl nation.tbl region.tbl
+TABLES := part.tbl supplier.tbl partsupp.tbl customer.tbl nation.tbl region.tbl lineitem.tbl
 
 help:
 	@echo ""
 	@echo "  build          download and build postgresql"
 	@echo "  init-db        init a test database"
 	@echo "  load-tables    load tables for TPC-H queries"
-	@echo "  run-q2         run q2.sql"
-	@echo "  run-q2-unnest  run q2_unnested.sql"
-	@echo "  run-qf1        run qf1.sql"
-	@echo "  run-qf1-unnest run qf1_unnested.sql"
-	@echo "  run-qf3        run qf3.sql"
-	@echo "  run-qf3-unnest run qf3_unnested.sql"
-	@echo "  run-qf7        run qf7.sql"
-	@echo "  run-qf7-unnest run qf7_unnested.sql"
+	@echo "  run-%          run %.sql"
 	@echo ""
 
 build:
@@ -48,46 +41,13 @@ load-tables:
 	done
 	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
 
-run-q2:
+run-%:
 	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
-	$(PSQL_DIR)/bin/psql testdb -f ../tpch_test/q2.sql > q2.output
+	$(PSQL_DIR)/bin/psql testdb -c '\timing' -f ../tpch_test/$*.sql > $*.output
 	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
 
-run-q2-unnest:
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
-	$(PSQL_DIR)/bin/psql testdb -f ../tpch_test/q2_unnested.sql > q2_unnested.output
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
-
-run-qf1:
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
-	$(PSQL_DIR)/bin/psql testdb -c '\timing' -f ../tpch_test/final-queries/qf1.sql > qf1.output
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
-
-run-qf1-unnest:
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
-	$(PSQL_DIR)/bin/psql testdb -c '\timing' -f ../tpch_test/final-queries/qf1_unnested.sql > qf1_unnested.output
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
-
-run-qf3:
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
-	$(PSQL_DIR)/bin/psql testdb -c '\timing' -f ../tpch_test/final-queries/qf3_mem.sql > qf3.output
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
-
-run-qf3-unnest:
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
-	$(PSQL_DIR)/bin/psql testdb -c '\timing' -f ../tpch_test/final-queries/qf3_mem_unnested.sql > qf3_unnested.output
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
-
-run-qf7:
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
-	$(PSQL_DIR)/bin/psql testdb -c '\timing' -f ../tpch_test/final-queries/qf7.sql > qf7.output
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
-
-run-qf7-unnested:
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
-	$(PSQL_DIR)/bin/psql testdb -c '\timing' -f ../tpch_test/final-queries/qf7_unnested.sql > qf7_unnested.output
-	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile stop
-
+clean-tables:
+	rm -f load_data/*.tbl
 
 clean:
 	rm -f postgresql-12.1.tar.gz *.output

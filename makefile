@@ -8,6 +8,7 @@ help:
 	@echo "loader        generate the loader ($(LOADER))"
 	@echo "load-columns  generate column files to $(DATA_DIR)"
 	@echo "run           run the gpudb"
+	@echo "pgsql-q%      run q% with pgsql"
 	@echo ""
 	@echo "clean"
 	@echo "clean-gpudb   clean $(CUDA_DRIVER) and $(CUDA_GPUDB)"
@@ -21,6 +22,11 @@ TPCH_TEST_DIR := ./test/tpch_test
 TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
+
+SQL_FILE := $(TPCH_TEST_DIR)/q17.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
+
+
 
 # --- Synthetic Queries ---
 #SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJ.sql
@@ -104,7 +110,7 @@ SCHEMA := $(TPCH_SCHEMA)
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2_unnested.sql
 
 #Q7 -> Modified TPC-H Q2 that cannot be unnested
-SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf7.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf7.sql
 # ---------------
 
 # -- Optimizations --
@@ -115,6 +121,11 @@ GPU_OPT := --base
 #Nested indexes (sort and prefix)
 #GPU_OPT := --idx
 # -------------------
+
+pgsql-%:
+	make -C test/tpch_psql run-$*
+	tail test/tpch_psql/$*.output
+
 
 # build test/dbgen/dbgen for generating tables
 DBGEN_DIR := test/dbgen
@@ -130,11 +141,11 @@ $(DBGEN):
 TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
 #TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
 
-DEFAULT_SCALE := 1
+DEFAULT_SCALE := 0.5
 
-SUPPLIER_SCALE := 2
-PART_SCALE     := 3
-CUSTOMER_SCALE := 4
+# SUPPLIER_SCALE := 2
+# PART_SCALE     := 3
+# CUSTOMER_SCALE := 4
 
 SUPPLIER_SCALE ?= $(DEFAULT_SCALE)
 PART_SCALE     ?= $(DEFAULT_SCALE)
@@ -246,3 +257,4 @@ clean-all: clean-gpudb clean-loader
 	  rm -f $(DATA_DIR)/*; \
 	  rm -r $(DATA_DIR); \
 	fi
+	$(MAKE) -C test/tpch_psql clean-tables
