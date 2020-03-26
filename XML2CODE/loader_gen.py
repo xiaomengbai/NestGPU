@@ -75,6 +75,8 @@ def generate_loader():
     print >>fo, "#include <unistd.h>"
     print >>fo, "#include <string.h>"
     print >>fo, "#include <getopt.h>"
+    print >>fo, "#include <time.h>"
+    print >>fo, "#include <string.h>"
     print >>fo, "#include <linux/limits.h>"
     print >>fo, "#include \"../include/schema.h\""
     print >>fo, "#include \"../include/common.h\""
@@ -96,6 +98,7 @@ def generate_loader():
 
         indent = baseIndent
         print >>fo, indent + "struct " + tn.lower() + " tmp;"
+        print >>fo, indent + "struct tm tm;"
         print >>fo, indent + "char data [1024] = {0};"
         print >>fo, indent + "char buf[1024] = {0};"
         print >>fo, indent + "int count = 0, i = 0,prev = 0;"
@@ -189,7 +192,7 @@ def generate_loader():
             print >>fo, indent + "case " + str(i) + ":"
 
             indent += baseIndent
-            if col.column_type == "INTEGER" or col.column_type == "DATE":
+            if col.column_type == "INTEGER":
                 print >>fo, indent + "if(writeHeader == 1){"
                 indent += baseIndent
                 print >>fo, indent + "header.blockSize = header.tupleNum * sizeof(int);"
@@ -216,6 +219,17 @@ def generate_loader():
                 print >>fo, indent + "}"
                 print >>fo, indent + "strncpy(tmp." + str(col.column_name.lower()) + ",data,sizeof(tmp." + str(col.column_name.lower()) + "));"
                 print >>fo, indent + "fwrite(&(tmp." + str(col.column_name.lower()) + "),sizeof(tmp." +str(col.column_name.lower()) + "), 1, out[" + str(i) + "]);"
+            elif col.column_type == "DATE":
+                print >>fo, indent + "if(writeHeader == 1){"
+                indent += baseIndent
+                print >>fo, indent + "header.blockSize = header.tupleNum * sizeof(int);"
+                print >>fo, indent + "fwrite(&header,sizeof(struct columnHeader),1,out[" + str(i) + "]);"
+                indent = indent[:indent.rfind(baseIndent)]
+                print >>fo, indent + "}"
+                print >>fo, indent + "memset(&tm, 0, sizeof(struct tm));"
+                print >>fo, indent + "strptime(data, \"%Y-%m-%d\", &tm);"
+                print >>fo, indent + "tmp."+str(col.column_name.lower()) + " = mktime(&tm);"
+                print >>fo, indent + "fwrite(&(tmp." + str(col.column_name.lower()) + "),sizeof(int),1,out["+str(i) + "]);"
 
             print >>fo, indent + "break;"
             indent = indent[:indent.rfind(baseIndent)]
@@ -232,7 +246,7 @@ def generate_loader():
 
         col = schema[tn].column_list[attrLen-1]
         indent += baseIndent
-        if col.column_type == "INTEGER" or col.column_type == "DATE":
+        if col.column_type == "INTEGER":
             print >>fo, indent + "if(writeHeader == 1){"
             indent += baseIndent
             print >>fo, indent + "header.blockSize = header.tupleNum * sizeof(int);"
@@ -263,6 +277,17 @@ def generate_loader():
             print >>fo, indent + "}"
             print >>fo, indent + "strncpy(tmp." + str(col.column_name.lower()) + ",buf+prev,i-prev);"
             print >>fo, indent + "fwrite(&(tmp." + str(col.column_name.lower()) + "),sizeof(tmp." +str(col.column_name.lower()) + "), 1, out[" + str(attrLen-1) + "]);"
+        elif col.column_type == "DATE":
+            print >>fo, indent + "if(writeHeader == 1){"
+            indent += baseIndent
+            print >>fo, indent + "header.blockSize = header.tupleNum * sizeof(int);"
+            print >>fo, indent + "fwrite(&header,sizeof(struct columnHeader),1,out[" + str(i) + "]);"
+            indent = indent[:indent.rfind(baseIndent)]
+            print >>fo, indent + "}"
+            print >>fo, indent + "memset(&tm, 0, sizeof(struct tm));"
+            print >>fo, indent + "strptime(data, \"%Y-%m-%d\", &tm);"
+            print >>fo, indent + "tmp."+str(col.column_name.lower()) + " = mktime(&tm);"
+            print >>fo, indent + "fwrite(&(tmp." + str(col.column_name.lower()) + "),sizeof(int),1,out["+str(attrLen-1) + "]);"
 
         indent = indent[:indent.rfind(baseIndent)]
         print >>fo, indent + "}"

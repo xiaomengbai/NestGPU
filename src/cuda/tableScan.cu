@@ -2535,7 +2535,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
             pp->dataMemCopy_s2 += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
                 
             int rel = where->exp[0].relation;
-            if(sn->tn->attrType[index] == INT){
+            if(sn->tn->attrType[index] == INT || sn->tn->attrType[index] == DATE){
                 int whereValue;
                 int *whereVec;
                 if(rel == EQ || rel == NOT_EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)
@@ -2831,7 +2831,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
             if(format == UNCOMPRESSED){
                 int rel = where->exp[i].relation;
-                if(sn->tn->attrType[index] == INT){
+                if(sn->tn->attrType[index] == INT || sn->tn->attrType[index] == DATE){
                     int whereValue;
                     int *whereVec;
                     if(rel == EQ || rel == NOT_EQ || rel == GTH || rel == LTH || rel == GEQ || rel == LEQ)

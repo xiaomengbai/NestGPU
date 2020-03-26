@@ -262,8 +262,10 @@ Currently only three types are supported:
 
 def to_ctype(colType):
 
-    if colType in ["INTEGER","DATE"]:
+    if colType in ["INTEGER"]:
         return "INT";
+    elif colType in ["DATE"]:
+        return "DATE"
     elif colType in ["TEXT"]:
         return "STRING"
     elif colType in ["DECIMAL"]:
@@ -518,6 +520,7 @@ def generate_code(tree):
     print >>fo, "#include <malloc.h>"
     print >>fo, "#include <time.h>"
     print >>fo, "#include <getopt.h>"
+    print >>fo, "#include <string.h>"
     print >>fo, "#include <linux/limits.h>"
     print >>fo, "#include \"../include/common.h\""
 
@@ -2068,7 +2071,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                     print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
                 print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &vec, sizeof(char **));"
                 print >>fo, indent + "}"
-            elif ctype == "INT":
+            elif ctype == "INT" or ctype == "DATE":
                 if isinstance(conList[i], ystree.YRawColExp):
                     con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
                     # Get index here
@@ -2079,7 +2082,12 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 else:
                     con_value = conList[i]
                 print >>fo, indent + "{"
-                print >>fo, indent + baseIndent + "int tmp = " + con_value + ";"
+                if ctype == "INT":
+                    print >>fo, indent + baseIndent + "int tmp = " + con_value + ";"
+                else: # DATE
+                    print >>fo, indent + baseIndent + "struct tm tm; memset(&tm, 0, sizeof(struct tm));"
+                    print >>fo, indent + baseIndent + "strptime(" + con_value + ", \"%Y-%m-%d\", &tm);"
+                    print >>fo, indent + baseIndent + "int tmp = mktime(&tm);"
                 print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(int));"
                 print >>fo, indent + "}"
             elif ctype == "FLOAT":

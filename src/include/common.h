@@ -51,6 +51,7 @@ enum {
     INT,
     FLOAT,
     STRING,
+    DATE,
 
 /* supported relation in exp */
     EQ,

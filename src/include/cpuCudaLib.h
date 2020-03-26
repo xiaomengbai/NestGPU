@@ -254,11 +254,19 @@ static void printCol(char *col, int size, int type,int tupleNum,int pos){
 
 static void printMaterializedTable(struct materializeNode &mn, char *table)
 {
+    char buf[20];
+    time_t t;
     for(int i = 0; i < mn.table->tupleNum; i++){
         size_t tuple_off = 0;
         printf("Tuple %d: ", i);
         for(int j = 0; j < mn.table->totalAttr; j++){
             switch(mn.table->attrType[j]){
+            case DATE:
+                t = *(int *)(table + i * mn.table->tupleSize + tuple_off);
+                memset(buf, 0, 20);
+                strftime(buf, 20, "%Y-%m-%d", gmtime(&t));
+                printf("(date) %s, ", buf);
+                break;
             case INT:
                 printf("(int) %d, ", *(int *)(table + i * mn.table->tupleSize + tuple_off)); break;
             case FLOAT:

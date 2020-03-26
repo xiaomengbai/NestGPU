@@ -1,7 +1,7 @@
 .PHONY: clean build
 
 PSQL_DIR := postgresql-12.1
-TABLES := part.tbl supplier.tbl partsupp.tbl customer.tbl nation.tbl region.tbl lineitem.tbl
+TABLES := part.tbl supplier.tbl partsupp.tbl customer.tbl nation.tbl region.tbl lineitem.tbl orders.tbl
 
 help:
 	@echo ""
