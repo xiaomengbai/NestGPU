@@ -1,12 +1,21 @@
 --TPC-H Q4 (Type J - Original)
 select
-  *
+  l_orderkey, l_commitdate, l_receiptdate
 from
-  orders
+  lineitem
 where
-  o_orderdate > '1996-01-15'
-  and o_orderdate <= '1996-01-16'
+  l_orderkey < 100 and
+  l_commitdate < l_receiptdate
 ;
+
+-- select
+--   o_orderkey, o_orderpriority
+-- from
+--   orders
+-- where
+--   o_orderdate > '1996-01-15'
+--   and o_orderdate <= '1996-01-16'
+-- ;
 
 -- select
 --   o_orderpriority,

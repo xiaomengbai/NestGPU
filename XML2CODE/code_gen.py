@@ -298,16 +298,23 @@ def get_where_attr(exp, whereList, relList, conList):
                     whereList.append(x)
         else:
             relList.append(exp.func_name)
-            for x in exp.parameter_list:
-                if isinstance(x, ystree.YRawColExp):
-                    whereList.append(x)
-                elif isinstance(x, ystree.YConsExp):
-                    if x.ref_col != None:
-                        conList.append(x.ref_col)
-                    else:
-                        conList.append(x.cons_value)
-                elif isinstance(x, ystree.YFuncExp) and (x.func_name == "SUBQ" or x.func_name == "LIST"):
-                    conList.append(x)
+            if len(exp.parameter_list) == 2:
+                whereItem = None
+                for x in exp.parameter_list:
+                    if isinstance(x, ystree.YRawColExp):
+                        if whereItem == None:
+                            whereList.append(x)
+                            whereItem = x
+                        else:
+                            # in case two columns appear at both sides
+                            conList.append(x)
+                    elif isinstance(x, ystree.YConsExp):
+                        if x.ref_col != None:
+                            conList.append(x.ref_col)
+                        else:
+                            conList.append(x.cons_value)
+                    elif isinstance(x, ystree.YFuncExp) and (x.func_name == "SUBQ" or x.func_name == "LIST"):
+                        conList.append(x)
 
     elif isinstance(exp, ystree.YRawColExp):
         whereList.append(exp)
@@ -1967,6 +1974,10 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         conList = []
 
         get_where_attr(tn.where_condition.where_condition_exp, whereList, relList, conList)
+        # print "whereList: ", whereList
+        # print "relList: ", relList
+        # print "conList: ", conList
+
         newWhereList = []
         whereLen = count_whereList(whereList, newWhereList)
         nested = count_whereNested(tn.where_condition.where_condition_exp)
@@ -2000,8 +2011,8 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
             colIndex = indexList.index(newWhereList[i].column_name)
             print >>fo, indent + relName + ".whereIndex["+str(i) + "] = " + str(colIndex) + ";"
 
-        if keepInGpu ==0:
-            print >>fo, indent + relName + ".KeepInGpu = 0;"
+        if keepInGpu == 0:
+            print >>fo, indent + relName + ".keepInGpu = 0;"
         else:
             print >>fo, indent + relName + ".keepInGpu = 1;"
 
@@ -2027,13 +2038,12 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         indices = []
         los = []
         his = []
+        # for a column, track the index of table->content[]
+        contentIdx = lambda col: indexList.index(col.column_name)
+        # for a column, track the index of table->whereIndex[]
+        whereIdx = lambda col: newWhereList.index(col)
         for i in range(0, len(whereList)):
-            colIndex = -1
-            for j in range(0, len(newWhereList)):
-                if newWhereList[j].compare(whereList[i]) is True:
-                    colIndex = j
-                    break
-
+            colIndex = whereIdx(whereList[i])
             if colIndex < 0:
                 print 1/0
 
@@ -2044,11 +2054,16 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+            elif isinstance(conList[i], ystree.YRawColExp):
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = " + tnName + "->dataPos[" + str(contentIdx(conList[i])) + "];"
             elif relList[i] == "IN" and isinstance(conList[i], basestring):# in ("MOROCCO")
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EQ;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
             else:
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
-            print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
 
             # Get subquery result here
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
@@ -2070,6 +2085,10 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                     item = conList[i].parameter_list[idx]
                     print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
                 print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &vec, sizeof(char **));"
+                print >>fo, indent + "}"
+            elif isinstance(conList[i], ystree.YRawColExp):
+                print >>fo, indent + "{"
+                print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &(" + tnName + "->content[" + str(contentIdx(conList[i])) + "]), sizeof(char *));"
                 print >>fo, indent + "}"
             elif ctype == "INT" or ctype == "DATE":
                 if isinstance(conList[i], ystree.YRawColExp):
