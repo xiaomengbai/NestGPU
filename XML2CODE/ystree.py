@@ -75,7 +75,6 @@ class YExpTool:
             elif atn == "T_RESERVED" and atc.upper() == "NULL":
                 return YConsExp(atc, "NULL")
 
-
         if len_input_token_list == 3:
 
             first_token = input_token_list[0]
@@ -135,17 +134,9 @@ class YExpTool:
             if sub_level != 0:
                 continue
 
-            if atn == "T_RESERVED" and atc.upper() == "LIKE":
+            if atn == "T_RESERVED" and atc.upper() in ["LIKE", "IS", "IN", "EXISTS"]:
                 partition_index = i
-                partition_type = "LIKE"
-                continue
-            elif atn == "T_RESERVED" and atc.upper() == "IS":
-                partition_index = i
-                partition_type = "IS"
-                continue
-            elif atn == "T_RESERVED" and atc.upper() == "IN":
-                partition_index = i
-                partition_type = "IN"
+                partition_type = atc.upper()
                 continue
             elif atn in ["EQ", "GTH", "LTH", "NOT_EQ", "GEQ", "LEQ"]:
                 partition_index = i
@@ -175,6 +166,11 @@ class YExpTool:
 
             return YFuncExp(func_name, [before_exp, end_exp])
 
+        elif partition_index == 0:
+            func_name = partition_type
+            after_list = input_token_list[1:]
+            end_exp = self.convert_token_list_to_exp_tree(after_list)
+            return YFuncExp(func_name, [end_exp])
 
         #---------------------------------------------------------------
         #Step 1: look for plus or minus
@@ -2102,12 +2098,14 @@ class FirstStepWhereCondition:
 
 
 
-            if len(c) == 5 and (c[1].tokenname == "T_SELECT" or c[3].tokenname == "T_SELECT"):
+            if (len(c) == 5 and (c[1].tokenname == "T_SELECT" or c[3].tokenname == "T_SELECT")) or (len(c) == 4 and c[2].tokenname == "T_SELECT"):
                 select_pos = None
                 if c[0].tokenname == "LPAREN" and c[2].tokenname == "RPAREN" and c[1].tokenname == "T_SELECT":
                     select_pos = 1
                 elif c[2].tokenname == "LPAREN" and c[4].tokenname == "RPAREN" and c[3].tokenname == "T_SELECT":
                     select_pos = 3
+                elif c[2].tokenname == "T_SELECT":
+                    select_pos = 2
 
                 if select_pos != None:
                     subqueries.append( build_plan_tree_from_a_select_node( c[select_pos] ) )
@@ -2688,6 +2686,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
             "IN":[2,["TEXT", "DATE"],["BOOLEAN"]], \
             "LIST":[0,["TEXT", "DATE"],["TEXT", "DATE"]], \
             "LIKE":[2,["TEXT"],["BOOLEAN"]], \
+            "EXISTS":[0, ["INTEGER", "DECIMAL", "TEXT", "DATE"], ["BOOLEAN"]], \
     }
 
     if isinstance(exp,YFuncExp):
@@ -2945,7 +2944,7 @@ def __schema_having__(having_exp,groupby_list,table_list,table_alias_dict):
 
 def __schema_where__(where,table_list,table_alias_dict):
     res = 0
-    func_list = ["AND","OR","EQ", "GTH", "LTH", "NOT_EQ", "GEQ","LEQ","LIKE","IS", "IN"]
+    func_list = ["AND","OR","EQ", "GTH", "LTH", "NOT_EQ", "GEQ","LEQ","LIKE","IS", "IN", "EXISTS"]
 
     if where is None:
         return res

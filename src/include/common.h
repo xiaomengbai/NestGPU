@@ -73,6 +73,7 @@ enum {
     NOT_EQ_VEC,
     IN_VEC,
     NOT_IN_VEC,
+    EXISTS,
 
 /* for where condition */
     AND ,

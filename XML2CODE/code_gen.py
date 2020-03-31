@@ -310,11 +310,15 @@ def get_where_attr(exp, whereList, relList, conList):
                             conList.append(x)
                     elif isinstance(x, ystree.YConsExp):
                         if x.ref_col != None:
-                            conList.append(x.ref_col)
+#                            conList.append(x.ref_col)
+                            conList.append(x)
                         else:
                             conList.append(x.cons_value)
                     elif isinstance(x, ystree.YFuncExp) and (x.func_name == "SUBQ" or x.func_name == "LIST"):
                         conList.append(x)
+            elif len(exp.parameter_list) == 1:
+                whereList.append("NULL")
+                conList.append(exp.parameter_list[0])
 
     elif isinstance(exp, ystree.YRawColExp):
         whereList.append(exp)
@@ -328,6 +332,8 @@ Return the number of columns in the new list.
 def count_whereList(wlist, tlist):
 
     for col in wlist:
+        if not isinstance(col, ystree.YRawColExp):
+            continue
         colExist = False
         for x in tlist:
             if x.compare(col) is True:
@@ -443,7 +449,7 @@ def generate_col_list(tn, indexList, colList):
         conList = []
         get_where_attr(tn.where_condition.where_condition_exp,whereList,relList,conList)
         for col in whereList:
-            if col.column_name not in indexList:
+            if isinstance(col, ystree.YRawColExp) and col.column_name not in indexList:
                 indexList.append(col.column_name)
                 colList.append(col)
         for con in conList:
@@ -452,6 +458,10 @@ def generate_col_list(tn, indexList, colList):
                     if isinstance(par, ystree.YRawColExp) and par.column_name not in indexList:
                         indexList.append(par.column_name)
                         colList.append(par)
+            if isinstance(con, ystree.YRawColExp) and con.column_name not in indexList:
+                indexList.append(con.column_name)
+                colList.append(con)
+
 
 """
 generate_code generates CUDA/OpenCL codes from the query plan tree.
@@ -751,46 +761,46 @@ def generate_code(tree):
     #print >>fo, indent + "printf(\"PCIe Time: %lf\\n\",pp.pcie);"
     #print >>fo, indent + "printf(\"Kernel Time: %lf\\n\",pp.kernel);"
 
-    # print >>fo, indent + "printf(\"\\n\");"
-    # print >>fo, indent + "printf(\"<--Build index time-->         : %lf\\n\", pp.buildIndexTotal/(1000*1000));\n"
-    # print >>fo, indent + "printf(\"\\n\");"
+    print >>fo, indent + "printf(\"\\n\");"
+    print >>fo, indent + "printf(\"<--Build index time-->         : %lf\\n\", pp.buildIndexTotal/(1000*1000));\n"
+    print >>fo, indent + "printf(\"\\n\");"
 
-    # print >>fo, indent + "printf(\"<---SUB()--->\\n\");"
-    # print >>fo, indent + "printf(\"Outer table size           : %d\\n\", pp.outerTableSize);\n"
-    # print >>fo, indent + "printf(\"Result table size          : %d\\n\", pp.resultTableSize);\n"
-    # print >>fo, indent + "printf(\"<----------------->\");"
-    # print >>fo, indent + "printf(\"\\n\");"
+    print >>fo, indent + "printf(\"<---SUB()--->\\n\");"
+    print >>fo, indent + "printf(\"Outer table size           : %d\\n\", pp.outerTableSize);\n"
+    print >>fo, indent + "printf(\"Result table size          : %d\\n\", pp.resultTableSize);\n"
+    print >>fo, indent + "printf(\"<----------------->\");"
+    print >>fo, indent + "printf(\"\\n\");"
 
-    # print >>fo, indent + "printf(\"<---TableScan()--->\\n\");"
-    # print >>fo, indent + "printf(\"Total time      : %lf\\n\", pp.tableScanTotal/(1000*1000));"
-    # print >>fo, indent + "printf(\"Calls           : %d\\n\", pp.tableScanCount);\n"
-    # print >>fo, indent + "printf(\"Step 1 - memCopy where clause                 : %lf\\n\", pp.whereMemCopy_s1/(1000*1000));"
-    # print >>fo, indent + "printf(\"Step 2 - memCopy predicate col                : %lf\\n\", pp.dataMemCopy_s2/(1000*1000));"
-    # print >>fo, indent + "printf(\"Step 3 - Scan                                 : %lf\\n\", pp.scanTotal_s3/(1000*1000));"
-    # print >>fo, indent + "printf(\"Idx Step 3.1 - Get index position             : %lf\\n\", pp.getIndexPos_idxS1/(1000*1000));"
-    # print >>fo, indent + "printf(\"Idx Step 3.2 - Get range                      : %lf\\n\", pp.getRange_idxS2/(1000*1000));"
-    # print >>fo, indent + "printf(\"Idx Step 3.3 - Convert addrs to elements      : %lf\\n\", pp.convertMemToElement_idxS3/(1000*1000));"
-    # print >>fo, indent + "printf(\"Idx Step 3.4 - Get mapping position           : %lf\\n\", pp.getMapping_idxS4/(1000*1000));"
-    # print >>fo, indent + "printf(\"Idx Step 3.5 - Set bitmap to zero             : %lf\\n\", pp.setBitmapZeros_idxS5/(1000*1000));"
-    # print >>fo, indent + "printf(\"Idx Step 3.6 - Build bitmap                   : %lf\\n\", pp.buildBitmap_idxS6/(1000*1000));"
-    # print >>fo, indent + "printf(\"Step 4 - CountRes(PreScan)                    : %lf\\n\", pp.preScanTotal_s4/(1000*1000));"
-    # print >>fo, indent + "printf(\"PreScan Step 4.1 - Count selected rows kernel : %lf\\n\", pp.countScanKernel_countS1/(1000*1000));"
-    # print >>fo, indent + "printf(\"PreScan Step 4.2 - scanImpl time              : %lf\\n\", pp.scanImpl_countS2/(1000*1000));"
-    # print >>fo, indent + "printf(\"scanImpl Step 4.2.1 - preallocBlockSums time  : %lf\\n\", pp.preallocBlockSums_scanImpl_S1/(1000*1000));"
-    # print >>fo, indent + "printf(\"scanImpl Step 4.2.2 - prescanArray time       : %lf\\n\", pp.prescanArray_scanImpl_S2/(1000*1000));"
-    # print >>fo, indent + "printf(\"scanImpl Step 4.2.3 - deallocBlockSums time   : %lf\\n\", pp.deallocBlockSums_scanImpl_S3/(1000*1000));"
-    # print >>fo, indent + "printf(\"prescan Step 4.2.3.1 - set variables time     : %lf\\n\", pp.setVar_prescan_S1/(1000*1000));"
-    # print >>fo, indent + "printf(\"prescan Step 4.2.3.2 - prescan Kernel time    : %lf\\n\", pp.preScanKernel_prescan_S2/(1000*1000));"
-    # print >>fo, indent + "printf(\"prescan Step 4.2.3.3 - uniformAdd Kernel time : %lf\\n\", pp.uniformAddKernel_prescan_S3/(1000*1000));"
-    # print >>fo, indent + "printf(\"Step 5 - memReturn countRes                   : %lf\\n\", pp.preScanResultMemCopy_s5/(1000*1000));"
-    # print >>fo, indent + "printf(\"Step 6 - Copy rest of columns                 : %lf\\n\", pp.dataMemCopyOther_s6/(1000*1000));"
-    # print >>fo, indent + "printf(\"Step 7 - Materialize result                   : %lf\\n\", pp.materializeResult_s7/(1000*1000));"
-    # print >>fo, indent + "printf(\"Step 8 - Copy final result                    : %lf\\n\", pp.finalResultMemCopy_s8/(1000*1000));"
-    # print >>fo, indent + "printf(\"Other 1 - Create tableNode                    : %lf\\n\", pp.create_tableNode_S01/(1000*1000));"
-    # print >>fo, indent + "printf(\"Other 2 - Malloc res                          : %lf\\n\", pp.mallocRes_S02/(1000*1000));"
-    # print >>fo, indent + "printf(\"Other 3 - Deallocate buffers                  : %lf\\n\", pp.deallocateBuffs_S03/(1000*1000));"
-    # print >>fo, indent + "printf(\"<----------------->\");"
-    # print >>fo, indent + "printf(\"\\n\");"
+    print >>fo, indent + "printf(\"<---TableScan()--->\\n\");"
+    print >>fo, indent + "printf(\"Total time      : %lf\\n\", pp.tableScanTotal/(1000*1000));"
+    print >>fo, indent + "printf(\"Calls           : %d\\n\", pp.tableScanCount);\n"
+    print >>fo, indent + "printf(\"Step 1 - memCopy where clause                 : %lf\\n\", pp.whereMemCopy_s1/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 2 - memCopy predicate col                : %lf\\n\", pp.dataMemCopy_s2/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 3 - Scan                                 : %lf\\n\", pp.scanTotal_s3/(1000*1000));"
+    print >>fo, indent + "printf(\"Idx Step 3.1 - Get index position             : %lf\\n\", pp.getIndexPos_idxS1/(1000*1000));"
+    print >>fo, indent + "printf(\"Idx Step 3.2 - Get range                      : %lf\\n\", pp.getRange_idxS2/(1000*1000));"
+    print >>fo, indent + "printf(\"Idx Step 3.3 - Convert addrs to elements      : %lf\\n\", pp.convertMemToElement_idxS3/(1000*1000));"
+    print >>fo, indent + "printf(\"Idx Step 3.4 - Get mapping position           : %lf\\n\", pp.getMapping_idxS4/(1000*1000));"
+    print >>fo, indent + "printf(\"Idx Step 3.5 - Set bitmap to zero             : %lf\\n\", pp.setBitmapZeros_idxS5/(1000*1000));"
+    print >>fo, indent + "printf(\"Idx Step 3.6 - Build bitmap                   : %lf\\n\", pp.buildBitmap_idxS6/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 4 - CountRes(PreScan)                    : %lf\\n\", pp.preScanTotal_s4/(1000*1000));"
+    print >>fo, indent + "printf(\"PreScan Step 4.1 - Count selected rows kernel : %lf\\n\", pp.countScanKernel_countS1/(1000*1000));"
+    print >>fo, indent + "printf(\"PreScan Step 4.2 - scanImpl time              : %lf\\n\", pp.scanImpl_countS2/(1000*1000));"
+    print >>fo, indent + "printf(\"scanImpl Step 4.2.1 - preallocBlockSums time  : %lf\\n\", pp.preallocBlockSums_scanImpl_S1/(1000*1000));"
+    print >>fo, indent + "printf(\"scanImpl Step 4.2.2 - prescanArray time       : %lf\\n\", pp.prescanArray_scanImpl_S2/(1000*1000));"
+    print >>fo, indent + "printf(\"scanImpl Step 4.2.3 - deallocBlockSums time   : %lf\\n\", pp.deallocBlockSums_scanImpl_S3/(1000*1000));"
+    print >>fo, indent + "printf(\"prescan Step 4.2.3.1 - set variables time     : %lf\\n\", pp.setVar_prescan_S1/(1000*1000));"
+    print >>fo, indent + "printf(\"prescan Step 4.2.3.2 - prescan Kernel time    : %lf\\n\", pp.preScanKernel_prescan_S2/(1000*1000));"
+    print >>fo, indent + "printf(\"prescan Step 4.2.3.3 - uniformAdd Kernel time : %lf\\n\", pp.uniformAddKernel_prescan_S3/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 5 - memReturn countRes                   : %lf\\n\", pp.preScanResultMemCopy_s5/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 6 - Copy rest of columns                 : %lf\\n\", pp.dataMemCopyOther_s6/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 7 - Materialize result                   : %lf\\n\", pp.materializeResult_s7/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 8 - Copy final result                    : %lf\\n\", pp.finalResultMemCopy_s8/(1000*1000));"
+    print >>fo, indent + "printf(\"Other 1 - Create tableNode                    : %lf\\n\", pp.create_tableNode_S01/(1000*1000));"
+    print >>fo, indent + "printf(\"Other 2 - Malloc res                          : %lf\\n\", pp.mallocRes_S02/(1000*1000));"
+    print >>fo, indent + "printf(\"Other 3 - Deallocate buffers                  : %lf\\n\", pp.deallocateBuffs_S03/(1000*1000));"
+    print >>fo, indent + "printf(\"<----------------->\");"
+    print >>fo, indent + "printf(\"\\n\");"
 
     # print >>fo, indent + "printf(\"<---HashJoin()--->\\n\");"
     # print >>fo, indent + "printf(\"Total time                : %lf\\n\", pp.join_totalTime/(1000*1000));"
@@ -889,6 +899,8 @@ def generate_code_for_a_tree(fo, tree, lvl):
         print >>fo, indent + "clReleaseContext(context.context);"
         print >>fo, indent + "clReleaseProgram(context.program);\n"
 
+    return tree_result
+
 def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
     indent = (lvl * 3 + 2) * baseIndent
@@ -918,6 +930,9 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     if rel in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
         constant_len_res = True
         subq_res_size = "sizeof(float)"
+    elif rel in ["EXISTS"]:
+        constant_len_res = True
+        subq_res_size = "sizeof(int)"
     else:
         constant_len_res = False
         subq_res_size = type_length(subq_res_col.table_name, subq_res_col.column_name, subq_res_col.column_type)
@@ -1064,16 +1079,19 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
 
     print >>fo, indent + baseIndent + "{"
 
-    generate_code_for_a_tree(fo, sub_tree, lvl + 1)
+    resTable = generate_code_for_a_tree(fo, sub_tree, lvl + 1)
 
     print >>fo, indent + baseIndent * 2 + ""
 
     if constant_len_res:
-        print >>fo, indent + baseIndent * 2 + "mempcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
-        if SubCache == 1 and len(pass_in_cols) == 1:
-            col = pass_in_cols[0]
-            pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-            print >>fo, indent + baseIndent * 2 + "cache[*(" + to_ctype(col.column_type).lower() + " *)" + pass_in_var + "] = *(float *)final;"
+        if rel in ["EXISTS"]:
+            print >>fo, indent + baseIndent * 2 + "*(int *)(" + var_subqRes + " + tupleid * " + subq_res_size + ") = (" + resTable + "->tupleNum > 0);"
+        else:
+            print >>fo, indent + baseIndent * 2 + "memcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
+            if SubCache == 1 and len(pass_in_cols) == 1:
+                col = pass_in_cols[0]
+                pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+                print >>fo, indent + baseIndent * 2 + "cache[*(" + to_ctype(col.column_type).lower() + " *)" + pass_in_var + "] = *(float *)final;"
     else:
         print >>fo, indent + baseIndent * 2 + "((char **)" + var_subqRes + ")[tupleid] = (char *)malloc(sizeof(int) + " + subq_res_size + " * mn.table->tupleNum);"
         print >>fo, indent + baseIndent * 2 + "CHECK_POINTER( ((char **)" + var_subqRes + ")[tupleid] );"
@@ -1378,9 +1396,6 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
 
 
             print >>fo, indent + "gbNode->gbExp["+str(i)+"].func = " + exp.func_name + ";"
-            print ">>> DEBUG: ", exp.func_name, ", parameter_list: ", exp.parameter_list
-            for par in exp.parameter_list:
-                print "  ", par.evaluate()
             para = exp.parameter_list[0]
             mathFunc = mathExp()
             mathFunc.addOp(para)
@@ -1882,6 +1897,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
     indexList = []
     colList   = []
     generate_col_list(tn, indexList, colList)
+    print "indexList: ", indexList
 
     tablePreloaded = False
     selectList = tn.select_list.tmp_exp_list
@@ -1974,9 +1990,9 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         conList = []
 
         get_where_attr(tn.where_condition.where_condition_exp, whereList, relList, conList)
-        # print "whereList: ", whereList
-        # print "relList: ", relList
-        # print "conList: ", conList
+        print "whereList: ", whereList
+        print "relList: ", relList
+        print "conList: ", conList
 
         newWhereList = []
         whereLen = count_whereList(whereList, newWhereList)
@@ -2041,19 +2057,31 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         # for a column, track the index of table->content[]
         contentIdx = lambda col: indexList.index(col.column_name)
         # for a column, track the index of table->whereIndex[]
-        whereIdx = lambda col: newWhereList.index(col)
-        for i in range(0, len(whereList)):
-            colIndex = whereIdx(whereList[i])
-            if colIndex < 0:
-                print 1/0
+        # whereIdx = lambda col: newWhereList.index(col)
+        def whereIdx(col):
+            for i in range(0, len(newWhereList)):
+                if newWhereList[i].compare(col):
+                    return i
+            return -1
 
-            colType = whereList[i].column_type
+        for i in range(0, len(whereList)):
+            if isinstance(whereList[i], ystree.YRawColExp):
+                print whereList[i].evaluate()
+
+            colIndex = whereIdx(whereList[i]) if isinstance(whereList[i], ystree.YRawColExp) else -1
+            # if colIndex < 0:
+            #     print 1/0
+
+            colType = whereList[i].column_type if isinstance(whereList[i], ystree.YRawColExp) else "INT"
             ctype = to_ctype(colType)
 
             print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
 
-            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ" and relList[i] not in ["EXISTS"]:
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+            elif relList[i] == "EXISTS":
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EXISTS;"
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
             elif isinstance(conList[i], ystree.YRawColExp):
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
@@ -2091,13 +2119,13 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &(" + tnName + "->content[" + str(contentIdx(conList[i])) + "]), sizeof(char *));"
                 print >>fo, indent + "}"
             elif ctype == "INT" or ctype == "DATE":
-                if isinstance(conList[i], ystree.YRawColExp):
-                    con_value = "*(int *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
+                if isinstance(conList[i], ystree.YConsExp) and conList[i].ref_col != None:
+                    con_value = "*(int *)(_" + conList[i].ref_col.table_name + "_" + str(conList[i].ref_col.column_name) + ")"
                     # Get index here
                     if "--idx" in optimization:
                         indices.append(whereList[i].table_name.lower() + str(whereList[i].column_name) + "_idx")
-                        los.append(conList[i].table_name.lower() + str(conList[i].column_name) + "_lo")
-                        his.append(conList[i].table_name.lower() + str(conList[i].column_name) + "_hi")
+                        los.append(conList[i].ref_col.table_name.lower() + str(conList[i].ref_col.column_name) + "_lo")
+                        his.append(conList[i].ref_col.table_name.lower() + str(conList[i].ref_col.column_name) + "_hi")
                 else:
                     con_value = conList[i]
                 print >>fo, indent + "{"
@@ -2119,8 +2147,8 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(float));"
                 print >>fo, indent + "}"
             else:
-                if isinstance(conList[i], ystree.YRawColExp):
-                    con_value = "_" + conList[i].table_name + "_" + str(conList[i].column_name)
+                if isinstance(conList[i], ystree.YConsExp) and conList[i].ref_col != None:
+                    con_value = "_" + conList[i].ref_col.table_name + "_" + str(conList[i].ref_col.column_name)
                 else:
                     con_value = conList[i]
                 print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + con_value + ");\n"

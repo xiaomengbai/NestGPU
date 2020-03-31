@@ -141,7 +141,7 @@ $(DBGEN):
 TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
 #TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
 
-DEFAULT_SCALE := 0.5
+DEFAULT_SCALE := 0.01
 
 # SUPPLIER_SCALE := 2
 # PART_SCALE     := 3

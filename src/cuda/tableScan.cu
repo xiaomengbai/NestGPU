@@ -862,6 +862,22 @@ __global__ static void genScanFilter_init_float_leq_vec(char *col, long tupleNum
     }
 }
 
+__global__ static void genScanFilter_and_exists(int *outFilter, long tupleNum, int *filter) {
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for(long i = tid; i < tupleNum; i += stride)
+        filter[i] &= outFilter[i];
+}
+
+__global__ static void genScanFilter_or_exists(int *outFilter, long tupleNum, int *filter) {
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for(long i = tid; i < tupleNum; i += stride)
+        filter[i] |= outFilter[i];
+}
+
 __global__ static void genScanFilter_and_int_eq(char *col, long tupleNum, int where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -2440,12 +2456,32 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
          */
 
         int whereIndex = where->exp[0].index;
-        int index = sn->whereIndex[whereIndex];
+        int index = whereIndex == -1 ? -1 : sn->whereIndex[whereIndex]; // whereIndex = -1 if the operator is EXISTS
         int prevWhere = whereIndex;
         int prevIndex = index;
 
         int format = sn->tn->dataFormat[index];
         int prevFormat = format;
+
+        /*
+         * @dNum, @byteNum and @gpuDictFilter are for predicates that need to access dictionary-compressed columns.
+         */
+        int dNum;
+        int byteNum;
+        int *gpuDictFilter = NULL;
+
+        int rel;
+
+        if( where->exp[0].relation == EXISTS ) {
+            if( where->exp[0].dataPos == MEM || where->exp[0].dataPos == MMAP || where->exp[0].dataPos == PINNED ) {
+                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(gpuFilter, *((int **) where->exp[0].content), totalTupleNum * sizeof(int), cudaMemcpyHostToDevice) );
+                free( *((int **) where->exp[0].content) );
+            }else{
+                CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(gpuFilter, *((int **) where->exp[0].content), totalTupleNum * sizeof(int), cudaMemcpyDeviceToDevice) );
+                cudaFree( *((int **) where->exp[0].content) );
+            }
+            goto init_end;
+        }
 
         if( (where->exp[0].relation == EQ_VEC || where->exp[0].relation == NOT_EQ_VEC || where->exp[0].relation == GTH_VEC || where->exp[0].relation == LTH_VEC || where->exp[0].relation == GEQ_VEC || where->exp[0].relation == LEQ_VEC) &&
             (where->exp[0].dataPos == MEM || where->exp[0].dataPos == MMAP || where->exp[0].dataPos == PINNED) )
@@ -2502,13 +2538,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
         clock_gettime(CLOCK_REALTIME, &endS1);
         pp->whereMemCopy_s1 += (endS1.tv_sec - startS1.tv_sec)* BILLION + endS1.tv_nsec - startS1.tv_nsec;
-                 
-       /*   
-         * @dNum, @byteNum and @gpuDictFilter are for predicates that need to access dictionary-compressed columns.
-         */
-        int dNum;
-        int byteNum;
-        int *gpuDictFilter = NULL;
 
         /*
          * We will allocate GPU device memory for a column if it is stored in the host pageable or pinned memory.
@@ -2534,7 +2563,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
             clock_gettime(CLOCK_REALTIME, &endS2);
             pp->dataMemCopy_s2 += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
                 
-            int rel = where->exp[0].relation;
+            rel = where->exp[0].relation;
             if(sn->tn->attrType[index] == INT || sn->tn->attrType[index] == DATE){
                 int whereValue;
                 int *whereVec;
@@ -2635,16 +2664,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                     genScanFilter_init_float_neq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if(rel == GTH_VEC)
                     genScanFilter_init_float_gth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
-                else if(rel == LTH_VEC) {
-                    printf("here~\n");
+                else if(rel == LTH_VEC)
                     genScanFilter_init_float_lth_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
-                }
                 else if(rel == GEQ_VEC)
                     genScanFilter_init_float_geq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if (rel == LEQ_VEC)
                     genScanFilter_init_float_leq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
-
-
             }else{
                 if(rel == EQ)
                     genScanFilter_init_eq<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],totalTupleNum, gpuExp, gpuFilter);
@@ -2677,6 +2702,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                 else if (rel == LIKE)
                     genScanFilter_init_like<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
             }
+    init_end:
 
         }else if(format == DICT){
 
@@ -2714,7 +2740,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         int dictFilter = 0;
         int dictFinal = OR;
         int dictInit = 1;
-
         //Start timer for Step 1 - Copy where clause (Part2)
         struct timespec startS12, endS12;
         clock_gettime(CLOCK_REALTIME,&startS12);
@@ -2723,6 +2748,25 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
             whereIndex = where->exp[i].index;
             index = sn->whereIndex[whereIndex];
             format = sn->tn->dataFormat[index];
+
+            if( where->exp[i].relation == EXISTS ) {
+                int *outFilter;
+                if( where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED ){
+                    CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&outFilter, sizeof(int) * totalTupleNum) );
+                    CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(outFilter, *((int **) where->exp[i].content), sizeof(int) * totalTupleNum, cudaMemcpyHostToDevice) );
+                }else
+                    outFilter = *((int **) where->exp[i].content);
+
+                if(where->andOr == AND)
+                    genScanFilter_and_exists<<<grid,block>>>(outFilter, totalTupleNum, gpuFilter);
+                else if(where->andOr == OR)
+                    genScanFilter_or_exists<<<grid,block>>>(outFilter, totalTupleNum, gpuFilter);
+
+                if( where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED )
+                    free( *((int **) where->exp[i].content) );
+                cudaFree(outFilter);
+                continue;
+            }
 
             if( (where->exp[i].relation == EQ_VEC || where->exp[i].relation == NOT_EQ_VEC || where->exp[i].relation == GTH_VEC || where->exp[i].relation == LTH_VEC || where->exp[i].relation == GEQ_VEC || where->exp[i].relation == LEQ_VEC) &&
                 (where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED) )
@@ -3017,7 +3061,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                             genScanFilter_or_like<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
                     }
                 }
-
             }else if(format == DICT){
 
                 struct dictHeader * dheader = (struct dictHeader *)sn->tn->content[index];
@@ -3042,7 +3085,6 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                 genScanFilter_rle<<<grid,block>>>(column[whereIndex],sn->tn->attrSize[index],sn->tn->attrType[index], totalTupleNum, gpuExp, where->andOr, gpuFilter);
 
             }
-
         }
 
         //Stop timer for Step 1 - Copy where clause (Part2)

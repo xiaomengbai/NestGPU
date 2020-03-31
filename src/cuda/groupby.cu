@@ -177,6 +177,8 @@ __global__ static void agg_cal_cons(char ** content, int colNum, struct groupByE
 
                 float tmpRes = calMathExp(content, exp[j].exp, i);
                 buf[j] = buf[j] < tmpRes ? buf[j] : tmpRes;
+            }else if (func == COUNT){
+                buf[j] += 1.0f;
             }
         }
     }
@@ -192,6 +194,8 @@ __global__ static void agg_cal_cons(char ** content, int colNum, struct groupByE
             atomicMaxFloat(&((float *)result[i])[0], buf[i]);
         else if (func == MIN)
             atomicMinFloat(&((float *)result[i])[0], buf[i]);
+        else if (func == COUNT)
+            atomicAdd(&((float *)result[i])[0], buf[i]);
     }
 }
 
@@ -242,6 +246,8 @@ __global__ static void agg_cal(char ** content, int colNum, struct groupByExp* e
             }else if (func == AVG){
                 float tmpRes = calMathExp(content, exp[j].exp, i)/groupNum[hKey];
                 atomicAdd(& ((float *)result[j])[offset], tmpRes);
+            }else if (func == COUNT){
+                atomicAdd(& ((float *)result[j])[offset], 1.0f);
             }
         }
     }
