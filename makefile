@@ -23,7 +23,7 @@ TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
 
-SQL_FILE := $(TPCH_TEST_DIR)/q4.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q17.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 
@@ -141,7 +141,7 @@ $(DBGEN):
 TABLES := supplier part customer partsupp orders lineitem nation region # All tables!
 #TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
 
-DEFAULT_SCALE := 0.01
+DEFAULT_SCALE := 0.1
 
 # SUPPLIER_SCALE := 2
 # PART_SCALE     := 3

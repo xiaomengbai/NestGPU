@@ -1170,7 +1170,7 @@ def check_tree_correlated(tree):
             relList = []
             conList = []
             get_where_attr(tree.where_condition.where_condition_exp, whereList, relList, conList)
-	    if any(map(lambda x: isinstance(x, ystree.YRawColExp), conList)):
+	    if any(map(lambda x: isinstance(x, ystree.YConsExp) and x.ref_col != None, conList)):
 		tree.correlated = True
 
 
