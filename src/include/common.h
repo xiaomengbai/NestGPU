@@ -19,7 +19,7 @@
 
 #define BILLION     1000000000
 #define BLOCKNUM    (100*1024*1024)
-#define HSIZE 2891072
+#define HSIZE 27891072
 #define FLOAT_MAX 0x7f800000
 #define FLOAT_MIN 0xff800000
 
@@ -391,8 +391,14 @@ struct statistic{
     //Step 3.3 - Prob and memcpy ops
     double joinProf_step33_prob; 
 
-    // Step 4 - De-allocate memory
-    double joinProf_step4_deallocate;
+    // Step 4 - Materialize result
+    double joinProf_step4_materialize_res;
+
+    // Step 4.1 - Materialize left result
+    double joinProf_step41_materialize_res_left;
+
+    // Step 4.2 - Materialize right result
+    double joinProf_step42_materialize_res_right;
     // ===============================
 
 

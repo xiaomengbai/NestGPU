@@ -979,7 +979,7 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp,
     clock_gettime(CLOCK_REALTIME, &endS3);
     pp->joinProf_step3_join += (endS3.tv_sec - startS3.tv_sec)* BILLION + endS3.tv_nsec - startS3.tv_nsec;
     
-    //Start timer for Step 4 - De-allocate memory
+    //Start timer for Step 4 - Materialize result
     struct timespec startS4, endS4;
     clock_gettime(CLOCK_REALTIME,&startS4);
 
@@ -1053,7 +1053,13 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp,
         else
             gpu_result = (char *) res_mp->alloc(resSize);
 
+
         if(leftRight == 0){
+
+            //Start timer for Step 41 - Materialize left table result
+            struct timespec startS41, endS41;
+            clock_gettime(CLOCK_REALTIME,&startS41);
+
             if(format == UNCOMPRESSED){
 
                 if(dataPos == MEM || dataPos == MMAP || dataPos == PINNED){
@@ -1122,7 +1128,17 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp,
 
             }
 
+            //Stop for Step 41 - Materialize left table result
+            CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+            clock_gettime(CLOCK_REALTIME, &endS41);
+            pp->joinProf_step41_materialize_res_left += (endS41.tv_sec - startS41.tv_sec)* BILLION + endS41.tv_nsec - startS41.tv_nsec;
+
         }else{
+
+            //Start timer for Step 42 - Materialize right table result
+            struct timespec startS42, endS42;
+            clock_gettime(CLOCK_REALTIME,&startS42);
+
             if(format == UNCOMPRESSED){
 
                 if(dataPos == MEM || dataPos == MMAP || dataPos == PINNED){
@@ -1171,6 +1187,11 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp,
 
                 joinDim_rle<<<grid,block>>>(gpu_resPsum,gpu_fact, attrSize, jNode->leftTable->tupleNum, gpuFactFilter,gpu_result);
             }
+
+            //Stop for Step 42 - Materialize right table result
+            CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+            clock_gettime(CLOCK_REALTIME, &endS42);
+            pp->joinProf_step42_materialize_res_right += (endS42.tv_sec - startS42.tv_sec)* BILLION + endS42.tv_nsec - startS42.tv_nsec;
         }
         
         res->attrTotalSize[i] = resSize;
@@ -1204,10 +1225,10 @@ struct tableNode * hashJoin(struct joinNode *jNode, struct statistic *pp,
         CUDA_SAFE_CALL_NO_SYNC(cudaFree(JRes));
     }
 
-    //Stop for Step 4 - De-allocate memory
+    //Stop for Step 4 - Materialize result
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME, &endS4);
-    pp->joinProf_step4_deallocate += (endS4.tv_sec - startS4.tv_sec)* BILLION + endS4.tv_nsec - startS4.tv_nsec;
+    pp->joinProf_step4_materialize_res += (endS4.tv_sec - startS4.tv_sec)* BILLION + endS4.tv_nsec - startS4.tv_nsec;
     
     //Stop total timer
     clock_gettime(CLOCK_REALTIME, &endS0);

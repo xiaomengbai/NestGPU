@@ -31,7 +31,7 @@ optimization = None
 
 merge = lambda l1, l2: [ (l1[i], l2[i]) for i in range(0, min(len(l1), len(l2))) ]
 unmerge = lambda l: ( [ l[i][0] for i in range(0, len(l)) ], [ l[i][1] for i in range(0, len(l)) ] )
-preload_threshold = 1024 * 1024 * 1024
+preload_threshold = 1024 * 1024 * 1024 * 10
 loaded_table_list = {}
 cols_to_index = []
 
@@ -678,7 +678,9 @@ def generate_code(tree):
     print >>fo, indent + "pp.joinProf_step31_allocateMem = 0;"
     print >>fo, indent + "pp.joinProf_step32_exclusiveScan = 0;"
     print >>fo, indent + "pp.joinProf_step33_prob = 0;"
-    print >>fo, indent + "pp.joinProf_step4_deallocate = 0;\n"
+    print >>fo, indent + "pp.joinProf_step4_materialize_res = 0;"
+    print >>fo, indent + "pp.joinProf_step41_materialize_res_left = 0;"
+    print >>fo, indent + "pp.joinProf_step42_materialize_res_right = 0;\n"
 
     #For groupBy profiling
     print >>fo, indent + "pp.groupby_totalTime = 0;"
@@ -797,7 +799,9 @@ def generate_code(tree):
     print >>fo, indent + "printf(\"Step 3.1 - Allocate memory                        : %lf\\n\", pp.joinProf_step31_allocateMem/(1000*1000));"
     print >>fo, indent + "printf(\"Step 3.2 - Exclusive scan                         : %lf\\n\", pp.joinProf_step32_exclusiveScan/(1000*1000));"
     print >>fo, indent + "printf(\"Step 3.3 - Prob and memcpy ops                    : %lf\\n\", pp.joinProf_step33_prob/(1000*1000));"
-    print >>fo, indent + "printf(\"Step 4 - De-allocate memory                       : %lf\\n\", pp.joinProf_step4_deallocate/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 4 - Materialize result                       : %lf\\n\", pp.joinProf_step4_materialize_res/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 4.1 - Materialize right part (joinFact)      : %lf\\n\", pp.joinProf_step41_materialize_res_left/(1000*1000));"
+    print >>fo, indent + "printf(\"Step 4.2 - Materialize left part (joinDim)        : %lf\\n\", pp.joinProf_step42_materialize_res_right/(1000*1000));"
     print >>fo, indent + "printf(\"<----------------->\");"
     print >>fo, indent + "printf(\"\\n\");"
 
