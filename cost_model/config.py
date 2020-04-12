@@ -42,11 +42,11 @@ class config:
 			self.join_Threads = 1048576
 
 			#Aggregation op configuraiton
-			self.aggregation_kernelTime = 1.3
+			self.aggregation_kernelTime = 0.086
 			self.aggregation_Threads = 131072
 
 			#Group by op configurations
-			self.groupby_kernelTime = 6
+			self.groupby_kernelTime = 0.51
 			self.groupby_Threads = 131072
 
 			#Materialization time 

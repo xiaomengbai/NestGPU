@@ -209,7 +209,7 @@ class query:
 			#Kernels
 			self.ops = [] 
 			self.ops.append(scan ('partsupp', ['ps_supplycost','ps_partkey']))
-			self.ops.append(groupby ('partsupp', ['ps_supplycost','ps_partkey'], "min(ps_supplycost) GROUP BY ps_partkey", 0.5))
+			self.ops.append(groupby ('partsupp', ['ps_supplycost','ps_partkey'], "min(ps_supplycost) GROUP BY ps_partkey", 0.25))
 			self.ops.append(materialize ('partsupp', ['ps_supplycost','ps_partkey']))
 
 			#Nested part

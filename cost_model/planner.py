@@ -57,10 +57,10 @@ class planner:
 			col_size = self.schema.tables[kernel.table].cols[col.upper()]
 			#print "Columm "+col+" with size " + str(col_size)+" added!"
 			row_size += col_size
-		total_data = row_size * self.schema.tables[kernel.table].size
+		total_data = row_size * self.schema.tables[kernel.table].size * kernel.selectivity
 
 		#Calculate result size
-		self.tmpTableSize = total_data * kernel.selectivity
+		self.tmpTableSize = total_data 
 
 		#Compute and return time
 		return iterations * self.config.filter_kernelTime
@@ -129,10 +129,10 @@ class planner:
 			col_size = self.schema.tables[kernel.table].cols[col.upper()]
 			#print "Columm "+col+" with size " + str(col_size)+" added!"
 			row_size += col_size
-		total_data = row_size * self.schema.tables[kernel.table].size
+		total_data = row_size * 1
 
 		#Calculate result size
-		self.tmpTableSize = total_data * 1
+		self.tmpTableSize = total_data
 
 		#Compute and return time
 		return iterations * self.config.aggregation_kernelTime
@@ -150,10 +150,10 @@ class planner:
 			col_size = self.schema.tables[kernel.table].cols[col.upper()]
 			#print "Columm "+col+" with size " + str(col_size)+" added!"
 			row_size += col_size
-		total_data = row_size * self.schema.tables[kernel.table].size
+		total_data = row_size * self.schema.tables[kernel.table].size * kernel.selectivity
 
 		#Calculate result size
-		self.tmpTableSize = total_data * kernel.selectivity
+		self.tmpTableSize = total_data 
 
 		#Compute and return time
 		return iterations * self.config.groupby_kernelTime
