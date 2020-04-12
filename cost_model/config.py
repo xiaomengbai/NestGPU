@@ -38,7 +38,8 @@ class config:
 			#Join op configuration
 			self.join_kernelTime_hashTable = 1.22
 			self.join_kernelTime_probe = 3.7
-			self.join_materialization_speed = 895752 #b/ms (~900 mb/sec for IR2)
+			self.join_kernelTime_joinFact = 3.56 
+			self.join_kernelTime_joinDim = 0.05 
 			self.join_Threads = 1048576
 
 			#Aggregation op configuraiton
@@ -51,6 +52,9 @@ class config:
 
 			#Materialization time 
 			self.materialization_kernelTime = 2468085 #b/ms (~2.5 gb/sec for IR2)
+
+			#Materialization after join time 
+			self.materializationJ_kernelTime = 266735 #b/ms (~0.2 gb/sec for IR2)
 
 		else:
 			print "Error - There is no existing configuration for this system!"

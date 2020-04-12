@@ -111,17 +111,22 @@ class planner:
 		print ">>Probe time: "+str(probe_cost)
 		#-----------------------
 
-		#--Materialize Join result---
+		#--Materialize right part (joinFact)--
+		joinFact_iterations = self.workSpace[kernel.r_table].size / self.config.join_Threads
+		joinFact_iterations =  math.ceil(joinFact_iterations)
 
-		#Get input row size 
-		row_size = self._computeRowSize(self.schema, kernel.cols) 
-		
-		#Get total data (always from the workSpace as we materialize mem buffers!)
-		total_data = row_size * kernel.cardinality
+		#Compute joinFact time
+		joinFact_cost = joinFact_iterations * self.config.join_kernelTime_joinFact
+		print ">>Materialize right part (joinFact): "+str(joinFact_cost)
+		#-----------------------------
 
-		#Compute materialization time
-		meterialization_cost = total_data / self.config.join_materialization_speed
-		print ">>Materialization time: "+str(meterialization_cost)
+		#--Materialize left part (joinDim)--
+		joinDim_iterations = self.workSpace[kernel.l_table].size / self.config.join_Threads
+		joinDim_iterations =  math.ceil(joinDim_iterations)
+
+		#Compute joinDim time
+		joinDim_cost = joinDim_iterations * self.config.join_kernelTime_joinDim
+		print ">>Materialize left part (joinDim): "+str(joinDim_cost)
 		#-----------------------------
 
 		#Add output to workspace
@@ -129,7 +134,7 @@ class planner:
 		self.workSpace [kernel.output] = buffer
 
 		#Compute and return total time
-		return build_hash_table_cost+probe_cost+meterialization_cost
+		return build_hash_table_cost+probe_cost+joinFact_cost+joinDim_cost
 
 	def _estimateAggCost(self,kernel):
 
@@ -205,6 +210,8 @@ class planner:
 		joinC = 0 #Join cost
 		aggregationC = 0 #aggregation cost
 		groupbyC = 0 #group by cost
+		materializeC = 0 #materialization cost
+		materializeJC = 0 #materialization after join cost
 
 		for kernel in self.query.ops:
 
@@ -273,22 +280,22 @@ class planner:
 		#Print detailed info
 		if verdose == True:
 			print "---Cost estimation---"
-			print "Disk time          :"+str(diskC)
-			print "Filter time        :"+str(filterC)
-			print "Join time          :"+str(joinC)
-			print "Aggregation time   :"+str(aggregationC)
-			print "Group By time      :"+str(groupbyC)
+			print "Disk time               :"+str(diskC)
+			print "Filter time             :"+str(filterC)
+			print "Join time               :"+str(joinC)
+			print "Aggregation time        :"+str(aggregationC)
+			print "Group By time           :"+str(groupbyC)
 			print "--Nested part--"
 			print "Filter time (nest)      :"+str(nest_filterC)
 			print "Join time (nest)        :"+str(nest_joinC)
 			print "Aggregation time (nest) :"+str(nest_aggregationC)
 			print "Group By time (next)    :"+str(nest_groupbyC)
 			print "---------------"
-			print "Total un-nested time :"+str(unnestedPartC)
-			print "Total Nested time    :"+str(nestedPartC)
+			print "Total un-nested time    :"+str(unnestedPartC)
+			print "Total Nested time       :"+str(nestedPartC)
 			print "---------------"
-			print "Constant        time :"+str(self.config.constantTime)
-			print "Materialization time :"+str(materializeC)
+			print "Constant           time :"+str(self.config.constantTime)
+			print "Materialization    time :"+str(materializeC)
 			print ">Total Time :"+str(total_cost)
 
 		return total_cost

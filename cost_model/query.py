@@ -28,6 +28,25 @@ class materialize:
 		print "Output      :"+ self.output
 		print "Output Cols :"+ str(self.output_cols)
 
+#Class for materialize after join (i.e. for some reason it takes more time to materialize after join)
+class materializeJ:
+
+	# Constructor
+	def __init__(self, table, cols, output, output_cols):
+		self.op = "materializeJ"
+		self.table = table
+		self.cols = cols
+		self.output = output
+		self.output_cols = output_cols
+
+	#Pring op
+	def printOp(self):
+		print "Operator    :"+ self.op
+		print "Table       :"+ self.table
+		print "Cols        :"+ str(self.cols)
+		print "Output      :"+ self.output
+		print "Output Cols :"+ str(self.output_cols)
+
 #Class for grouup by operation
 class groupby:
 
@@ -143,7 +162,7 @@ class scan:
 class query:
 
 	# Constructor
-	def __init__(self, query):
+	def __init__(self, query, scaleFactor):
 
 		#Configure simple ops queries
 		if 'select'.lower() == query.lower():
@@ -202,7 +221,7 @@ class query:
 				'join-tmp2', ['ps_partkey']))
 			
 			#Join part and partsupp
-			self.ops.append(join ("join-tmp1", "join-tmp2", ['p_partkey', 'ps_partkey'], "p_partkey = ps_partkey", 800000,\
+			self.ops.append(join ("join-tmp1", "join-tmp2", ['p_partkey', 'ps_partkey'], "p_partkey = ps_partkey", 800000 * scaleFactor,\
 				'join-tmp3', ['p_partkey', 'p_mfgr']))
 			
 			#Materialize res
@@ -273,11 +292,11 @@ class query:
 				'join2-tmp3', ['s_suppkey']))
 
 			#Join part and supplier
-			self.ops.append(join ('join2-tmp1', 'join2-tmp2', ['p_partkey', 'ps_partkey'], "p_partkey = ps_partkey", 800000,\
+			self.ops.append(join ('join2-tmp1', 'join2-tmp2', ['p_partkey', 'ps_partkey'], "p_partkey = ps_partkey", 800000 * scaleFactor,\
 				'join2-tmp4', ['p_partkey', 'p_mfgr', 'ps_suppkey']))
 			
 			#Join 2 part-partsupp with supplier
-			self.ops.append(join ('join2-tmp4', "join2-tmp3", ['s_suppkey', 'ps_suppkey'], "s_suppkey = ps_suppkey", 800000,\
+			self.ops.append(join ('join2-tmp4', "join2-tmp3", ['s_suppkey', 'ps_suppkey'], "s_suppkey = ps_suppkey", 800000 * scaleFactor,\
 				'join2-tmp5', ['p_partkey', 'p_mfgr'] ))
 
 			#Materialize res
@@ -309,23 +328,23 @@ class query:
 				'join4c8-tmp5', ['r_regionkey']))
 
 			#Join part and partsupp
-			self.ops.append(join ('join4c8-tmp1', 'join4c8-tmp2', ['p_partkey', 'ps_partkey'] , "p_partkey = ps_partkey", 800000, \
+			self.ops.append(join ('join4c8-tmp1', 'join4c8-tmp2', ['p_partkey', 'ps_partkey'] , "p_partkey = ps_partkey", 800000 * scaleFactor, \
 				'join4c8-tmp6', ['p_partkey', 'p_mfgr','ps_suppkey']))
 			
 			#Join2 part-partsupp and supplier
-			self.ops.append(join ("join4c8-tmp6", "join4c8-tmp3", ['s_suppkey', 'ps_suppkey'], "s_suppkey = ps_suppkey", 800000, \
+			self.ops.append(join ("join4c8-tmp6", "join4c8-tmp3", ['s_suppkey', 'ps_suppkey'], "s_suppkey = ps_suppkey", 800000 * scaleFactor, \
 				'join4c8-tmp7', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment']))
 
 			#Join3 part-partsupp-supplier and nation
-			self.ops.append(join ("join4c8-tmp7", "join4c8-tmp4", ['s_nationkey', 'n_nationkey'], "s_nationkey = n_nationkey", 800000, \
+			self.ops.append(join ("join4c8-tmp7", "join4c8-tmp4", ['s_nationkey', 'n_nationkey'], "s_nationkey = n_nationkey", 800000 * scaleFactor, \
 				'join4c8-tmp8', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name','n_regionkey']))			
 
 			#Join4 part-partsupp-supplier and nation
-			self.ops.append(join ("join4c8-tmp8", "join4c8-tmp5", ['n_regionkey', 'r_regionkey'], "n_regionkey = r_regionkey", 800000, \
+			self.ops.append(join ("join4c8-tmp8", "join4c8-tmp5", ['n_regionkey', 'r_regionkey'], "n_regionkey = r_regionkey", 800000 * scaleFactor, \
 				'join4c8-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name']))			
 
 			#Print result
-			self.ops.append(materialize ('join4c8-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name'],\
+			self.ops.append(materializeJ ('join4c8-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name'],\
 				'join4c8-tmp10', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name']))
 
 			#Nested part
