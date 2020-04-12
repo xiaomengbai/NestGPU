@@ -166,7 +166,7 @@ class YExpTool:
 
             return YFuncExp(func_name, [before_exp, end_exp])
 
-        elif partition_index == 0:
+        elif partition_index == 0: # EXISTS
             func_name = partition_type
             after_list = input_token_list[1:]
             end_exp = self.convert_token_list_to_exp_tree(after_list)
@@ -380,15 +380,16 @@ class YExpBase:
     def evaluate(self):
         pass
 
+    def __str__(self):
+        return "%s: %s" % (self.__class__.__name__, self.evaluate())
+
 class YFuncExp(YExpBase):
 
     func_name = None
     parameter_list = None
     func_obj = None
 
-
     def __init__(self, input_func_name, input_parameter_list):
-
         self.func_name = input_func_name.upper()
         self.parameter_list = input_parameter_list
         self.convert_to_upper()
@@ -398,9 +399,7 @@ class YFuncExp(YExpBase):
         self.parameter_list = para_list
         self.gen_func_obj(self)
 
-
     def evaluate(self):
-
         ps = ""
         for ap in self.parameter_list:
             aps = ap.evaluate()
@@ -458,7 +457,6 @@ class YFuncExp(YExpBase):
                 return False
 
         return True
-
 
 class YConsExp(YExpBase):
 
@@ -563,6 +561,17 @@ class YRawColExp(YExpBase):
 
         return True
 
+def exp_gen(exp):
+    '''
+    The generator to traverse an expression (exp)
+    Usage: for e in qpt_gen(exp)
+    '''
+    yield exp
+    if isinstance(exp, YFuncExp):
+        for par in exp.parameter_list:
+            for e in exp_gen(par):
+                yield e
+
 ############################################################################################
 ############################################################################################
 ########################    InitialQueryTree    ############################################
@@ -610,6 +619,7 @@ class QueryPlanTreeBase(object):
             ob.order_by_clause = self.order_by_clause
             self.order_by_clause = None
 
+            # change to table_list.copy()
             for x in self.table_list:
                 ob.table_list.append(x)
             for x in self.table_alias_dict.keys():
@@ -622,7 +632,6 @@ class QueryPlanTreeBase(object):
             return ob
         else:
             return self
-
 
     def release_group_by(self):
 
@@ -756,6 +765,10 @@ class OrderByNode(QueryPlanTreeBase):
 
         self.child.debug(level + 1)
 
+    def __str__(self):
+        return "[OrderByNode]"
+
+
 class GroupByNode(QueryPlanTreeBase):
 
     child = None
@@ -856,6 +869,9 @@ class GroupByNode(QueryPlanTreeBase):
         self.child.debug(level + 1)
 
 
+    def __str__(self):
+        return "[GroupByNode]"
+
 class SelectProjectNode(QueryPlanTreeBase):
 
     child = None
@@ -915,19 +931,24 @@ class SelectProjectNode(QueryPlanTreeBase):
         if self.select_list is None:
             sscs = str(None)
         else:
-            sscs = self.select_list.converted_exp_str
+            sscs = str(eval_exp_list(self.select_list.tmp_exp_list))
+            #sscs = self.select_list.converted_exp_str
 
 
         if self.where_condition is None:
             swc = str(None)
         else:
-            swc = self.where_condition.converted_exp_str
+            swc = self.where_condition.where_condition_exp.evaluate()
 
         name = "None" if self.name is None else self.name
         star = "*" if self.correlated else ""
-        print pb, star + "SelectProjectNode", "(" + name + ")", self.table_alias, "[" + sscs + "]", "[" + swc + "]"
+        print pb, star + "SelectProjectNode", "(" + str(name) + ")", str(self.table_alias), "[" + str(sscs) + "]", "[" + str(swc) + "]"
         self.child.debug(level + 1)
 
+    def __str__(self):
+        select_list = eval_exp_list(self.select_list.tmp_exp_list) if self.select_list is not None else "None"
+        where_cond = self.where_condition.where_condition_exp.evaluate() if self.where_condition is not None else "None"
+        return "[SelectProjectNode: " + str(self.name) + "]: select: (" + str(select_list) + "), where: (" + where_cond + ")"
 
 
 class TableNode(QueryPlanTreeBase):
@@ -964,7 +985,8 @@ class TableNode(QueryPlanTreeBase):
         if self.select_list is None:
             sscs = str(None)
         else:
-            sscs = self.select_list.converted_exp_str
+            # sscs = self.select_list.converted_exp_str
+            sscs = str(eval_exp_list(self.select_list.tmp_exp_list))
 
             #sscs = self.select_list.converted_str
 
@@ -982,6 +1004,8 @@ class TableNode(QueryPlanTreeBase):
         star = "*" if self.correlated else ""
         print pb, star + "TableNode", "(" + name + ")", self.table_name, "{" + self.table_alias + "}", tmp_str_select_list, tmp_str_where_condition
 
+    def __str__(self):
+        return "[TableNode: %s]" % (self.name)
 
 class TwoJoinNode(QueryPlanTreeBase):
 
@@ -1024,10 +1048,8 @@ class TwoJoinNode(QueryPlanTreeBase):
 
         if self.join_explicit is True:
             __get_func_para__(self.join_condition.on_condition_exp,tmp_list)
-#            print "self.on_condition_exp: ", self.join_condition.on_condition_exp.evaluate()
         else:
             __get_func_para__(self.join_condition.where_condition_exp,tmp_list)
-            # print "self.where_condition_exp: ", self.join_condition.where_condition_exp.evaluate()
 
 
         # print "tmp_list: ", map(lambda x: x.evaluate(), tmp_list)
@@ -1080,8 +1102,8 @@ class TwoJoinNode(QueryPlanTreeBase):
 
                 for exp in exp_list:
                     if exp.column_name == old_exp.column_name:
-                            x.column_name = exp_list.index(exp)
-                            break
+                        x.column_name = exp_list.index(exp)
+                        break
 
     def set_composite(self,c_node,node):
         if self.left_child == node:
@@ -1142,6 +1164,10 @@ class TwoJoinNode(QueryPlanTreeBase):
         self.left_child.debug(level + 1)
 
         self.right_child.debug(level + 1)
+
+    def __str__(self):
+        return "[TwoJoinNode]"
+
 
 #useless once we have TwoJoinNode
 class MultipleJoinNode(QueryPlanTreeBase):
@@ -1232,7 +1258,6 @@ class MultipleJoinNode(QueryPlanTreeBase):
                         tmp_list_join_condition = self.join_info[0]
                         tmp_list_join_type = self.join_info[1]
 
-
                         a_join_node.join_condition = tmp_list_join_condition[tmp_index]
                         a_join_node.join_type = tmp_list_join_type[tmp_index]
 
@@ -1270,6 +1295,9 @@ class MultipleJoinNode(QueryPlanTreeBase):
         for a_child in self.children_list:
             a_child.debug(level + 1)
 
+    def __str__(self):
+        return "[MultipleJoinNode]"
+
 class CompositeNode(QueryPlanTreeBase):
 
     it_node_list = []
@@ -1304,8 +1332,8 @@ class CompositeNode(QueryPlanTreeBase):
     def get_pk(self):
         pk_list = []
         for x in self.pk_dict.keys():
-                for y in self.pk_dict[x]:
-                    pk_list.append(y)
+            for y in self.pk_dict[x]:
+                pk_list.append(y)
         return pk_list
 
     def get_mapoutput(self,table_name):
@@ -1313,6 +1341,29 @@ class CompositeNode(QueryPlanTreeBase):
 
     def adjust_index(self,exp_list,table_name):
         return
+
+    def __str__(self):
+        return "[CompositeNode]"
+
+
+def qpt_gen(node):
+    '''
+    The generator to traverse a query-plan-tree (qpt)
+    Usage: for node in qpt_gen(root)
+    '''
+    yield node
+    if isinstance(node, SelectProjectNode) or isinstance(node, GroupByNode) or isinstance(node, OrderByNode):
+        for n in qpt_gen(node.child):       yield n
+    elif isinstance(node, TwoJoinNode):
+        for n in qpt_gen(node.left_child):  yield n
+        for n in qpt_gen(node.right_child): yield n
+    elif isinstance(node, MultipleJoinNode):
+        for child in node.children_list:
+            for n in qpt_gen(child):        yield n
+    elif isinstance(node, CompositeNode):
+        # slightly different from the name in MultipleJoinNode
+        for child in node.child_list:
+            for n in qpt_gen(child):        yield n
 
 
 
@@ -2570,6 +2621,7 @@ def get_the_select_node_from_a_file(filename):
 #This function processes a T_SELECT node
 def build_plan_tree_from_a_select_node(a_query_node):
 
+    #debug_global_tables()
     r = convert_a_select_tree(a_query_node)
 
     r.process_from_list()
@@ -2613,6 +2665,7 @@ def __check_column__(exp,table_list,table_alias_dict):
     if isinstance(exp,YRawColExp):
         if exp.table_name != "":
             if exp.table_name not in table_list and exp.table_name not in table_alias_dict.keys():
+                print "The column ", exp.evaluate(), " not found in (table_list): ", table_list, " and table_alias_dict: ", table_alias_dict
                 return -1
 
             elif exp.column_name == '*':
@@ -2625,12 +2678,13 @@ def __check_column__(exp,table_list,table_alias_dict):
                     tmp_name = exp.table_name
 
                 if column_unique_in_table(exp.column_name,tmp_name) is False:
+                    print exp.column_name, " is not unique in ", tmp_name
                     return -1
 
 
         elif exp.column_name == '*':
             return 0
-        else:
+        else: # "t.c"
             count = 0
 
             tmp_name = None
@@ -2645,6 +2699,7 @@ def __check_column__(exp,table_list,table_alias_dict):
                     count = count +1
 
             if count !=1:
+                print "More than one table contains the same column: ", exp.column_name
                 return -1
 
             if column_unique_in_table(exp.column_name,table_name) is False:
@@ -2691,13 +2746,16 @@ def __check_func_para__(exp,table_list,table_alias_dict):
 
     if isinstance(exp,YFuncExp):
         if exp.func_name not in func_dict.keys():
+            print "Func name ", exp.func_name, " not found!"
             return -1
 
         func_para_len = func_dict[exp.func_name][0]
         if func_para_len == 0 and len(exp.parameter_list) == 0:
+            print "Func ", exp.func_name, " should have at least one argument!"
             return -1
 
         if func_para_len !=0 and func_para_len != len(exp.parameter_list):
+            print "Func ", exp.func_name, " has wrong argument number: ", len(exp.parameter_list), ", supposed to be ", fun_para_len
             return -1
 
         check_type = None
@@ -2706,12 +2764,14 @@ def __check_func_para__(exp,table_list,table_alias_dict):
             if isinstance(para,YRawColExp):
                 res = __check_column__(para,table_list,table_alias_dict)
                 if res == -1 :
+                    print "Checking column ", para.evaluate(), " failed inside the func ", exp.evaluate()
                     return res
 
                 if para.column_name == "*":
                     if exp.func_name == "COUNT" :
                         continue
                     else:
+                        print exp.func_name, "(*) is not supported, the only legal one is count(*)"
                         return -1
 
                 column_type = None
@@ -2725,6 +2785,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                         break
                 if column_type is not None:
                     if column_type not in func_dict[exp.func_name.upper()][1]:
+                        print exp.func, " has a wrong type arg (", column_type, "). Should be ", func_dict[exp.func_name.upper()][1]
                         return -1
 
                     if check_type is None or exp.func_name == "SUBQ":
@@ -2738,8 +2799,10 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                             continue
 
                         elif check_type != column_type:
+                            print "The column type (", column_type, ") does not match the check type (", check_type, ")"
                             return -1
                 else:
+                    print "Failed to find the column type for ", para.column_name
                     return -1
 
             elif isinstance(para,YFuncExp):
@@ -2756,6 +2819,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
 
                 for tmp in return_type:
                     if tmp not in func_dict[exp.func_name.upper()][1]:
+                        print "One of the return types of ", para.evaluate(), " (", tmp, ") does appear in the arg types of ", exp.evaluate(), " ", func_dict[exp.func_name.upper()][1]
                         return -1
 
                 if check_type is None:
@@ -2814,14 +2878,17 @@ def __schema_select_list__(select_list,table_list,table_alias_dict):
         if isinstance(x,YRawColExp):
             res = __check_column__(x,table_list,table_alias_dict)
             if res == -1:
+                print "Checking column ", x.evaluate(), " failed inside the select list ", select_list
                 return -1
 
         elif isinstance(x, YFuncExp):
             if x.func_name.upper() not in select_func_list:
+                print "invalid select list func ", x.func_name.upper()
                 return -1
 
             res = __check_func_para__(x,table_list,table_alias_dict)
             if res == -1:
+                print "Checking func ", x.evaluate(), " failed in the select list ", select_list
                 return -1
         else:
             continue
@@ -2840,6 +2907,7 @@ def __groupby_func_check__(exp,gb_list,table_list,table_alias_dict):
 
     res = __check_func_para__(exp,table_list,table_alias_dict)
     if res == -1:
+        print "Checking func ", exp.evaluate(), " failed in a groupby node"
         return -1
 
     if exp.func_name in agg_func_list:
@@ -2952,6 +3020,7 @@ def __schema_where__(where,table_list,table_alias_dict):
     exp = where.where_condition_exp
     if isinstance(exp,YFuncExp):
         if exp.func_name not in func_list:
+            print exp.func_name, " is not a valid func name"
             return -1
 
         res = __check_func_para__(exp,table_list,table_alias_dict)
@@ -2995,10 +3064,12 @@ def __schema_join__(join_cond,table_list,table_alias_dict):
     exp = join_cond.on_condition_exp
     if isinstance(exp,YFuncExp):
         if exp.func_name.upper() not in func_list:
+            print exp.func_name.upper(), " is not valid in a join clause"
             return -1
 
         res = __check_func_para__(exp,table_list,table_alias_dict)
     else:
+        print "Join clause must be a func: ", exp.evaluate()
         res = -1
 
     return res
@@ -3342,17 +3413,83 @@ def __groupby_where_filter__(exp):
         else:
             return exp
 
+def split_subquery(tree):
+    if isinstance(tree, TwoJoinNode):
+        split_subquery(tree.left_child)
+        split_subquery(tree.right_child)
+    elif not isinstance(tree, TableNode):
+        split_subquery(tree.child)
+    else:
+        if tree.where_condition is not None:
+            scan_exp = tree.where_condition.where_condition_exp
+            # We can only splitting the table node with the AND condition
+            if isinstance(scan_exp, YFuncExp) and scan_exp.func_name == "AND":
+                subq_exps = []
+                for par in scan_exp.parameter_list:
+                    subq_funcs = []
+                    __traverse_exp_filter__(par, subq_funcs, lambda exp: isinstance(exp, YFuncExp) and exp.func_name == "SUBQ")
+                    if len(subq_funcs) > 0:
+                        subq_exps.append(par)
+
+                # Split the TableNode into a SelectProjectNode and a TableNode
+                if len(subq_exps) == 1:
+                    # remove the subquery from the where list
+                    __remove_para__(subq_exps[0])
+
+                    # initialize the SelectProjectNode
+                    spn = SelectProjectNode()
+                    # spn.source = a_input
+                    # tn.i_am_the_tree = i_am_the_tree
+
+                    #if i_am_the_tree:
+                    spn.select_list = tree.select_list
+                    spn.where_condition = FirstStepWhereCondition(None)
+                    spn.where_condition.where_condition_exp = subq_exps[0]
+                    spn.table_list = tree.table_list
+                    spn.table_alias = tree.table_alias
+
+                    tn_select_list = filter(lambda exp: isinstance(exp, YRawColExp), spn.select_list.tmp_exp_list)
+                    # [ tn_select_list.append(exp) for exp in exp_gen(subq_exps[0]) if isinstance(exp, YRawColExp) and exp not in tn_select_list ]
+                    [ tn_select_list.append(exp) for exp in exp_gen(spn.where_condition.where_condition_exp) if isinstance(exp, YRawColExp) and exp not in tn_select_list ]
+
+                    # initialize the TableNode
+                    tn = TableNode()
+                    # tn.source = a_input
+                    # tn.i_am_the_tree = i_am_the_tree
+
+                    #if i_am_the_tree:
+                    tn.select_list = copy.deepcopy(tree.select_list)
+                    tn.select_list.tmp_exp_list = copy.deepcopy(tn_select_list)
+                    [ tn.select_list.dict_exp_and_alias.update({exp: exp.column_name}) for exp in tn.select_list.tmp_exp_list if isinstance(exp, YRawColExp) ]
+                    # push down the subquery exp
+                    tn.where_condition = copy.deepcopy(tree.where_condition)
+                    tn.table_name = tree.table_name
+                    tn.table_list = copy.deepcopy(tree.table_list)
+                    tn.table_alias = tree.table_alias
+
+                    spn.child = tn
+                    spn.parent = tree.parent
+                    tn.parent = spn
+                    if isinstance(tree.parent, TwoJoinNode):
+                        if tree.parent.left_child == tree:
+                            tree.parent.left_child = spn
+                        else:
+                            tree.parent.right_child = spn
+                    else:
+                        tree.parent.child = spn
+
+
 def predicate_pushdown(tree):
 
     if isinstance(tree,TableNode):
         return
 
     elif isinstance(tree,OrderByNode):
-            predicate_pushdown(tree.child)
+        predicate_pushdown(tree.child)
 
     elif isinstance(tree,GroupByNode):
 
-        if tree.where_condition is  not None:
+        if tree.where_condition is not None:
 
             new_where = __groupby_where_filter__(tree.where_condition.where_condition_exp)
 #### the where condition of the groupby node is pushed down by its parent.
@@ -3525,7 +3662,7 @@ def __gen_column_index__(exp,table_list,table_alias_dict):
         if exp.table_name != "":
             if exp.table_name not in table_alias_dict.keys():
                 if exp.table_name not in table_list:
-                    print >>sys.stderr,"Internal Error:__gen_column_index__"
+                    print >>sys.stderr,"Internal Error:__gen_column_index__: ", exp.table_name, " not in table_list"
                     exit(29)
                 tmp_table =  lookup_a_table(exp.table_name)
 
@@ -4036,9 +4173,98 @@ def gen_column_index(tree):
         pass
 
     elif isinstance(tree,SelectProjectNode):
-        __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
-        __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
+
+        child_select_list = tree.child.select_list.tmp_exp_list
+        child_select_dict = tree.child.select_list.dict_exp_and_alias
+
+        for exp in tree.select_list.tmp_exp_list:
+            if isinstance(exp,YConsExp):
+                continue
+
+            elif isinstance(exp,YFuncExp):
+                col_list = []
+                __get_func_para__(exp,col_list)
+                for x in col_list:
+                    for tmp in child_select_list:
+                        if isinstance(tmp,YRawColExp):
+                            if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
+                                x.table_name = "CHILD"
+                                x.column_name = child_select_list.index(tmp)
+                                if "CHILD" not in tree.table_list:
+                                    tree.table_list.append("RIGHT")
+                                break
+                            else:
+                                if x.column_name == child_select_dict[tmp]:
+                                    x.table_name = "CHILD"
+                                    x.column_name = child_select_list.index(tmp)
+                                    if "CHILD" not in tree.table_list:
+                                        tree.table_list.append("CHILD")
+                                    break
+                continue
+
+            for tmp in child_select_list:
+                if isinstance(tmp,YRawColExp):
+                    if exp.column_name == tmp.column_name and exp.table_name == tmp.table_name:
+                        exp.table_name = "CHILD"
+                        exp.column_name = child_select_list.index(tmp)
+                        if "CHILD" not in tree.table_list:
+                            tree.table_list.append("CHILD")
+                        break
+                else:
+                    if exp.column_name == child_select_dict[tmp]:
+                        exp.table_name = "CHILD"
+                        exp.column_name = child_select_list.index(tmp)
+                        if "CHILD" not in tree.table_list:
+                            tree.table_list.append("CHILD")
+
+        if tree.where_condition is not None:
+            where_exp = tree.where_condition.where_condition_exp
+
+            correlated_cols = {}
+            for exp in exp_gen(where_exp):
+                if isinstance(exp, YFuncExp) and exp.func_name == "SUBQ":
+                    for par in exp.parameter_list[1:]:
+                        correlated_cols[par] = exp.parameter_list[0].cons_value
+
+            col_list = []
+            __get_func_para__(where_exp,col_list)
+
+            for tmp in col_list:
+                for x in child_select_list:
+                    if isinstance(x,YRawColExp):
+                        if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
+                            if tmp in correlated_cols.keys():
+                                update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "CHILD", child_select_list.index(x))
+                            tmp.table_name = "CHILD"
+                            tmp.column_name = child_select_list.index(x)
+                            if "CHILD" not in tree.table_list:
+                                tree.table_list.append("CHILD")
+                            break
+                    else:
+                        if tmp.column_name == child_select_dict[x]:
+                            if tmp in correlated_cols.keys():
+                                update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "CHILD", child_select_list.index(x))
+                            tmp.table_name = "CHILD"
+                            tmp.column_name = child_select_list.index(x)
+                            if "CHILD" not in tree.table_list:
+                                tree.table_list.append("CHILD")
+                            break
+
+        # __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
+        # __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
         gen_column_index(tree.child)
+
+def update_subquery_column_name(subquery, table_name, column_name, new_table_name, new_column_name):
+    a_col = YRawColExp(table_name, column_name)
+    new_a_col = __gen_column_index__(a_col, [table_name], {})
+    for node in qpt_gen(subquery):
+        if node.where_condition is not None:
+            print node.where_condition.where_condition_exp.evaluate()
+            for exp in exp_gen(node.where_condition.where_condition_exp):
+                if isinstance(exp, YConsExp) and exp.ref_col is not None and exp.ref_col.table_name == new_a_col.table_name and exp.ref_col.column_name == new_a_col.column_name:
+                    exp.ref_col.table_name = new_table_name
+                    exp.ref_col.column_name = new_column_name
+
 
 
 
@@ -4492,6 +4718,23 @@ def column_filtering(tree):
         child_exp_list = tree.child.select_list.tmp_exp_list
         child_exp_dict = tree.child.select_list.dict_exp_and_alias
 
+        if tree.where_condition is not None:
+            for exp in exp_gen(tree.where_condition.where_condition_exp):
+                if isinstance(exp, YRawColExp):
+                    for child_exp in child_exp_list:
+                        if isinstance(exp, YRawColExp):
+                            if child_exp_dict[child_exp] == exp.column_name:
+                                if child_exp not in new_exp_list:
+                                    new_exp_list.append(child_exp)
+                                    new_select_dict[child_exp] = exp.column_name
+                                break
+
+                            if exp.column_name == child_exp.column_name:
+                                if child_exp not in new_exp_list:
+                                    new_exp_list.append(child_exp)
+                                    new_select_dict[child_exp] = None
+                                break
+
         for exp in tree.select_list.tmp_exp_list:
             if isinstance(exp,YRawColExp):
                 for x in child_exp_list:
@@ -4784,6 +5027,10 @@ def process_the_plan_tree(tree):
     gen_table_name(tree)
 
     predicate_pushdown(tree)
+
+    split_subquery(tree)
+
+    gen_project_list(tree)
 
     column_filtering(tree)
 

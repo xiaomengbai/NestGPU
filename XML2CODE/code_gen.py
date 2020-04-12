@@ -1063,13 +1063,11 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     for col in pass_in_cols:
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
         colLen = type_length(col.table_name, col.column_name, col.column_type)
-        if passInPos == "MEM":
-            print >>fo, indent + baseIndent + "memcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" +  str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ");"
-        elif passInPos == "GPU":
-            print >>fo, indent + baseIndent + "CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" + str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ", cudaMemcpyDeviceToHost) );"
-        else:
-            print "ERROR: Unknown pass in value position: ", passInPos
-            exit(99)
+
+        print >>fo, indent + baseIndent + "if(" + tableName + "->dataPos["+ str(indexDict[col.table_name + "." + str(col.column_name)]) + "] == MEM)"
+        print >>fo, indent + baseIndent * 2 + "memcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" +  str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ");"
+        print >>fo, indent + baseIndent + "else"
+        print >>fo, indent + baseIndent * 2 + "CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" + str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ", cudaMemcpyDeviceToHost) );"
 
     # may also consider IN
     if SubCache == 1 and len(pass_in_cols) == 1:
@@ -1243,12 +1241,286 @@ def generate_code_for_a_node(fo, indent, lvl, node):
 def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
 
     global pre_executed_nodes
+    global loaded_table_list
+
     if spn.name in pre_executed_nodes:
 	return spn.name
 
     inputNode = generate_code_for_a_node(fo, indent, lvl, spn.child)
 
-    return inputNode
+    resName = spn.name
+    var_subqRes = "subqRes" + str(lvl)
+    print >>fo, indent + "// Process the SelectProjectNode for " + inputNode
+
+    print >>fo, indent + "struct tableNode *" + resName + ";"
+    print >>fo, indent + "{"
+    indent += baseIndent
+
+    colList   = []
+    indexList = []
+    generate_col_list(spn, indexList, colList)
+    print "indexList: ", indexList
+
+    selectList = spn.select_list.tmp_exp_list
+
+    tnName = inputNode + "SP"
+
+    totalAttr = len(indexList)
+    print >>fo, indent + "struct tableNode *" + tnName + ";"
+    if HostMempool == 1:
+        print >>fo, indent + tnName + " = (struct tableNode *)host_mempool.alloc(sizeof(struct tableNode));"
+        print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
+        print >>fo, indent + tnName + "->attrType = (int *)host_mempool.alloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->attrSize = (int *)host_mempool.alloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->attrIndex = (int *)host_mempool.alloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->attrTotalSize = (int *)host_mempool.alloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->dataPos = (int *)host_mempool.alloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->dataFormat = (int *)host_mempool.alloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + tnName + "->content = (char **)host_mempool.alloc(sizeof(char *) * " + str(totalAttr) + ");"
+    else:
+        print >>fo, indent + tnName + " = (struct tableNode *)malloc(sizeof(struct tableNode));"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + ");"
+        print >>fo, indent + tnName + "->totalAttr = " + str(totalAttr) + ";"
+        print >>fo, indent + tnName + "->attrType = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrType);"
+        print >>fo, indent + tnName + "->attrSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrSize);"
+        print >>fo, indent + tnName + "->attrIndex = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrIndex);"
+        print >>fo, indent + tnName + "->attrTotalSize = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->attrTotalSize);"
+        print >>fo, indent + tnName + "->dataPos = (int *)malloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataPos);"
+        print >>fo, indent + tnName + "->dataFormat = (int *) malloc(sizeof(int) * " + str(totalAttr) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->dataFormat);"
+        print >>fo, indent + tnName + "->content = (char **)malloc(sizeof(char *) * " + str(totalAttr) + ");"
+        print >>fo, indent + "CHECK_POINTER(" + tnName + "->content);\n"
+
+
+    print >>fo, indent + "int tuple_size = 0;"
+    for i in range(0, totalAttr):
+        # fullIndexPos = lambda pidx: fullIndexList.index(indexList[pidx])
+        print >>fo, indent + tnName + "->attrSize["        + str(i) + "] = " + inputNode + "->attrSize["        + str(indexList[i]) + "];"
+        print >>fo, indent + tnName + "->attrIndex["       + str(i) + "] = " + inputNode + "->attrIndex["       + str(indexList[i]) + "];"
+        print >>fo, indent + tnName + "->attrType["        + str(i) + "] = " + inputNode + "->attrType["        + str(indexList[i]) + "];"
+        print >>fo, indent + tnName + "->dataPos["         + str(i) + "] = " + inputNode + "->dataPos["         + str(indexList[i]) + "];"
+        print >>fo, indent + tnName + "->dataFormat["      + str(i) + "] = " + inputNode + "->dataFormat["      + str(indexList[i]) + "];"
+        print >>fo, indent + tnName + "->attrTotalSize["   + str(i) + "] = " + inputNode + "->attrTotalSize["   + str(indexList[i]) + "];"
+        print >>fo, indent + tnName + "->content["         + str(i) + "] = " + inputNode + "->content["         + str(indexList[i]) + "];"
+        print >>fo, indent + "tuple_size += " + tnName + "->attrSize[" + str(i) + "];\n"
+
+    print >>fo, indent + tnName + "->tupleSize = tuple_size;"
+    print >>fo, indent + tnName + "->tupleNum = " + inputNode + "->tupleNum;\n"
+    print >>fo, indent + tnName + "->keepInGpuIdx = 1;"
+
+    if spn.where_condition is not None:
+        whereList = []
+        relList = []
+        conList = []
+
+        get_where_attr(spn.where_condition.where_condition_exp, whereList, relList, conList)
+
+        newWhereList = []
+        whereLen = count_whereList(whereList, newWhereList)
+        nested = count_whereNested(spn.where_condition.where_condition_exp)
+
+        if nested != 0:
+            print "Not supported yet: the where expression is too complicated"
+            print 1/0
+
+        relName = tnName + "Rel"
+        print >>fo, indent + "// Where conditions: " + spn.where_condition.where_condition_exp.evaluate()
+        print >>fo, indent + "struct scanNode " + relName + ";"
+        print >>fo, indent + relName + ".tn = " + tnName + ";"
+        print >>fo, indent + relName + ".hasWhere = 1;"
+        print >>fo, indent + relName + ".whereAttrNum = " + str(whereLen) + ";"
+	if HostMempool == 1:
+            print >>fo, indent + relName + ".whereIndex = (int *)host_mempool.alloc(sizeof(int) * " + str(len(whereList)) + ");"
+            print >>fo, indent + relName + ".outputIndex = (int *)host_mempool.alloc(sizeof(int) * " + str(len(selectList)) + ");"
+	else:
+	    print >>fo, indent + relName + ".whereIndex = (int *)malloc(sizeof(int) * " + str(len(whereList)) + ");"
+            print >>fo, indent + "CHECK_POINTER(" + relName + ".whereIndex);"
+            print >>fo, indent + relName + ".outputIndex = (int *)malloc(sizeof(int) * " + str(len(selectList)) + ");"
+            print >>fo, indent + "CHECK_POINTER(" + relName + ".outputIndex);"
+        print >>fo, indent + relName + ".outputNum = " + str(len(selectList)) + ";"
+
+        for i in range(0, len(selectList)):
+            colIndex = selectList[i].column_name
+            outputIndex = indexList.index(colIndex)
+            print >>fo, indent + relName + ".outputIndex[" + str(i) + "] = " + str(outputIndex) + ";"
+
+        for i in range(0, len(newWhereList)):
+            colIndex = indexList.index(newWhereList[i].column_name)
+            print >>fo, indent + relName + ".whereIndex["+str(i) + "] = " + str(colIndex) + ";"
+
+        if keepInGpu == 0:
+            print >>fo, indent + relName + ".keepInGpu = 0;"
+        else:
+            print >>fo, indent + relName + ".keepInGpu = 1;"
+
+	if HostMempool == 1:
+            print >>fo, indent + relName + ".filter = (struct whereCondition *)host_mempool.alloc(sizeof(struct whereCondition));"
+	else:
+            print >>fo, indent + relName + ".filter = (struct whereCondition *)malloc(sizeof(struct whereCondition));"
+            print >>fo, indent + "CHECK_POINTER(" + relName + ".filter);"
+
+        print >>fo, indent + "(" + relName + ".filter)->nested = 0;"
+        print >>fo, indent + "(" + relName + ".filter)->expNum = " + str(len(whereList)) + ";"
+	if HostMempool == 1:
+            print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)host_mempool.alloc(sizeof(struct whereExp) *" + str(len(whereList)) + ");"
+	else:
+            print >>fo, indent + "(" + relName + ".filter)->exp = (struct whereExp*)malloc(sizeof(struct whereExp) *" + str(len(whereList)) + ");"
+            print >>fo, indent + "CHECK_POINTER((" + relName + ".filter)->exp);"
+
+        if spn.where_condition.where_condition_exp.func_name in ["AND","OR"]:
+            print >>fo, indent + "(" + relName + ".filter)->andOr = " + tn.where_condition.where_condition_exp.func_name + ";"
+        else:
+            print >>fo, indent + "(" + relName + ".filter)->andOr = EXP;"
+
+        indices = []
+        los = []
+        his = []
+        # for a column, track the index of table->content[]
+        contentIdx = lambda col: indexList.index(col.column_name)
+        # for a column, track the index of table->whereIndex[]
+        # whereIdx = lambda col: newWhereList.index(col)
+        def whereIdx(col):
+            for i in range(0, len(newWhereList)):
+                if newWhereList[i].compare(col):
+                    return i
+            return -1
+
+        for i in range(0, len(whereList)):
+            if isinstance(whereList[i], ystree.YRawColExp):
+                print whereList[i].evaluate()
+
+            colIndex = whereIdx(whereList[i]) if isinstance(whereList[i], ystree.YRawColExp) else -1
+            # if colIndex < 0:
+            #     print 1/0
+
+            colType = whereList[i].column_type if isinstance(whereList[i], ystree.YRawColExp) else "INT"
+            ctype = to_ctype(colType)
+
+            print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
+
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ" and relList[i] not in ["EXISTS"]:
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+            elif relList[i] == "EXISTS":
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EXISTS;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+            elif isinstance(conList[i], ystree.YRawColExp):
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = " + tnName + "->dataPos[" + str(contentIdx(conList[i])) + "];"
+            elif relList[i] == "IN" and isinstance(conList[i], basestring):# in ("MOROCCO")
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EQ;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+            else:
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + ";"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+
+            # Get subquery result here
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                indexDict = {}
+                for j in range(0, len(indexList)):
+                    indexDict[ "CHILD." + str(indexList[j])] = j
+                print "indexList: ", indexList
+                print "indexDict: ", indexDict
+                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, spn, "MEM")
+
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
+            elif isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "LIST":
+                vec_len = len(conList[i].parameter_list)
+                vec_item_len = type_length(whereList[i].table_name, whereList[i].column_name, whereList[i].column_type)
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].vlen  = " + str(vec_len) + ";"
+                print >>fo, indent + "{"
+                print >>fo, indent + baseIndent + "char *vec = (char *)malloc(" + vec_item_len + " * " + str(vec_len) + ");"
+                print >>fo, indent + baseIndent + "memset(vec, 0, " + vec_item_len + " * " + str(vec_len) + ");"
+                for idx in range(0, vec_len):
+                    item = conList[i].parameter_list[idx]
+                    print >>fo, indent + baseIndent + "memcpy(vec + " + vec_item_len + " * " + str(idx) + ", " + item.cons_value + ", " + vec_item_len +");"
+                print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &vec, sizeof(char **));"
+                print >>fo, indent + "}"
+            elif isinstance(conList[i], ystree.YRawColExp):
+                print >>fo, indent + "{"
+                print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &(" + tnName + "->content[" + str(contentIdx(conList[i])) + "]), sizeof(char *));"
+                print >>fo, indent + "}"
+            elif ctype == "INT" or ctype == "DATE":
+                if isinstance(conList[i], ystree.YConsExp) and conList[i].ref_col != None:
+                    con_value = "*(int *)(_" + conList[i].ref_col.table_name + "_" + str(conList[i].ref_col.column_name) + ")"
+                    # Get index here
+                    if "--idx" in optimization:
+                        indices.append(whereList[i].table_name.lower() + str(whereList[i].column_name) + "_idx")
+                        los.append(conList[i].ref_col.table_name.lower() + str(conList[i].ref_col.column_name) + "_lo")
+                        his.append(conList[i].ref_col.table_name.lower() + str(conList[i].ref_col.column_name) + "_hi")
+                else:
+                    con_value = conList[i]
+                print >>fo, indent + "{"
+                if ctype == "INT":
+                    print >>fo, indent + baseIndent + "int tmp = " + con_value + ";"
+                else: # DATE
+                    print >>fo, indent + baseIndent + "struct tm tm; memset(&tm, 0, sizeof(struct tm));"
+                    print >>fo, indent + baseIndent + "strptime(" + con_value + ", \"%Y-%m-%d\", &tm);"
+                    print >>fo, indent + baseIndent + "int tmp = mktime(&tm);"
+                print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(int));"
+                print >>fo, indent + "}"
+            elif ctype == "FLOAT":
+                if isinstance(conList[i], ystree.YRawColExp):
+                    con_value = "*(float *)(_" + conList[i].table_name + "_" + str(conList[i].column_name) + ")"
+                else:
+                    con_value = conList[i]
+                print >>fo, indent + "{"
+                print >>fo, indent + baseIndent + "float tmp = " + con_value + ";"
+                print >>fo, indent + baseIndent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &tmp, sizeof(float));"
+                print >>fo, indent + "}"
+            else:
+                if isinstance(conList[i], ystree.YConsExp) and conList[i].ref_col != None:
+                    con_value = "_" + conList[i].ref_col.table_name + "_" + str(conList[i].ref_col.column_name)
+                else:
+                    con_value = conList[i]
+                print >>fo, indent + "strcpy((" + relName + ".filter)->exp[" + str(i) + "].content, " + con_value + ");\n"
+
+        if CODETYPE == 0:
+	    h_mp = "&host_mempool" if HostMempool == 1 else "NULL"
+	    d_inner_mp = "&gpu_inner_mp" if DeviceMempool == 1 else "NULL"
+	    d_res_mp = "&gpu_inter_mp" if lvl > 0 and SubResMempool == 1 else "NULL"
+            if DeviceMempool == 1:
+                print >>fo, indent + "int dev_memsize = tableScanGPUMemSize(&" + relName + ");"
+                print >>fo, indent + "if(gpu_inner_mp.freesize() < dev_memsize)"
+                print >>fo, indent + baseIndent + "gpu_inner_mp.resize(gpu_inner_mp.usedsize() + dev_memsize);"
+		print >>fo, indent + "char *origin_pos = gpu_inner_mp.freepos();"
+            if len(indices) > 0:
+                print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, " + h_mp + ", " + d_inner_mp + ", "  + d_res_mp + ", " + indices[0] + ", " + los[0] + " + tupleid, " + his[0] + " + tupleid);"
+            else:
+                print >>fo, indent + resName + " = tableScan(&" + relName + ", &pp, " + h_mp + ", " + d_inner_mp + ", "  + d_res_mp + ", NULL, NULL, NULL);"
+            if DeviceMempool == 1:
+		print >>fo, indent + "gpu_inner_mp.freeto(origin_pos);\n"
+        else:
+            print >>fo, indent + resName + " = tableScan(&" + relName + ", &context, &pp);"
+
+        print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
+
+	if HostMempool == 1:
+            print >>fo, indent + "freeScan(&" + relName + ", false);\n"
+	else:
+            print >>fo, indent + "freeScan(&" + relName + ", true);\n"
+
+	if CODETYPE == 1:
+            print >>fo, indent + "clFinish(context.queue);"
+
+        print >>fo, indent + "clock_gettime(CLOCK_REALTIME, &diskEnd);"
+        # print >>fo, indent + "diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;"
+
+        ############## end of wherecondition not none
+
+    else:
+        print >>fo, indent + resName + " = " + tnName + ";"
+
+    indent = indent[:indent.rfind(baseIndent)]
+    print >>fo, indent + "}\n"
+
+    return resName
 
 def generate_code_for_a_order_by_node(fo, indent, lvl, obn):
 
@@ -1990,9 +2262,20 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         conList = []
 
         get_where_attr(tn.where_condition.where_condition_exp, whereList, relList, conList)
-        print "whereList: ", whereList
-        print "relList: ", relList
-        print "conList: ", conList
+        # print ">>>>>>>>>>>>>>>>>"
+        # for exp in ystree.exp_gen(tn.where_condition.where_condition_exp):
+        #     print exp.evaluate()
+        # print "<<<<<<<<<<<<<<<<"
+        # columnlist =  [ exp for exp in ystree.exp_gen(tn.where_condition.where_condition_exp) if isinstance(exp, ystree.YRawColExp) ]
+        # # filter(lambda e: isinstance(e, ystree.YRawColExp), [ exp for exp in ystree.exp_gen(tn.where_condition.where_condition_exp) ])
+        # for col in columnlist:
+        #     print col
+
+        # print "whereList: ", whereList
+        # for exp in whereList:
+        #     print exp
+        # print "relList: ", relList
+        # print "conList: ", conList
 
         newWhereList = []
         whereLen = count_whereList(whereList, newWhereList)
