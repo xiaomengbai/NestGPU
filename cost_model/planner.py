@@ -10,11 +10,17 @@ import math
 # Class that captures the cost model to be used for the estimation.
 #-------------------------------
 
+#Class that represents temporary tables
+class tempTable:
 
+	#Constructor
+	def __init__(self, name, cols, size):
+		self.name = name
+		self.col = cols
+		self.size = size
 
 #Class for cost estimation
 class planner:
-
 
 	# Constructor
 	def __init__(self, schema, query, config):
@@ -25,149 +31,175 @@ class planner:
 		#Keeps track of the working table size
 		self.tmpTableSize = 0
 
+	# Compute size of a row given cols
+	def _computeRowSize(self, schema, cols):
+
+		row_size = 0
+		col_size = 0
+
+		#Search all tables (ASSUMPTION: unique col names!)
+		for table in schema.tables.keys():
+				for col in cols:
+					if col.upper() in schema.tables[table].cols:
+						col_size = schema.tables[table].cols[col.upper()]
+						row_size += col_size
+
+		#Return size
+		return row_size
+
 	# Estimate disk time
 	def _estimateDiskCost(self,kernel):
 
-		#Compute data size that we need to fetch from disk
-		row_size = 0
-		col_size = 0
-		for col in kernel.cols:
-			col_size = self.schema.tables[kernel.table].cols[col.upper()]
-			#print "Columm "+col+" with size " + str(col_size)+" added!"
-			row_size += col_size
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols)
+
+		#Get total data (always from scema as we load from disk!)
 		total_data = row_size * self.schema.tables[kernel.table].size
 
-		#Set size to full
-		self.tmpTableSize = total_data
+		#Compute total time
+		total_time = total_data / self.config.scan_diskTime
 
-		#Compute and return time
-		return self.tmpTableSize / self.config.scan_diskTime
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, self.schema.tables[kernel.table].size)
+		self.workSpace [kernel.output] = buffer
+
+		#Return total time
+		return total_time
 
 	# Estimate filter time (i.e table scan)
 	def _estimateFilterCost(self,kernel):
 
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
+		total_data = row_size * self.workSpace[kernel.table].size
+
 		#Compute number of iterations to be performed by the kernel
-		iterations = self.schema.tables[kernel.table].size / self.config.filter_Threads
+		iterations = self.workSpace[kernel.table].size / self.config.filter_Threads
 		iterations = math.ceil(iterations)
 
-		#Compute data size that we need to process
-		row_size = 0
-		col_size = 0
-		for col in kernel.cols:
-			col_size = self.schema.tables[kernel.table].cols[col.upper()]
-			#print "Columm "+col+" with size " + str(col_size)+" added!"
-			row_size += col_size
-		total_data = row_size * self.schema.tables[kernel.table].size * kernel.selectivity
+		#Compute total time
+		total_time = iterations * self.config.filter_kernelTime
 
-		#Calculate result size
-		self.tmpTableSize = total_data 
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, self.workSpace[kernel.table].size * kernel.selectivity)
+		self.workSpace [kernel.output] = buffer
 
-		#Compute and return time
-		return iterations * self.config.filter_kernelTime
+		#Return total time
+		return total_time
 
 	def _estimateJoinCost(self,kernel):
 
 		#---------Build Hash table---------
 		#We build the hash table on the right table
-		hash_table_iterations = self.schema.tables[kernel.r_table].size / self.config.join_Threads
+		hash_table_iterations = self.workSpace[kernel.r_table].size / self.config.join_Threads
 		hash_table_iterations = math.ceil(hash_table_iterations)
 
 		#Compute hash table time
 		build_hash_table_cost = hash_table_iterations * self.config.join_kernelTime_hashTable
-		# print ">>Hash Table iter: "+str(hash_table_iterations)
 		print ">>Hash Table time: "+str(build_hash_table_cost)
 		#----------------------------------
 
 		#---------Probe---------
 		#We probe on the left table
-		probe_iterations = self.schema.tables[kernel.l_table].size / self.config.join_Threads
+		probe_iterations = self.workSpace[kernel.l_table].size / self.config.join_Threads
 		probe_iterations = math.ceil(probe_iterations)
 
 		#Compute probe time
 		probe_cost = probe_iterations * self.config.join_kernelTime_probe
-		# print ">>Probe iter: "+str(probe_iterations)
 		print ">>Probe time: "+str(probe_cost)
 		#-----------------------
 
 		#--Materialize Join result---
 
-		#Compute data size that we need to process
-		row_size = 0
-		col_size = 0
-
-		#Search all tables (ASSUME unique col names!)
-		for table in self.schema.tables.keys():
-			for col in kernel.cols:
-				if col.upper() in self.schema.tables[table].cols:
-					col_size = self.schema.tables[table].cols[col.upper()]
-					row_size += col_size
-
-		#Total data is the size of the row * result size of the join
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
 		total_data = row_size * kernel.cardinality
 
+		#Compute materialization time
 		meterialization_cost = total_data / self.config.join_materialization_speed
-		# print ">>Materialization data: "+str(total_data)
 		print ">>Materialization time: "+str(meterialization_cost)
 		#-----------------------------
 
-		#Calculate result size
-		self.tmpTableSize = total_data
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, kernel.cardinality)
+		self.workSpace [kernel.output] = buffer
 
 		#Compute and return total time
 		return build_hash_table_cost+probe_cost+meterialization_cost
 
 	def _estimateAggCost(self,kernel):
 
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
+		total_data = row_size * self.workSpace[kernel.table].size
+
 		#Compute number of iterations to be performed by the kernel
-		iterations = self.schema.tables[kernel.table].size / self.config.aggregation_Threads
+		iterations = self.workSpace[kernel.table].size / self.config.aggregation_Threads
 		iterations = math.ceil(iterations)
 
-		#Compute data size that we need to process (It is only one for this case!)
-		row_size = 0
-		col_size = 0
-		for col in kernel.cols:
-			col_size = self.schema.tables[kernel.table].cols[col.upper()]
-			#print "Columm "+col+" with size " + str(col_size)+" added!"
-			row_size += col_size
-		total_data = row_size * 1
+		#Compute total time
+		total_time = iterations * self.config.aggregation_kernelTime
 
-		#Calculate result size
-		self.tmpTableSize = total_data
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, 1)
+		self.workSpace [kernel.output] = buffer
 
-		#Compute and return time
-		return iterations * self.config.aggregation_kernelTime
+		#Return total time
+		return total_time
 
 	def _estimateGroupbyCost(self,kernel):
 
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
+		total_data = row_size * self.workSpace[kernel.table].size
+
 		#Compute number of iterations to be performed by the kernel
-		iterations = self.schema.tables[kernel.table].size / self.config.groupby_Threads
+		iterations = self.workSpace[kernel.table].size / self.config.groupby_Threads
 		iterations = math.ceil(iterations)
 
-		#Compute data size that we need to process (It is only one for this case!)
-		row_size = 0
-		col_size = 0
-		for col in kernel.cols:
-			col_size = self.schema.tables[kernel.table].cols[col.upper()]
-			#print "Columm "+col+" with size " + str(col_size)+" added!"
-			row_size += col_size
-		total_data = row_size * self.schema.tables[kernel.table].size * kernel.selectivity
+		#Compute total time
+		total_time = iterations * self.config.groupby_kernelTime
 
-		#Calculate result size
-		self.tmpTableSize = total_data 
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, self.workSpace[kernel.table].size * kernel.selectivity)
+		self.workSpace [kernel.output] = buffer
 
-		#Compute and return time
-		return iterations * self.config.groupby_kernelTime
+		#Return total time
+		return total_time
 
 	def _estimateMaterializationCost(self,kernel):
 
-		#Compute and return time
-		return self.tmpTableSize / self.config.materialization_kernelTime
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
+		total_data = row_size * self.workSpace[kernel.table].size
+
+		#Compute total time
+		total_time = total_data / self.config.materialization_kernelTime
+
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, self.workSpace[kernel.table].size)
+		self.workSpace [kernel.output] = buffer
+
+		#Return total time
+		return total_time
 
 	# Estimate execution time
 	def estimateCost(self, verdose):
 
-		#Compute un-nested part
+		#Create new schema that will hold only temp tables!
+		self.workSpace = {}
 
+		#Compute un-nested part
 		diskC = 0 #Disk cost
 		filterC = 0 #Table scan cost
 		joinC = 0 #Join cost
