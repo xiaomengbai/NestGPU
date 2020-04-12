@@ -180,6 +180,42 @@ class query:
 			self.nestedOps = []
 			self.outerTableRows = 0
 
+		elif 'aggregation'.lower() == query.lower():
+
+			#Name of the test case
+			self.name = 'aggregation'
+
+			#Actual SQL query
+			self.sql = "SELECT min(ps_supplycost) FROM partsupp;"
+
+			#Kernels
+			self.ops = [] 
+			self.ops.append(scan ('partsupp', ['ps_supplycost']))
+			self.ops.append(aggregation ('partsupp', ['ps_supplycost'], "min(ps_supplycost)"))
+			self.ops.append(materialize ('partsupp', ['ps_supplycost']))
+
+			#Nested part
+			self.nestedOps = []
+			self.outerTableRows = 0
+
+		elif 'groupby'.lower() == query.lower():
+
+			#Name of the test case
+			self.name = 'groupby'
+
+			#Actual SQL query
+			self.sql = "SELECT min(ps_supplycost),ps_partkey FROM partsupp GROUP BY ps_partkey;"
+
+			#Kernels
+			self.ops = [] 
+			self.ops.append(scan ('partsupp', ['ps_supplycost','ps_partkey']))
+			self.ops.append(groupby ('partsupp', ['ps_supplycost','ps_partkey'], "min(ps_supplycost) GROUP BY ps_partkey", 0.5))
+			self.ops.append(materialize ('partsupp', ['ps_supplycost','ps_partkey']))
+
+			#Nested part
+			self.nestedOps = []
+			self.outerTableRows = 0
+
 		elif 'join2'.lower() == query.lower():
 
 			#Name of the test case
@@ -230,7 +266,6 @@ class query:
 			self.ops.append(join ("partsupp", "supplier", ['p_partkey', 'p_mfgr'], "s_suppkey = ps_suppkey", 800000))
 			self.ops.append(join ("partsupp", "nation", ['p_partkey', 'p_mfgr'], "s_nationkey = n_nationkey", 800000))
 			self.ops.append(join ("partsupp", "region", ['p_partkey', 'p_mfgr'], "n_regionkey = r_regionkey", 800000))
-
 
 			self.ops.append(materialize ('tmp1', ['p_partkey', 'p_mfgr']))
 

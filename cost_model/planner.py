@@ -119,14 +119,44 @@ class planner:
 	def _estimateAggCost(self,kernel):
 
 		#Compute number of iterations to be performed by the kernel
-		iterations = self.schema.tables[kernel.table].size / self.config.filter_Threads
+		iterations = self.schema.tables[kernel.table].size / self.config.aggregation_Threads
 		iterations = math.ceil(iterations)
 
+		#Compute data size that we need to process (It is only one for this case!)
+		row_size = 0
+		col_size = 0
+		for col in kernel.cols:
+			col_size = self.schema.tables[kernel.table].cols[col.upper()]
+			#print "Columm "+col+" with size " + str(col_size)+" added!"
+			row_size += col_size
+		total_data = row_size * self.schema.tables[kernel.table].size
+
+		#Calculate result size
+		self.tmpTableSize = total_data * 1
+
 		#Compute and return time
-		return iterations * self.config.filter_kernelTime
+		return iterations * self.config.aggregation_kernelTime
 
 	def _estimateGroupbyCost(self,kernel):
-		return 24
+
+		#Compute number of iterations to be performed by the kernel
+		iterations = self.schema.tables[kernel.table].size / self.config.groupby_Threads
+		iterations = math.ceil(iterations)
+
+		#Compute data size that we need to process (It is only one for this case!)
+		row_size = 0
+		col_size = 0
+		for col in kernel.cols:
+			col_size = self.schema.tables[kernel.table].cols[col.upper()]
+			#print "Columm "+col+" with size " + str(col_size)+" added!"
+			row_size += col_size
+		total_data = row_size * self.schema.tables[kernel.table].size
+
+		#Calculate result size
+		self.tmpTableSize = total_data * kernel.selectivity
+
+		#Compute and return time
+		return iterations * self.config.groupby_kernelTime
 
 	def _estimateMaterializationCost(self,kernel):
 

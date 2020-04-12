@@ -17,38 +17,45 @@ class config:
 	# Constructor
 	def __init__(self, gpu, optimizations):
 
-		#Hardware and software configuration
-		self.gpu = gpu
-		self.optimizations = optimizations
+		if gpu == "RI2":
 
-		#Constant time
-		self.constantTime = 12
+			#Hardware and software configuration
+			self.gpu = gpu
+			self.optimizations = optimizations
 
-		#Scan op configuration
-		self.scan_diskTime = 1731343 #b/ms (~1.7 gb/sec for IR2)
-		self.scan_KernelTime = 0
-		self.scan_Threads = 1
+			#Constant time
+			self.constantTime = 12
 
-		#Filter op configuration
-		self.filter_kernelTime = 4.16
-		self.filter_Threads = 524288
+			#Scan op configuration
+			self.scan_diskTime = 1731343 #b/ms (~1.7 gb/sec for IR2)
+			self.scan_KernelTime = 0
+			self.scan_Threads = 1
 
-		#Join op configuration
-		self.join_kernelTime_hashTable = 1.22
-		self.join_kernelTime_probe = 3.7
-		self.join_materialization_speed = 895752 #b/ms (~900 mb/sec for IR2)
-		self.join_Threads = 1048576
+			#Filter op configuration
+			self.filter_kernelTime = 4.16
+			self.filter_Threads = 524288
 
-		#Aggregation op configuraiton
-		self.aggregation_kernelTime = 1.3
-		self.aggregation_Threads = 131072
+			#Join op configuration
+			self.join_kernelTime_hashTable = 1.22
+			self.join_kernelTime_probe = 3.7
+			self.join_materialization_speed = 895752 #b/ms (~900 mb/sec for IR2)
+			self.join_Threads = 1048576
 
-		#Group by op configurations
-		self.groupby_kernelTime = 6
-		self.groupby_Threads = 131072
+			#Aggregation op configuraiton
+			self.aggregation_kernelTime = 1.3
+			self.aggregation_Threads = 131072
 
-		#Materialization time 
-		self.materialization_kernelTime = 2468085 #b/ms (~2.5 gb/sec for IR2)
+			#Group by op configurations
+			self.groupby_kernelTime = 6
+			self.groupby_Threads = 131072
+
+			#Materialization time 
+			self.materialization_kernelTime = 2468085 #b/ms (~2.5 gb/sec for IR2)
+
+		else:
+			print "Error - There is no existing configuration for this system!"
+			exit(1)
+		
 
 	#Print out configuration
 	def printConfig(self):

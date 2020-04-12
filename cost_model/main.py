@@ -24,14 +24,15 @@ def main(argv):
 	s = schema('TPCH', 20)
 
 	#Create query 
-	#Test ops: ('select', 'filter', 'join', 'join2', 'join4', 'join4c4', 'join4c8')
-	#Actual queries: ('q2-nested', 'q2-unnested')
-	q = query('join')
+	#Test operators   : ('select', 'filter', 'join', 'aggregation', 'groupby')
+	#Test complex ops : ('join2', 'join4', 'join4c4', 'join4c8')
+	#Actual queries   : ('q2-nested', 'q2-unnested')
+	q = query('groupby')
 
 	#Create system configuration ('TeslaV100' , 0)
-	# Hardware: ('TeslaV100', 'GTX1080)
+	# Hardware: ('RI2')
 	# GPU-DB Optimizations: 0 -> No opts, 1 -> mempool, 2 -> cache, 3-> All)
-	c = config('TeslaV100', 0)
+	c = config('RI2', 0)
 
 	# #Planner
 	p = planner (s, q, c)
