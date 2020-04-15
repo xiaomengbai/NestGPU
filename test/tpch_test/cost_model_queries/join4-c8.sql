@@ -19,3 +19,4 @@ where
    and s_nationkey = n_nationkey
    and n_regionkey = r_regionkey
 ;
+

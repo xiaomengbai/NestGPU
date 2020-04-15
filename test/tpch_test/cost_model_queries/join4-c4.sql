@@ -1,8 +1,8 @@
 select
   s_acctbal,
   s_name,
-  n_name,
-  p_partkey
+  p_partkey,
+  p_mfgr
 from
    part,
    partsupp,
@@ -15,3 +15,4 @@ where
    and s_nationkey = n_nationkey
    and n_regionkey = r_regionkey
 ;
+

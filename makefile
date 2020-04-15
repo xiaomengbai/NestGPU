@@ -41,7 +41,7 @@ SCHEMA := $(TPCH_SCHEMA)
 # --- TPC-H Queries ---
 # TPC-H Q2
 #SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
-#SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_simple.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested_simple.sql
@@ -63,9 +63,11 @@ SCHEMA := $(TPCH_SCHEMA)
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/scan_point.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join2.sql
-#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4.sql
-#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-m4.sql
-#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-m8.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-c1.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-c2.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-c4.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-c6.sql
+SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4-c8.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/agg.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/groupby.sql
 # ---------------
@@ -104,7 +106,7 @@ SCHEMA := $(TPCH_SCHEMA)
 #SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf6_skew2_unnested.sql
 
 #Q7 -> Modified TPC-H Q2 that cannot be unnested
-SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf7.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/final-queries/qf7.sql
 # ---------------
 
 # -- Optimizations --
@@ -120,7 +122,7 @@ GPU_OPT := --base
 DBGEN_DIR := test/dbgen
 DBGEN := $(DBGEN_DIR)/dbgen
 DBGEN_DIST ?= $(DBGEN_DIR)/dists.dss
-TABLE_SCALE := 1
+TABLE_SCALE := 20
 DBGEN_OPTS := -b $(DBGEN_DIST) -O hm -vfF -s $(TABLE_SCALE)
 
 $(DBGEN):
