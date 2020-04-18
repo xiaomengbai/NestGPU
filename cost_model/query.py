@@ -28,25 +28,6 @@ class materialize:
 		print "Output      :"+ self.output
 		print "Output Cols :"+ str(self.output_cols)
 
-#Class for materialize after join (i.e. for some reason it takes more time to materialize after join)
-class materializeJ:
-
-	# Constructor
-	def __init__(self, table, cols, output, output_cols):
-		self.op = "materializeJ"
-		self.table = table
-		self.cols = cols
-		self.output = output
-		self.output_cols = output_cols
-
-	#Pring op
-	def printOp(self):
-		print "Operator    :"+ self.op
-		print "Table       :"+ self.table
-		print "Cols        :"+ str(self.cols)
-		print "Output      :"+ self.output
-		print "Output Cols :"+ str(self.output_cols)
-
 #Class for grouup by operation
 class groupby:
 

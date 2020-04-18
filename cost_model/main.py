@@ -6,6 +6,7 @@ from schema import schema
 from query import query
 from config import config
 from planner import planner
+from planner import resultQuery
 
 # Description 
 #-------------------------------
@@ -39,9 +40,12 @@ def main(argv):
 	# GPU-DB Optimizations: 0 -> No opts, 1 -> mempool, 2 -> cache, 3-> All)
 	c = config('RI2', 0)
 
-	# #Planner
+	#Planner
 	p = planner (s, q, c)
-	cost = p.estimateCost(True) # Estimate
+	queryEstimation = p.estimateCost() # Estimate
+
+	#Print query estimation
+	queryEstimation.printRes()
 
 	# #Print estimation (For single estimation)
 	# planner.printRes() # Print final estimation 
