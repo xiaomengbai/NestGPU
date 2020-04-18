@@ -139,14 +139,14 @@ class planner:
 				joinMaterializaiton_totalCost += fact_cost
 			
 			#If right table them comput joinDim
-			elif ( self._findTableFromCol( self.workSpace, out_col) == kernel.l_table ) :
+			elif ( self._findTableFromCol( self.workSpace, out_col) == kernel.r_table ) :
 				dim_cost = joinMaterializaiton_iterations *  self.config.join_kernelTime_joinDim * self._computeRowSize(self.schema, [out_col])
 				joinMaterializaiton_DimCost += dim_cost
 				joinMaterializaiton_totalCost += dim_cost
 
 			#Else there is a problem
 			else:
-				print "Column cannot be found in left or right table!"
+				print "Column "+out_col+" cannot be found in left or right table!"
 				exit(0)
 
 		print ">Left total materialization table cost (joinFact) :"+str(joinMaterializaiton_FactCost)
