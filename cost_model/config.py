@@ -38,8 +38,8 @@ class config:
 			#Join op configuration
 			self.join_kernelTime_hashTable = 1.22
 			self.join_kernelTime_probe = 3.7
-			self.join_kernelTime_joinFact = 3.56 
-			self.join_kernelTime_joinDim = 0.05 
+			self.join_kernelTime_joinFact =  0.55 # (For 1 iteration, for col with 1 byte)
+			self.join_kernelTime_joinDim = 0.167 # (For 1 iteration, for col with 1 byte)
 			self.join_Threads = 1048576
 
 			#Aggregation op configuraiton

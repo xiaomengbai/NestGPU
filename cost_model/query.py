@@ -211,6 +211,33 @@ class query:
 			self.name = 'join'
 
 			#Actual SQL query
+			self.sql = "SELECT p_mfgr FROM part, partsupp WHERE p_partkey = ps_partkey;"
+
+			#Kernels
+			self.ops = [] 
+			self.ops.append(scan ('part', ['p_partkey', 'p_mfgr'],\
+				'join-tmp1', ['p_partkey', 'p_mfgr'] ))
+			self.ops.append(scan ('partsupp', ['ps_partkey'],\
+				'join-tmp2', ['ps_partkey']))
+			
+			#Join part and partsupp
+			self.ops.append(join ("join-tmp1", "join-tmp2", ['p_partkey', 'ps_partkey'], "p_partkey = ps_partkey", 800000 * scaleFactor,\
+				'join-tmp3', ['p_mfgr']))
+			
+			#Materialize res
+			self.ops.append(materialize ('join-tmp3', ['p_mfgr'],\
+				'join-tmp4', ['p_mfgr']))
+
+			#Nested part
+			self.nestedOps = []
+			self.outerTableRows = 0
+
+		elif 'joinc2'.lower() == query.lower():
+
+			#Name of the test case
+			self.name = 'joinc2'
+
+			#Actual SQL query
 			self.sql = "SELECT p_partkey, p_mfgr FROM part, partsupp WHERE p_partkey = ps_partkey;"
 
 			#Kernels
@@ -310,7 +337,7 @@ class query:
 		elif 'join4c8'.lower() == query.lower():
 
 			#Name of the test case
-			self.name = 'join4c4'
+			self.name = 'join4c8'
 
 			#Actual SQL query
 			self.sql = "SELECT p_partkey, p_mfgr, s_acctbal, s_name FROM part, partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey;"
@@ -329,11 +356,11 @@ class query:
 
 			#Join part and partsupp
 			self.ops.append(join ('join4c8-tmp1', 'join4c8-tmp2', ['p_partkey', 'ps_partkey'] , "p_partkey = ps_partkey", 800000 * scaleFactor, \
-				'join4c8-tmp6', ['p_partkey', 'p_mfgr','ps_suppkey']))
+				'join4c8-tmp6', ['p_partkey', 'p_mfgr', 'ps_suppkey']))
 			
 			#Join2 part-partsupp and supplier
 			self.ops.append(join ("join4c8-tmp6", "join4c8-tmp3", ['s_suppkey', 'ps_suppkey'], "s_suppkey = ps_suppkey", 800000 * scaleFactor, \
-				'join4c8-tmp7', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment']))
+				'join4c8-tmp7', ['p_partkey', 'p_mfgr',' ps_suppkey', 's_acctbal','s_name','s_address', 's_phone','s_comment']))
 
 			#Join3 part-partsupp-supplier and nation
 			self.ops.append(join ("join4c8-tmp7", "join4c8-tmp4", ['s_nationkey', 'n_nationkey'], "s_nationkey = n_nationkey", 800000 * scaleFactor, \
@@ -344,7 +371,7 @@ class query:
 				'join4c8-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name']))			
 
 			#Print result
-			self.ops.append(materializeJ ('join4c8-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name'],\
+			self.ops.append(materialize ('join4c8-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name'],\
 				'join4c8-tmp10', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name']))
 
 			#Nested part

@@ -16,7 +16,7 @@ class tempTable:
 	#Constructor
 	def __init__(self, name, cols, size):
 		self.name = name
-		self.col = cols
+		self.cols = cols
 		self.size = size
 
 #Class for cost estimation
@@ -30,6 +30,14 @@ class planner:
 
 		#Keeps track of the working table size
 		self.tmpTableSize = 0
+
+	# Find the table in which the column belongs
+	def _findTableFromCol(self, workspace, col):
+
+		#Search all tables (ASSUMPTION: unique col names!)
+		for table in workspace.keys():
+			if col in workspace[table].cols:
+				return table
 
 	# Compute size of a row given cols
 	def _computeRowSize(self, schema, cols):
@@ -111,22 +119,38 @@ class planner:
 		print ">>Probe time: "+str(probe_cost)
 		#-----------------------
 
-		#--Materialize right part (joinFact)--
-		joinFact_iterations = self.workSpace[kernel.r_table].size / self.config.join_Threads
-		joinFact_iterations =  math.ceil(joinFact_iterations)
+		#--Materialize part--
 
-		#Compute joinFact time
-		joinFact_cost = joinFact_iterations * self.config.join_kernelTime_joinFact
-		print ">>Materialize right part (joinFact): "+str(joinFact_cost)
-		#-----------------------------
+		#Join materialization total cost
+		joinMaterializaiton_totalCost = 0 
+		joinMaterializaiton_FactCost = 0
+		joinMaterializaiton_DimCost = 0
 
-		#--Materialize left part (joinDim)--
-		joinDim_iterations = self.workSpace[kernel.l_table].size / self.config.join_Threads
-		joinDim_iterations =  math.ceil(joinDim_iterations)
+		# Iterations for joinFact() and JoinDim() = Rows that qualify (i.e. cardinality ) / Join threads
+		joinMaterializaiton_iterations = kernel.cardinality / self.config.join_Threads
 
-		#Compute joinDim time
-		joinDim_cost = joinDim_iterations * self.config.join_kernelTime_joinDim
-		print ">>Materialize left part (joinDim): "+str(joinDim_cost)
+		#For all columns 
+		for out_col in kernel.output_cols:
+
+			#If left table then compute joinFact
+			if ( self._findTableFromCol( self.workSpace, out_col) == kernel.l_table ) :
+				fact_cost = joinMaterializaiton_iterations *  self.config.join_kernelTime_joinFact * self._computeRowSize(self.schema, [out_col])
+				joinMaterializaiton_FactCost += fact_cost
+				joinMaterializaiton_totalCost += fact_cost
+			
+			#If right table them comput joinDim
+			elif ( self._findTableFromCol( self.workSpace, out_col) == kernel.l_table ) :
+				dim_cost = joinMaterializaiton_iterations *  self.config.join_kernelTime_joinDim * self._computeRowSize(self.schema, [out_col])
+				joinMaterializaiton_DimCost += dim_cost
+				joinMaterializaiton_totalCost += dim_cost
+
+			#Else there is a problem
+			else:
+				print "Column cannot be found in left or right table!"
+				exit(0)
+
+		print ">Left total materialization table cost (joinFact) :"+str(joinMaterializaiton_FactCost)
+		print ">Right total materialization table cost (joinDim) :"+str(joinMaterializaiton_DimCost)
 		#-----------------------------
 
 		#Add output to workspace
@@ -134,7 +158,7 @@ class planner:
 		self.workSpace [kernel.output] = buffer
 
 		#Compute and return total time
-		return build_hash_table_cost+probe_cost+joinFact_cost+joinDim_cost
+		return build_hash_table_cost + probe_cost + joinMaterializaiton_totalCost
 
 	def _estimateAggCost(self,kernel):
 

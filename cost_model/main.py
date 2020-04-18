@@ -21,16 +21,17 @@ from planner import planner
 def main(argv):
 
 	#Pick scaleFactor
-	scaleFactor = 20
+	scaleFactor = 10
 
 	#Create Schema (pass type and scale factor)
 	s = schema('TPCH', scaleFactor)
 
 	#Create query 
 	#Test operators   : ('select', 'filter', 'join', 'aggregation', 'groupby')
-	#Test complex ops : ('join2', 'join4', 'join4c4', 'join4c8')
+	#Test mult cols   : ('joinc2', 'joinc4', 'joinc6', 'joinc8')
+	#Test complex ops : ('joinc2', 'join4c8')
 	#Actual queries   : ('q2-nested', 'q2-unnested')
-	q = query('join', scaleFactor )
+	q = query('join4c8', scaleFactor )
 
 	#Create system configuration ('TeslaV100' , 0)
 	# Hardware: ('RI2')
