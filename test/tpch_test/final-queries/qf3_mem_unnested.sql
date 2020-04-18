@@ -24,7 +24,7 @@ select
        s_suppkey = ps_suppkey
        and s_nationkey = n_nationkey
        and n_regionkey = r_regionkey
-       and r_name != 'ASIA' 
+       and r_name != 'ASIA'
      group by
        ps_partkey
    ) t1

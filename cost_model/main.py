@@ -12,7 +12,7 @@ from planner import planner
 #
 # Author  : Sofoklis Floratos (floratos.1@osu.edu)
 # Date    : 04/03/2020
-# Version : 3.0v 
+# Version : 4.0v 
 # 
 # This program estimates the execution of a nested/unnested query in GPU-DB.
 #-------------------------------
@@ -27,10 +27,11 @@ def main(argv):
 	s = schema('TPCH', scaleFactor)
 
 	#Create query 
-	#Test operators   : ('select', 'filter', 'join', 'aggregation', 'groupby')
-	#Test mult cols   : ('joinc2', 'joinc4', 'joinc6', 'joinc8')
-	#Test complex ops : ('joinc2', 'join4c8')
-	#Actual queries   : ('q2-nested', 'q2-unnested')
+	#Test operators     : ('select', 'filter', 'join', 'aggregation', 'groupby')
+	#Test mult cols     : ('joinc2',  'joinc4')
+	#Test mult joins    : ('join2c2', 'join4c2)
+	#Test complex joins : ('join4c8)	
+	#Actual queries     : ('q2-nested', 'q2-unnested')
 	q = query('join4c8', scaleFactor )
 
 	#Create system configuration ('TeslaV100' , 0)

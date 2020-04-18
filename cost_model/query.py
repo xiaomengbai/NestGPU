@@ -4,7 +4,7 @@
 #
 # Author  : Sofoklis Floratos (floratos.1@osu.edu)
 # Date    : 04/03/2020
-# Version : 3.0v 
+# Version : 4.0v 
 # 
 # Class that captures the database query to be used for the estimation.
 #-------------------------------
@@ -205,6 +205,48 @@ class query:
 			self.nestedOps = []
 			self.outerTableRows = 0
 
+		elif 'aggregation'.lower() == query.lower():
+
+			#Name of the test case
+			self.name = 'aggregation'
+
+			#Actual SQL query
+			self.sql = "SELECT min(ps_supplycost) FROM partsupp;"
+
+			#Kernels
+			self.ops = [] 
+			self.ops.append(scan ('partsupp', ['ps_supplycost'],\
+				'agg-tmp1', ['ps_supplycost']))
+			self.ops.append(aggregation ('agg-tmp1', ['ps_supplycost'], "min(ps_supplycost)",\
+				'agg-tmp2', ['ps_supplycost']))
+			self.ops.append(materialize ('agg-tmp2', ['ps_supplycost'],\
+				'agg-tmp3', ['ps_supplycost']))
+
+			#Nested part
+			self.nestedOps = []
+			self.outerTableRows = 0
+
+		elif 'groupby'.lower() == query.lower():
+
+			#Name of the test case
+			self.name = 'groupby'
+
+			#Actual SQL query
+			self.sql = "SELECT min(ps_supplycost),ps_partkey FROM partsupp GROUP BY ps_partkey;"
+
+			#Kernels
+			self.ops = [] 
+			self.ops.append(scan ('partsupp', ['ps_supplycost','ps_partkey'],\
+				'groupby-tmp1', ['ps_supplycost', 'ps_partkey']))
+			self.ops.append(groupby ('groupby-tmp1', ['ps_supplycost','ps_partkey'], "min(ps_supplycost) GROUP BY ps_partkey", 0.25,\
+				'groupby-tmp2', ['ps_supplycost', 'ps_partkey'] ))
+			self.ops.append(materialize ('groupby-tmp2', ['ps_supplycost', 'ps_partkey'],\
+				'groupby-tmp3', ['ps_supplycost', 'ps_partkey']))
+
+			#Nested part
+			self.nestedOps = []
+			self.outerTableRows = 0
+
 		elif 'join'.lower() == query.lower():
 
 			#Name of the test case
@@ -259,49 +301,34 @@ class query:
 			self.nestedOps = []
 			self.outerTableRows = 0
 
-		elif 'aggregation'.lower() == query.lower():
+		elif 'joinc4'.lower() == query.lower():
 
 			#Name of the test case
-			self.name = 'aggregation'
+			self.name = 'joinc4'
 
 			#Actual SQL query
-			self.sql = "SELECT min(ps_supplycost) FROM partsupp;"
+			self.sql = "SELECT p_partkey, p_mfgr, p_name, ps_comment FROM part, partsupp WHERE p_partkey = ps_partkey;"
 
 			#Kernels
 			self.ops = [] 
-			self.ops.append(scan ('partsupp', ['ps_supplycost'],\
-				'agg-tmp1', ['ps_supplycost']))
-			self.ops.append(aggregation ('agg-tmp1', ['ps_supplycost'], "min(ps_supplycost)",\
-				'agg-tmp2', ['ps_supplycost']))
-			self.ops.append(materialize ('agg-tmp2', ['ps_supplycost'],\
-				'agg-tmp3', ['ps_supplycost']))
+			self.ops.append(scan ('part', ['p_partkey', 'p_mfgr', 'p_name'],\
+				'join-tmp1', ['p_partkey', 'p_mfgr', 'p_name'] ))
+			self.ops.append(scan ('partsupp', ['ps_partkey', 'ps_comment'],\
+				'join-tmp2', ['ps_partkey','ps_comment']))
+			
+			#Join part and partsupp
+			self.ops.append(join ("join-tmp1", "join-tmp2", ['p_partkey', 'ps_partkey'], "p_partkey = ps_partkey", 800000 * scaleFactor,\
+				'join-tmp3', ['p_partkey', 'p_mfgr', 'p_name', 'ps_comment']))
+			
+			#Materialize res
+			self.ops.append(materialize ('join-tmp3', ['p_partkey', 'p_mfgr', 'p_name', 'ps_comment'],\
+				'join-tmp4', ['p_partkey', 'p_mfgr', 'p_name', 'ps_comment']))
 
 			#Nested part
 			self.nestedOps = []
 			self.outerTableRows = 0
 
-		elif 'groupby'.lower() == query.lower():
-
-			#Name of the test case
-			self.name = 'groupby'
-
-			#Actual SQL query
-			self.sql = "SELECT min(ps_supplycost),ps_partkey FROM partsupp GROUP BY ps_partkey;"
-
-			#Kernels
-			self.ops = [] 
-			self.ops.append(scan ('partsupp', ['ps_supplycost','ps_partkey'],\
-				'groupby-tmp1', ['ps_supplycost', 'ps_partkey']))
-			self.ops.append(groupby ('groupby-tmp1', ['ps_supplycost','ps_partkey'], "min(ps_supplycost) GROUP BY ps_partkey", 0.25,\
-				'groupby-tmp2', ['ps_supplycost', 'ps_partkey'] ))
-			self.ops.append(materialize ('groupby-tmp2', ['ps_supplycost', 'ps_partkey'],\
-				'groupby-tmp3', ['ps_supplycost', 'ps_partkey']))
-
-			#Nested part
-			self.nestedOps = []
-			self.outerTableRows = 0
-
-		elif 'join2'.lower() == query.lower():
+		elif 'join2c2'.lower() == query.lower():
 
 			#Name of the test case
 			self.name = 'join2'
@@ -334,22 +361,66 @@ class query:
 			self.nestedOps = []
 			self.outerTableRows = 0
 
+		elif 'join4c2'.lower() == query.lower():
+
+			#Name of the test case
+			self.name = 'join2c4'
+
+			#Actual SQL query
+			self.sql = "SELECT p_partkey, s_name FROM part, partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey;"
+
+			self.ops = [] 
+			self.ops.append(scan ('part', ['p_partkey'],\
+				'join4c8-tmp1', ['p_partkey']))
+			self.ops.append(scan ('partsupp', ['ps_partkey', 'ps_suppkey'],\
+				'join4c8-tmp2', ['ps_partkey', 'ps_suppkey']))
+			self.ops.append(scan ('supplier', ['s_suppkey','s_name', 's_nationkey'],\
+				'join4c8-tmp3', ['s_suppkey', 's_name', 's_nationkey']))
+			self.ops.append(scan ('nation', ['n_nationkey','n_regionkey'],\
+				'join4c8-tmp4', ['n_nationkey','n_regionkey']))
+			self.ops.append(scan ('region', ['r_regionkey'],\
+				'join4c8-tmp5', ['r_regionkey']))
+
+			#Join part and partsupp
+			self.ops.append(join ('join4c8-tmp1', 'join4c8-tmp2', ['p_partkey', 'ps_partkey'] , "p_partkey = ps_partkey", 800000 * scaleFactor, \
+				'join4c8-tmp6', ['p_partkey', 'ps_suppkey']))
+			
+			#Join2 part-partsupp and supplier
+			self.ops.append(join ("join4c8-tmp6", "join4c8-tmp3", ['s_suppkey', 'ps_suppkey'], "s_suppkey = ps_suppkey", 800000 * scaleFactor, \
+				'join4c8-tmp7', ['p_partkey', 's_name', 's_nationkey']))
+
+			#Join3 part-partsupp-supplier and nation
+			self.ops.append(join ("join4c8-tmp7", "join4c8-tmp4", ['s_nationkey', 'n_nationkey'], "s_nationkey = n_nationkey", 800000 * scaleFactor, \
+				'join4c8-tmp8', ['p_partkey', 's_name', 'n_regionkey']))			
+
+			#Join4 part-partsupp-supplier and nation
+			self.ops.append(join ("join4c8-tmp8", "join4c8-tmp5", ['n_regionkey', 'r_regionkey'], "n_regionkey = r_regionkey", 800000 * scaleFactor, \
+				'join4c8-tmp9', ['p_partkey', 's_name']))			
+
+			#Print result
+			self.ops.append(materialize ('join4c8-tmp9', ['p_partkey', 's_name'],\
+				'join4c8-tmp10', ['p_partkey', 's_name']))
+
+			#Nested part
+			self.nestedOps = []
+			self.outerTableRows = 0
+
 		elif 'join4c8'.lower() == query.lower():
 
 			#Name of the test case
 			self.name = 'join4c8'
 
 			#Actual SQL query
-			self.sql = "SELECT p_partkey, p_mfgr, s_acctbal, s_name FROM part, partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey;"
+			self.sql = "SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey;"
 
 			self.ops = [] 
 			self.ops.append(scan ('part', ['p_partkey', 'p_mfgr'],\
 				'join4c8-tmp1', ['p_partkey', 'p_mfgr']))
 			self.ops.append(scan ('partsupp', ['ps_partkey', 'ps_suppkey'],\
 				'join4c8-tmp2', ['ps_partkey', 'ps_suppkey']))
-			self.ops.append(scan ('supplier', ['s_suppkey','s_acctbal','s_name','s_address', 's_phone','s_comment'],\
+			self.ops.append(scan ('supplier', ['s_suppkey', 's_acctbal', 's_name', 's_address', 's_phone', 's_nationkey', 's_comment'],\
 				'join4c8-tmp3', ['s_suppkey','s_acctbal','s_name','s_address', 's_phone','s_comment']))
-			self.ops.append(scan ('nation', ['n_nationkey','n_regionkey','n_name'],\
+			self.ops.append(scan ('nation', ['n_nationkey','n_regionkey', 's_nationkey', 'n_name'],\
 				'join4c8-tmp4', ['n_nationkey','n_regionkey','n_name']))
 			self.ops.append(scan ('region', ['r_regionkey'],\
 				'join4c8-tmp5', ['r_regionkey']))
@@ -360,7 +431,7 @@ class query:
 			
 			#Join2 part-partsupp and supplier
 			self.ops.append(join ("join4c8-tmp6", "join4c8-tmp3", ['s_suppkey', 'ps_suppkey'], "s_suppkey = ps_suppkey", 800000 * scaleFactor, \
-				'join4c8-tmp7', ['p_partkey', 'p_mfgr',' ps_suppkey', 's_acctbal','s_name','s_address', 's_phone','s_comment']))
+				'join4c8-tmp7', ['p_partkey', 'p_mfgr', 's_acctbal','s_name','s_address', 's_phone', 's_nationkey', 's_comment']))
 
 			#Join3 part-partsupp-supplier and nation
 			self.ops.append(join ("join4c8-tmp7", "join4c8-tmp4", ['s_nationkey', 'n_nationkey'], "s_nationkey = n_nationkey", 800000 * scaleFactor, \

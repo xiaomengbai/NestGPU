@@ -1,9 +1,3 @@
-select
-   p_partkey,
-   p_mfgr
-from
-   part,
-   partsupp
-where
-   p_partkey = ps_partkey
-;
+SELECT p_mfgr 
+FROM part, partsupp 
+WHERE p_partkey = ps_partkey;

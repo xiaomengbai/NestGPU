@@ -5,7 +5,7 @@ import math
 #
 # Author  : Sofoklis Floratos (floratos.1@osu.edu)
 # Date    : 04/03/2020
-# Version : 3.0v 
+# Version : 4.0v 
 # 
 # Class that captures the cost model to be used for the estimation.
 #-------------------------------
