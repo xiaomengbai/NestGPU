@@ -34,10 +34,15 @@ class planner:
 	# Find the table in which the column belongs
 	def _findTableFromCol(self, workspace, col):
 
+		#Find all temp tables that have this column
+		temp_tables = []
+
 		#Search all tables (ASSUMPTION: unique col names!)
 		for table in workspace.keys():
 			if col in workspace[table].cols:
-				return table
+				temp_tables.append(table)
+
+		return temp_tables
 
 	# Compute size of a row given cols
 	def _computeRowSize(self, schema, cols):
@@ -133,13 +138,13 @@ class planner:
 		for out_col in kernel.output_cols:
 
 			#If left table then compute joinFact
-			if ( self._findTableFromCol( self.workSpace, out_col) == kernel.l_table ) :
+			if ( kernel.l_table in self._findTableFromCol( self.workSpace, out_col) ) :
 				fact_cost = joinMaterializaiton_iterations *  self.config.join_kernelTime_joinFact * self._computeRowSize(self.schema, [out_col])
 				joinMaterializaiton_FactCost += fact_cost
 				joinMaterializaiton_totalCost += fact_cost
 			
 			#If right table them comput joinDim
-			elif ( self._findTableFromCol( self.workSpace, out_col) == kernel.r_table ) :
+			elif ( kernel.r_table in self._findTableFromCol( self.workSpace, out_col)) :
 				dim_cost = joinMaterializaiton_iterations *  self.config.join_kernelTime_joinDim * self._computeRowSize(self.schema, [out_col])
 				joinMaterializaiton_DimCost += dim_cost
 				joinMaterializaiton_totalCost += dim_cost

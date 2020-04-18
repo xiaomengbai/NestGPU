@@ -419,8 +419,8 @@ class query:
 			self.ops.append(scan ('partsupp', ['ps_partkey', 'ps_suppkey'],\
 				'join4c8-tmp2', ['ps_partkey', 'ps_suppkey']))
 			self.ops.append(scan ('supplier', ['s_suppkey', 's_acctbal', 's_name', 's_address', 's_phone', 's_nationkey', 's_comment'],\
-				'join4c8-tmp3', ['s_suppkey','s_acctbal','s_name','s_address', 's_phone','s_comment']))
-			self.ops.append(scan ('nation', ['n_nationkey','n_regionkey', 's_nationkey', 'n_name'],\
+				'join4c8-tmp3', ['s_suppkey','s_acctbal','s_name','s_address', 's_phone','s_nationkey','s_comment']))
+			self.ops.append(scan ('nation', ['n_nationkey','n_regionkey', 'n_nationkey', 'n_name'],\
 				'join4c8-tmp4', ['n_nationkey','n_regionkey','n_name']))
 			self.ops.append(scan ('region', ['r_regionkey'],\
 				'join4c8-tmp5', ['r_regionkey']))
