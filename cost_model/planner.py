@@ -23,19 +23,24 @@ class tempTable:
 class resultQuery():
 
 	#Constructor
-	def __init__(self, resUnnested, resNested, totalTime):
+	def __init__(self, resUnnested, resNested, iteNested, totalTime):
 		self.unnestedPart = resUnnested
 		self.nestedPart = resNested
+		self.iteNestedPart = iteNested
 		self.totalQueryTime = totalTime
 
 	#Print estimation
 	def printRes(self):
 
 		print "<---Unnested Part--->"
-		self.unnestedPart.printRes()
+		self.unnestedPart.printRes(1)
 		print ""
-		print "<----Nested Part---->"
-		self.nestedPart.printRes()
+		print "<----Nested Part Total (single iteration)---->"
+		self.nestedPart.printRes(1)
+		print ""
+		print "<------------------->"
+		print "<----Nested Part Total---->"
+		self.nestedPart.printRes(self.iteNestedPart)
 		print ""
 		print "<------------------->"
 		print ">>Total estimated time:"+ str(self.totalQueryTime)
@@ -107,22 +112,22 @@ class resultEstimation:
 			self.total_materializationTime
 
 	#Print results
-	def printRes(self):
-		print "Total Time :"+str(self.total_Time)
-		print "> Cosntant Time    :"+str(self.total_constantTime)
+	def printRes(self, iterations):
+		print "Total Time :"+str(self.total_Time * iterations) 
+		print "> Cosntant Time    :"+str(self.total_constantTime  * iterations)
 		print ""
-		print "> Disk Time        :"+str(self.total_diskTime)
-		print "> Filter Time      :"+str(self.total_filterTime) 
-		print "> Aggregation Time :"+str(self.total_aggregationTime) 
-		print "> GroupBy Time     :"+str(self.total_groupbyTime) 
+		print "> Disk Time        :"+str(self.total_diskTime * iterations) 
+		print "> Filter Time      :"+str(self.total_filterTime * iterations) 
+		print "> Aggregation Time :"+str(self.total_aggregationTime * iterations) 
+		print "> GroupBy Time     :"+str(self.total_groupbyTime * iterations)  
 		print ""
-		print "> Join Time        :"+str(self.total_joinTime) 
-		print ">> HashTable :"+str(self.total_hashTableTime) 
-		print ">> Probe     :"+str(self.total_probeTime) 
-		print ">> JoinFact  :"+str(self.total_joinFactTime) 
-		print ">> JoinDim   :"+str(self.total_joinDimTime) 
+		print "> Join Time        :"+str(self.total_joinTime * iterations) 
+		print ">> HashTable :"+str(self.total_hashTableTime * iterations ) 
+		print ">> Probe     :"+str(self.total_probeTime * iterations)  
+		print ">> JoinFact  :"+str(self.total_joinFactTime * iterations)  
+		print ">> JoinDim   :"+str(self.total_joinDimTime * iterations) 
 		print ""
-		print "> Materialization  :"+str(self.total_materializationTime)
+		print "> Materialization  :"+str(self.total_materializationTime * iterations) 
 
 	#Print results
 	def printResVerdose(self):
@@ -476,4 +481,4 @@ class planner:
 			exit(1)
 
 		#Pack everything to a query result and return it
-		return resultQuery (resUnnested, resNested, totalTime)
+		return resultQuery (resUnnested, resNested, self.query.outerTableRows, totalTime)

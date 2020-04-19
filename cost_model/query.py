@@ -430,6 +430,73 @@ class query:
 			self.nestedOps = []
 			self.outerTableRows = 0
 
+		elif 'q2-sub-simple'.lower() == query.lower():
+
+			#Name of the test case
+			self.name = 'join4c8'
+
+			#Actual SQL query
+			self.sql = "SELECT s_acctbal, s_name, n_name, p_partkey, p_mfgr, s_address, s_phone, s_comment FROM part, partsupp, supplier, nation, region WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey and s_nationkey = n_nationkey and n_regionkey = r_regionkey;"
+
+			self.ops = [] 
+
+			#Fetch from the disk
+			self.ops.append(scan ('part', ['p_partkey', 'p_mfgr'],\
+				'q2-sub-simple-tmp1', ['p_partkey', 'p_mfgr']))
+			self.ops.append(scan ('partsupp', ['ps_partkey', 'ps_suppkey','ps_supplycost'],\
+				'q2-sub-simple-tmp2', ['ps_partkey', 'ps_suppkey','ps_supplycost']))
+			self.ops.append(scan ('supplier', ['s_suppkey', 's_acctbal', 's_name', 's_address', 's_phone', 's_nationkey', 's_comment'],\
+				'q2-sub-simple-tmp3', ['s_suppkey','s_acctbal','s_name','s_address', 's_phone','s_nationkey','s_comment']))
+			self.ops.append(scan ('nation', ['n_nationkey','n_regionkey', 'n_nationkey', 'n_name'],\
+				'q2-sub-simple-tmp4', ['n_nationkey','n_regionkey','n_name']))
+			self.ops.append(scan ('region', ['r_regionkey'],\
+				'q2-sub-simple-tmp5', ['r_regionkey']))
+
+			#Join part and partsupp
+			self.ops.append(join ('q2-sub-simple-tmp1', 'q2-sub-simple-tmp2', ['p_partkey', 'ps_partkey'] , "p_partkey = ps_partkey", 800000 * scaleFactor, \
+				'q2-sub-simple-tmp6', ['p_partkey', 'p_mfgr', 'ps_suppkey']))
+			
+			#Join2 part-partsupp and supplier
+			self.ops.append(join ("q2-sub-simple-tmp6", "q2-sub-simple-tmp3", ['s_suppkey', 'ps_suppkey'], "s_suppkey = ps_suppkey", 800000 * scaleFactor, \
+				'q2-sub-simple-tmp7', ['p_partkey', 'p_mfgr', 's_acctbal','s_name','s_address', 's_phone', 's_nationkey', 's_comment']))
+
+			#Join3 part-partsupp-supplier and nation
+			self.ops.append(join ("q2-sub-simple-tmp7", "q2-sub-simple-tmp4", ['s_nationkey', 'n_nationkey'], "s_nationkey = n_nationkey", 800000 * scaleFactor, \
+				'q2-sub-simple-tmp8', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name','n_regionkey']))			
+
+			#Join4 part-partsupp-supplier and nation
+			self.ops.append(join ("q2-sub-simple-tmp8", "q2-sub-simple-tmp5", ['n_regionkey', 'r_regionkey'], "n_regionkey = r_regionkey", 800000 * scaleFactor, \
+				'q2-sub-simple-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name']))			
+
+			#Filter predicate Brand4%
+			self.ops.append(filter ('q2-sub-simple-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name'], \
+			"p_brand like Brand4%", 0.196,\
+			'q2-sub-simple-tmp10', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name']))
+
+			# --- Sub Part ---
+			self.nestedOps = []
+			self.outerTableRows = 600
+
+			#Filter linking predicate
+			self.nestedOps.append(filter ('q2-sub-simple-tmp2', ['ps_partkey', 'ps_suppkey'], "p_partkey = ps_partkey", 0.25,\
+			'q2-sub-simple-tmp11', ['ps_supplycost']))
+
+			#Aggregation
+			self.nestedOps.append(aggregation ('q2-sub-simple-tmp11', ['ps_supplycost'], "min(ps_supplycost)",\
+				'q2-sub-simple-tmp12', ['ps_supplycost']))
+			# ----------------
+
+			#Print result
+			self.ops.append(materialize ('q2-sub-simple-tmp9', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name'],\
+				'q2-sub-simple-tmp13', ['p_partkey', 'p_mfgr','s_acctbal','s_name','s_address', 's_phone','s_comment','n_name']))
+
+		elif 'q2-unsub-simple'.lower() == query.lower():
+			self.op = 'q2-unnested'
+
+			#Nested part
+			self.nestedOps = []
+			self.outerTableRows = 0
+
 		elif 'q2-nested'.lower() == query.lower():
 
 			self.op = 'q2-nested'

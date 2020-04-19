@@ -64,12 +64,16 @@ SCHEMA := $(TPCH_SCHEMA)
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/agg.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/groupby.sql
 #--joins--
-SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join_draft.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/joinc2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/joinc4.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join2c2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4c2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/join4c8.sql
+#--Nested--
+SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/q2-sub-simple.sql
+#SQL_FILE := $(TPCH_TEST_DIR)/cost_model_queries/q2-unsub-simple.sql
 # ---------------
 
 # --- Final exp queries ---

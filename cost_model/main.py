@@ -28,12 +28,13 @@ def main(argv):
 	s = schema('TPCH', scaleFactor)
 
 	#Create query 
-	#Test operators     : ('select', 'filter', 'join', 'aggregation', 'groupby')
-	#Test mult cols     : ('joinc2',  'joinc4')
-	#Test mult joins    : ('join2c2', 'join4c2)
-	#Test complex joins : ('join4c8)	
-	#Actual queries     : ('q2-nested', 'q2-unnested')
-	q = query('join4c8', scaleFactor )
+	#Test operators         : ('select', 'filter', 'join', 'aggregation', 'groupby')
+	#Test mult cols         : ('joinc2',  'joinc4')
+	#Test mult joins        : ('join2c2', 'join4c2)
+	#Test complex joins     : ('join4c8)
+	#Test (un) nest queries : ( 'q2-sub-simple', 'q2-unsub-simple')
+	#Actual queries         : ( 'q2-nested', 'q2-unnested')
+	q = query('q2-sub-simple', scaleFactor )
 
 	#Create system configuration ('TeslaV100' , 0)
 	# Hardware: ('RI2')
