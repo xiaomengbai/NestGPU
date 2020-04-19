@@ -51,10 +51,10 @@ class config:
 			self.groupby_Threads = 131072
 
 			#Materialization time 
-			self.materialization_kernelTime = 2468085 #b/ms (~2.5 gb/sec for IR2)
+			self.materialization_kernelTime = 0.026 #(For 1 iteration copying 1 byte)
+			self.materialization_threads = 65536
 
-			#Materialization after join time 
-			self.materializationJ_kernelTime = 266735 #b/ms (~0.2 gb/sec for IR2)
+
 
 		else:
 			print "Error - There is no existing configuration for this system!"

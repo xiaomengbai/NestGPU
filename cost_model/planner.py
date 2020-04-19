@@ -33,8 +33,10 @@ class resultQuery():
 
 		print "<---Unnested Part--->"
 		self.unnestedPart.printRes()
+		print ""
 		print "<----Nested Part---->"
 		self.nestedPart.printRes()
+		print ""
 		print "<------------------->"
 		print ">>Total estimated time:"+ str(self.totalQueryTime)
 
@@ -382,11 +384,12 @@ class planner:
 		#Get input row size 
 		row_size = self._computeRowSize(self.schema, kernel.cols) 
 		
-		#Get total data (always from the workSpace as we materialize mem buffers!)
-		total_data = row_size * self.workSpace[kernel.table].size
+		#Compute number of iterations to be performed by the kernel
+		iterations = self.workSpace[kernel.table].size / self.config.materialization_threads
+		iterations = math.ceil(iterations)
 
 		#Compute total time
-		total_time = total_data / self.config.materialization_kernelTime
+		total_time = iterations * self.config.materialization_kernelTime * row_size
 
 		#Add output to workspace
 		buffer = tempTable(kernel.output, kernel.output_cols, self.workSpace[kernel.table].size)

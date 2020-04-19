@@ -288,22 +288,22 @@ class query:
 			self.name = 'joinc4'
 
 			#Actual SQL query
-			self.sql = "SELECT p_partkey, p_mfgr, p_name, ps_comment FROM part, partsupp WHERE p_partkey = ps_partkey;"
+			self.sql = "SELECT p_partkey, p_mfgr, p_name, p_brand FROM part, partsupp WHERE p_partkey = ps_partkey;"
 
 			#Kernels
 			self.ops = [] 
-			self.ops.append(scan ('part', ['p_partkey', 'p_mfgr', 'p_name'],\
-				'join-tmp1', ['p_partkey', 'p_mfgr', 'p_name'] ))
-			self.ops.append(scan ('partsupp', ['ps_partkey', 'ps_comment'],\
-				'join-tmp2', ['ps_partkey','ps_comment']))
+			self.ops.append(scan ('part', ['p_partkey', 'p_mfgr', 'p_name', 'p_brand'],\
+				'join-tmp1', ['p_partkey', 'p_mfgr', 'p_name', 'p_brand'] ))
+			self.ops.append(scan ('partsupp', ['ps_partkey'],\
+				'join-tmp2', ['ps_partkey']))
 			
 			#Join part and partsupp
 			self.ops.append(join ("join-tmp1", "join-tmp2", ['p_partkey', 'ps_partkey'], "p_partkey = ps_partkey", 800000 * scaleFactor,\
-				'join-tmp3', ['p_partkey', 'p_mfgr', 'p_name', 'ps_comment']))
+				'join-tmp3', ['p_partkey', 'p_mfgr', 'p_name', 'p_brand']))
 			
 			#Materialize res
-			self.ops.append(materialize ('join-tmp3', ['p_partkey', 'p_mfgr', 'p_name', 'ps_comment'],\
-				'join-tmp4', ['p_partkey', 'p_mfgr', 'p_name', 'ps_comment']))
+			self.ops.append(materialize ('join-tmp3', ['p_partkey', 'p_mfgr', 'p_name', 'p_brand'],\
+				'join-tmp4', ['p_partkey', 'p_mfgr', 'p_name', 'p_brand']))
 
 			#Nested part
 			self.nestedOps = []
