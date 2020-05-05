@@ -2116,6 +2116,8 @@ class FirstStepWhereCondition:
                 func_name = "OR"
             elif c.tokenname == 'T_COND_AND':
                 func_name = 'AND'
+            elif c.tokenname == 'T_COND_NOT':
+                func_name = 'NOT'
 
 
             all_my_child_list = c.child_list
