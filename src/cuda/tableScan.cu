@@ -3274,7 +3274,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         }
 
         if(res_mp == NULL)
+        {
+            fprintf(stderr, "GPU requires %d bytes mem space\n", count * sn->tn->attrSize[index]);
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &result[i], count * sn->tn->attrSize[index]));
+        }
         else
             result[i] = (char *) res_mp->alloc(count * sn->tn->attrSize[index]);
     }
