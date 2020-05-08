@@ -867,15 +867,15 @@ def generate_code_for_a_tree(fo, tree, lvl):
     global baseIndent
     indent = (lvl * 3 + 1) * baseIndent
 
-    var_subqRes = "subqRes" + str(lvl)
+    #var_subqRes = "subqRes" + str(lvl)
 
     print ">>> Generate code for a tree <<<"
     tree.debug(0)
 
     resultNode = "result"
 
-    print >>fo, indent + "struct tableNode *" + resultNode + ";"
-    print >>fo, indent + "char * " + var_subqRes + ";\n"
+    print >>fo, indent + "struct tableNode *" + resultNode + ";\n"
+    #print >>fo, indent + "char * " + var_subqRes + ";\n"
 
     tree_result = generate_code_for_a_node(fo, indent, lvl, tree)
 
@@ -901,7 +901,7 @@ def generate_code_for_a_tree(fo, tree, lvl):
 
     return tree_result
 
-def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
+def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, indexDict, currentNode, passInPos):
 
     indent = (lvl * 3 + 2) * baseIndent
     var_subqRes = "subqRes" + str(lvl)
@@ -1048,10 +1048,10 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
                 print >>fo, indent + "CUDA_SAFE_CALL_NO_SYNC( cudaFree(correlated_col_sort) );\n"
 
     if HostMempool == 1:
-	print >>fo, indent + "char *free_pos = host_mempool.freepos();"
+	print >>fo, indent + "free_pos = host_mempool.freepos();"
 
     if SubResMempool == 1:
-	print >>fo, indent + "char *free_gpu_pos = gpu_inter_mp.freepos();"
+	print >>fo, indent + "free_gpu_pos = gpu_inter_mp.freepos();"
 
     # TODO: need to consider more than one correlated columns
     if SubCache == 1 and len(pass_in_cols) == 1:
@@ -1084,6 +1084,23 @@ def generate_code_for_a_subquery(fo, lvl, rel, con, tupleNum, tableName, indexDi
     if constant_len_res:
         if rel in ["EXISTS"]:
             print >>fo, indent + baseIndent * 2 + "*(int *)(" + var_subqRes + " + tupleid * " + subq_res_size + ") = (" + resTable + "->tupleNum > 0);"
+        elif rel in ["GTH", "GEQ", "LTH", "LEQ"]:
+            # should consider if no qualified tuples in the subquery
+            bound = "INT" if where.column_type == "INTEGER" else "FLOAT"
+            if rel in ["GTH", "GEQ"]:
+                bound = bound + "_MAX"
+            else:
+                bound = bound + "_MIN"
+
+            print >>fo, indent + baseIndent * 2 + "if(mn.table->tupleNum)"
+            if where.column_type in ["INTEGER", "DATE"]:
+                print >>fo, indent + baseIndent * 3 + "*((int *)(" + var_subqRes + " + tupleid * sizeof(int))) = (int)(*((float *)final));"
+                print >>fo, indent + baseIndent * 2 + "else"
+                print >>fo, indent + baseIndent * 3 + "*((int *)(" + var_subqRes + " + tupleid * sizeof(int))) = " + bound + ";"
+            elif where.column_type in ["DECIMAL"]:
+                print >>fo, indent + baseIndent * 3 + "memcpy(" + var_subqRes + " + tupleid * sizeof(float), final, sizeof(float));"
+                print >>fo, indent + baseIndent * 2 + "else"
+                print >>fo, indent + baseIndent * 3 + "*((float *)(" + var_subqRes + " + tupleid * sizeof(float))) = " + bound + ";"
         else:
             print >>fo, indent + baseIndent * 2 + "memcpy(" + var_subqRes + " + tupleid * " + subq_res_size + ", final, " + subq_res_size + ");"
             if SubCache == 1 and len(pass_in_cols) == 1:
@@ -1426,7 +1443,7 @@ def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
                     indexDict[ "CHILD." + str(indexList[j])] = j
                 print "indexList: ", indexList
                 print "indexDict: ", indexDict
-                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, spn, "MEM")
+                generate_code_for_a_subquery(fo, lvl, whereList[i], relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, spn, "MEM")
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
@@ -1596,7 +1613,11 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
     resultNode = gbn.name
     print >>fo, indent + "struct tableNode * " + resultNode + ";"
 
-    print >>fo, indent + "{\n"
+    if lvl > 0:
+        print >>fo, indent + "if(" + inputNode + "->tupleNum == 0)"
+        print >>fo, indent + baseIndent + resultNode + " = " + inputNode + ";"
+        print >>fo, indent + "else"
+        print >>fo, indent + "{\n"
     indent += baseIndent
 
     if HostMempool == 1:
@@ -1653,19 +1674,6 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
             print >>fo, indent + "gbNode->tupleSize += sizeof(float);"
             print >>fo, indent + "gbNode->attrType[" + str(i) + "] = FLOAT;"
             print >>fo, indent + "gbNode->attrSize[" + str(i) + "] = sizeof(float);"
-
-            # _exp = exp
-            # while _exp.func_name not in ['MIN', 'MAX', 'COUNT', 'SUM', 'AVG']:
-            #     if _exp:
-            # COps = {'PLUS': '+', 'MINUS': '-', 'MULTIPLY': '*', 'DIVIDE': '/'}
-            # def CExp(e):
-            #     if isinstance(e, ystree.YFuncExp) and e.func_name in COps.keys():
-            #         return "(" + CExp(e.parameter_list[0]) + ") " + COps[e.func_name] + " (" + CExp(e.parameter_list[1]) + ")"
-            #     else:
-            #         return e.evaluate()
-
-            # print CExp(exp)
-
 
             print >>fo, indent + "gbNode->gbExp["+str(i)+"].func = " + exp.func_name + ";"
             para = exp.parameter_list[0]
@@ -1796,6 +1804,13 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
     jName = "jNode"
     indent += baseIndent
+    print >>fo, indent + "char * " + var_subqRes + ";"
+    if HostMempool == 1:
+	print >>fo, indent + "char *free_pos;"
+
+    if SubResMempool == 1:
+	print >>fo, indent + "char *free_gpu_pos;"
+
     print >>fo, indent + "struct joinNode " + jName + ";"
     print >>fo, indent + jName + ".leftTable = " + leftName + ";"
     print >>fo, indent + jName + ".rightTable = " + rightName + ";"
@@ -2087,7 +2102,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
                     col.column_name = rOutList[j]
                     indexDict[ystree.__trace_to_leaf__(jn, col, False).evaluate()] = rPosList[j]
 
-                generate_code_for_a_subquery(fo, lvl, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU")
+                generate_code_for_a_subquery(fo, lvl, left_col, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU")
 
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
 
@@ -2154,6 +2169,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
     resName = tn.name
     tnName = tn.table_name.lower() + "Table"
     var_subqRes = "subqRes" + str(lvl)
+
     print >>fo, indent + "// Process the TableNode for " + tn.table_name.upper()
     print >>fo, indent + "struct tableNode *" + resName + ";"
     if HostMempool == 1:
@@ -2165,6 +2181,12 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
     print >>fo, indent + "{"
     indent += baseIndent
+    print >>fo, indent + "char * " + var_subqRes + ";"
+    if HostMempool == 1:
+	print >>fo, indent + "char *free_pos;"
+
+    if SubResMempool == 1:
+	print >>fo, indent + "char *free_gpu_pos;"
 
     indexList = []
     colList   = []
@@ -2381,7 +2403,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                 indexDict = {}
                 for j in range(0, len(indexList)):
                     indexDict[ tn.table_name + "." + str(indexList[j])] = j
-                generate_code_for_a_subquery(fo, lvl, relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, tn, "MEM")
+                generate_code_for_a_subquery(fo, lvl, whereList[i], relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, tn, "MEM")
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"

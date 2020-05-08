@@ -160,6 +160,9 @@ class YExpTool:
                 pattern = after_list[0]['content'].lstrip("'").rstrip("'")
 
                 substrs = map(lambda s: "'" + s + "'", pattern.split("%"))
+#                print substrs
+                substrs = filter(lambda s : s != "''", substrs)
+#                print _substrs
                 end_exp = YFuncExp( "LIST", map(lambda sub: self.convert_token_list_to_exp_tree([{'content': sub, 'name': 'QUOTED_STRING'}]), substrs) )
             else:
                 end_exp = self.convert_token_list_to_exp_tree(after_list)
@@ -2634,7 +2637,7 @@ def build_plan_tree_from_a_select_node(a_query_node):
 
     t3 = t2.convert_to_binary_join_tree()
 
-    process_the_plan_tree(t3)
+    t3 = process_the_plan_tree(t3)
 
     return t3
 
@@ -2738,7 +2741,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
             "NOT_EQ":[2,["INTEGER","DECIMAL","DATE","TEXT"],["BOOLEAN"]],                 \
             "IS":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]], \
             "SUBQ":[0,["INTEGER","DECIMAL", "DATE", "TEXT"],["DECIMAL", "INTEGER", "DATE", "TEXT"]], \
-            "IN":[2,["TEXT", "DATE"],["BOOLEAN"]], \
+            "IN":[2,["TEXT", "DATE", "INTEGER"],["BOOLEAN"]], \
             "LIST":[0,["TEXT", "DATE"],["TEXT", "DATE"]], \
             "LIKE":[2,["TEXT"],["BOOLEAN"]], \
             "EXISTS":[0, ["INTEGER", "DECIMAL", "TEXT", "DATE"], ["BOOLEAN"]], \
@@ -2785,7 +2788,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                         break
                 if column_type is not None:
                     if column_type not in func_dict[exp.func_name.upper()][1]:
-                        print exp.func, " has a wrong type arg (", column_type, "). Should be ", func_dict[exp.func_name.upper()][1]
+                        print exp.func_name, " has a wrong type arg (", column_type, "). Should be ", func_dict[exp.func_name.upper()][1]
                         return -1
 
                     if check_type is None or exp.func_name == "SUBQ":
@@ -3415,10 +3418,12 @@ def __groupby_where_filter__(exp):
 
 def split_subquery(tree):
     if isinstance(tree, TwoJoinNode):
-        split_subquery(tree.left_child)
-        split_subquery(tree.right_child)
+        tree.left_child = split_subquery(tree.left_child)
+        tree.right_child = split_subquery(tree.right_child)
+        return tree
     elif not isinstance(tree, TableNode):
-        split_subquery(tree.child)
+        tree.child = split_subquery(tree.child)
+        return tree
     else:
         if tree.where_condition is not None:
             scan_exp = tree.where_condition.where_condition_exp
@@ -3470,14 +3475,18 @@ def split_subquery(tree):
                     spn.child = tn
                     spn.parent = tree.parent
                     tn.parent = spn
-                    if isinstance(tree.parent, TwoJoinNode):
-                        if tree.parent.left_child == tree:
-                            tree.parent.left_child = spn
-                        else:
-                            tree.parent.right_child = spn
-                    else:
-                        tree.parent.child = spn
 
+                    return spn
+        return tree
+                    # if isinstance(tree.parent, TwoJoinNode):
+                    #     if tree.parent.left_child == tree:
+                    #         tree.parent.left_child = spn
+                    #     else:
+                    #         tree.parent.right_child = spn
+                    # elif tree.parent is not None:
+                    #     tree.parent.child = spn
+                    # else:
+                    #     tree = spn
 
 def predicate_pushdown(tree):
 
@@ -5028,7 +5037,7 @@ def process_the_plan_tree(tree):
 
     predicate_pushdown(tree)
 
-    split_subquery(tree)
+    tree = split_subquery(tree)
 
     gen_project_list(tree)
 
@@ -5037,6 +5046,8 @@ def process_the_plan_tree(tree):
     gen_table_name(tree)
 
     gen_column_index(tree)
+
+    return tree
 
 def __traverse_exp_filter__(exp, res_list, filter_func):
     if filter_func(exp):
@@ -5074,7 +5085,8 @@ def search_external_cols(tree, root):
         __traverse_exp_filter__(exp, all_column_exps, lambda e : isinstance(e, YRawColExp))
 
         # external columns are columns not in the table list
-        external_cols = filter(lambda e : all( not column_in_table(e.column_name, t) for t in table_list), all_column_exps)
+        # external_cols = filter(lambda e : all( not column_in_table(e.column_name, t) for t in table_list), all_column_exps)
+        external_cols = filter(lambda e : all( not column_in_table(e.column_name, t) for t in table_list ) and all( not column_in_table(e.column_name, tree.table_alias_dict[t]) for t in table_list if t in tree.table_alias_dict.keys()), all_column_exps)
 
         for col in external_cols:
             external_table_found = False

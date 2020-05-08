@@ -66,3 +66,8 @@ test/tpch_psql/postgresql*
 test/tpch_psql/*.output
 others/config_project_env.sh
 *.bak
+
+
+output*
+check.pl
+test.cpp

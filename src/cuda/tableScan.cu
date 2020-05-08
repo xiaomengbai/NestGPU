@@ -99,8 +99,10 @@ __device__ static inline int stringFind(const char *buf1, const char *buf2, int 
             continue;
         }
 
-        if(matched)
-            return -1;
+        if(matched) {
+            matched = 0;
+            str2 = buf2;
+        }
 
         str1++;
     }
@@ -382,28 +384,34 @@ __global__ static void genScanFilter_and_like(char *col, int colSize, long tuple
     for(long i = tid; i < tupleNum; i += stride){
         int pos = 0, res;
         con = 1;
+
+        const char *str1 = col + colSize * i;
+        int len1 = stringLen(str1);
+        len1 = len1 < colSize ? len1 : colSize;
+
         for(long j = 0; j < vlen; j++){
-            const char *str1 = col + colSize * i;
             const char *str2 = *(char **)where->content + colSize * j;
-            int len1 = stringLen(str1);
             int len2 = stringLen(str2);
-            len1 = len1 < colSize ? len1 : colSize;
             len2 = len2 < colSize ? len2 : colSize;
 
-            if(j == 0){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == 0);
-                pos += len2;
-            }else if(j == vlen - 1){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res + len2 == len1);
-            }else{
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res != -1);
-                pos = res + len2;
-            }
+            res = stringFind(str1, str2, len1, len2, pos);
+            con &= (res != -1);
+            pos = res + len2;
+
+            // if(j == 0){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == 0);
+            //     pos += len2;
+            // }else if(j == vlen - 1){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res + len2 == len1);
+            // }else{
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res != -1);
+            //     pos = res + len2;
+            // }
             if(!con) break;
         }
         filter[i] &= con;
@@ -427,20 +435,24 @@ __global__ static void genScanFilter_and_nlike(char *col, int colSize, long tupl
             len1 = len1 < colSize ? len1 : colSize;
             len2 = len2 < colSize ? len2 : colSize;
 
-            if(j == 0){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == -1);
-                pos += len2;
-            }else if(j == vlen - 1){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= !(res + len2 == len1);
-            }else{
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == -1);
-                pos = res + len2;
-            }
+            res = stringFind(str1, str2, len1, len2, pos);
+            con &= (res == -1);
+            pos = res + len2;
+
+            // if(j == 0){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == -1);
+            //     pos += len2;
+            // }else if(j == vlen - 1){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= !(res + len2 == len1);
+            // }else{
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == -1);
+            //     pos = res + len2;
+            // }
             if(!con) break;
         }
         filter[i] &= con;
@@ -1157,6 +1169,21 @@ __global__ static void genScanFilter_init_in(char *col, int colSize, long tupleN
     }
 }
 
+__global__ static void genScanFilter_init_int_in_vec(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+    int con = 0;
+
+    for(long i = tid; i < tupleNum; i += stride){
+        int vlen = *((*(int ***)where->content)[i]);
+        char *int_st = (*(char ***)where->content)[i] + sizeof(int);
+        con = 0;
+        for(long j = 0; j < vlen; j++)
+            con |= ( ((int *)col)[i] == ((int *)int_st)[j]);
+        filter[i] = con;
+    }
+}
+
 __global__ static void genScanFilter_init_in_vec(char *col, int colSize, long tupleNum, struct whereExp * where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1219,20 +1246,24 @@ __global__ static void genScanFilter_init_like(char *col, int colSize, long tupl
             len1 = len1 < colSize ? len1 : colSize;
             len2 = len2 < colSize ? len2 : colSize;
 
-            if(j == 0){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == 0);
-                pos += len2;
-            }else if(j == vlen - 1){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res + len2 == len1);
-            }else{
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res != -1);
-                pos = res + len2;
-            }
+            res = stringFind(str1, str2, len1, len2, pos);
+            con &= (res != -1);
+            pos = res + len2;
+
+            // if(j == 0){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == 0);
+            //     pos += len2;
+            // }else if(j == vlen - 1){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res + len2 == len1);
+            // }else{
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res != -1);
+            //     pos = res + len2;
+            // }
             if(!con) break;
         }
         filter[i] = con;
@@ -1256,20 +1287,24 @@ __global__ static void genScanFilter_init_nlike(char *col, int colSize, long tup
             len1 = len1 < colSize ? len1 : colSize;
             len2 = len2 < colSize ? len2 : colSize;
 
-            if(j == 0){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == -1);
-                pos += len2;
-            }else if(j == vlen - 1){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= !(res + len2 == len1);
-            }else{
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == -1);
-                pos = res + len2;
-            }
+            res = stringFind(str1, str2, len1, len2, pos);
+            con &= (res == -1);
+            pos = res + len2;
+
+            // if(j == 0){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == -1);
+            //     pos += len2;
+            // }else if(j == vlen - 1){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= !(res + len2 == len1);
+            // }else{
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == -1);
+            //     pos = res + len2;
+            // }
             if(!con) break;
         }
         filter[i] = con;
@@ -1489,20 +1524,24 @@ __global__ static void genScanFilter_or_like(char *col, int colSize, long tupleN
             len1 = len1 < colSize ? len1 : colSize;
             len2 = len2 < colSize ? len2 : colSize;
 
-            if(j == 0){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == 0);
-                pos += len2;
-            }else if(j == vlen - 1){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res + len2 == len1);
-            }else{
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res != -1);
-                pos = res + len2;
-            }
+            res = stringFind(str1, str2, len1, len2, pos);
+            con &= (res != -1);
+            pos = res + len2;
+
+            // if(j == 0){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == 0);
+            //     pos += len2;
+            // }else if(j == vlen - 1){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res + len2 == len1);
+            // }else{
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res != -1);
+            //     pos = res + len2;
+            // }
             if(!con) break;
         }
         filter[i] |= con;
@@ -1526,20 +1565,24 @@ __global__ static void genScanFilter_or_nlike(char *col, int colSize, long tuple
             len1 = len1 < colSize ? len1 : colSize;
             len2 = len2 < colSize ? len2 : colSize;
 
-            if(j == 0){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == -1);
-                pos += len2;
-            }else if(j == vlen - 1){
-                if(!len2) continue;
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= !(res + len2 == len1);
-            }else{
-                res = stringFind(str1, str2, len1, len2, pos);
-                con &= (res == -1);
-                pos = res + len2;
-            }
+            res = stringFind(str1, str2, len1, len2, pos);
+            con &= (res == -1);
+            pos = res + len2;
+
+            // if(j == 0){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == -1);
+            //     pos += len2;
+            // }else if(j == vlen - 1){
+            //     if(!len2) continue;
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= !(res + len2 == len1);
+            // }else{
+            //     res = stringFind(str1, str2, len1, len2, pos);
+            //     con &= (res == -1);
+            //     pos = res + len2;
+            // }
             if(!con) break;
         }
         filter[i] |= con;
@@ -2638,6 +2681,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                     genScanFilter_init_int_geq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
                 else if (rel == LEQ_VEC)
                     genScanFilter_init_int_leq_vec<<<grid,block>>>(column[whereIndex],totalTupleNum, whereVec, gpuFilter);
+                else if (rel == IN_VEC)
+                    genScanFilter_init_int_in_vec<<<grid, block>>>(column[whereIndex], sn->tn->attrSize[index], totalTupleNum, gpuExp, gpuFilter);
 
             }else if (sn->tn->attrType[index] == FLOAT){
                 float whereValue, *whereVec;
