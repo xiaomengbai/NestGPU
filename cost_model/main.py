@@ -34,7 +34,7 @@ def main(argv):
 	#Test complex joins     : ('join4c8)
 	#Test (un) nest queries : ( 'q2-sub-simple', 'q2-unsub-simple')
 	#Actual queries         : ( 'q2-nested', 'q2-unnested')
-	q = query('q2-sub-simple', scaleFactor )
+	q = query('q2-sub-simple2', scaleFactor )
 
 	#Create system configuration ('TeslaV100' , 0)
 	# Hardware: ('RI2')

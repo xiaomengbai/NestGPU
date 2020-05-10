@@ -33,6 +33,8 @@ class config:
 
 			#Filter op configuration
 			self.filter_kernelTime = 4.16
+			self.filterMem_kernelTime = 3.9
+			self.filterKernel_kernelTime = 0.2
 			self.filter_Threads = 524288
 
 			#Join op configuration
@@ -44,6 +46,9 @@ class config:
 
 			#Aggregation op configuraiton
 			self.aggregation_kernelTime = 0.086
+			self.aggregationKernel_kernelTime = 0.072
+			self.aggregationMemory_kernelTime = 0.014
+
 			self.aggregation_Threads = 131072
 
 			#Group by op configurations

@@ -249,6 +249,54 @@ class planner:
 		res.filterTime.append(total_time)
 		res.total_filterTime += total_time
 
+	# Estimate filter time (i.e table scan)
+	def _estimateFilterMemoryCost(self, kernel, res):
+
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
+		total_data = row_size * self.workSpace[kernel.table].size
+
+		#Compute number of iterations to be performed by the kernel
+		iterations = self.workSpace[kernel.table].size / self.config.filter_Threads
+		iterations = math.ceil(iterations)
+
+		#Compute total time
+		total_time = iterations * self.config.filterMem_kernelTime
+
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, self.workSpace[kernel.table].size * kernel.selectivity)
+		self.workSpace [kernel.output] = buffer
+
+		#Add kernel total time to the result 
+		res.filterTime.append(total_time)
+		res.total_filterTime += total_time
+
+	# Estimate filter time (i.e table scan)
+	def _estimateFilterKernelCost(self, kernel, res):
+
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
+		total_data = row_size * self.workSpace[kernel.table].size
+
+		#Compute number of iterations to be performed by the kernel
+		iterations = self.workSpace[kernel.table].size / self.config.filter_Threads
+		iterations = math.ceil(iterations)
+
+		#Compute total time
+		total_time = iterations * self.config.filterKernel_kernelTime
+
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, self.workSpace[kernel.table].size * kernel.selectivity)
+		self.workSpace [kernel.output] = buffer
+
+		#Add kernel total time to the result 
+		res.filterTime.append(total_time)
+		res.total_filterTime += total_time
+
 	# Estimate join time (i.e. hash Join)
 	def _estimateJoinCost(self, kernel, res):
 
@@ -359,6 +407,54 @@ class planner:
 		res.aggregationTime.append(total_time)
 		res.total_aggregationTime += total_time
 
+	# Estimate aggregation time (i.e. aggregation without groupby)
+	def _estimateAggMemoryCost(self, kernel, res):
+
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
+		total_data = row_size * self.workSpace[kernel.table].size
+
+		#Compute number of iterations to be performed by the kernel
+		iterations = self.workSpace[kernel.table].size / self.config.aggregation_Threads
+		iterations = math.ceil(iterations)
+
+		#Compute total time
+		total_time = iterations * self.config.aggregationMemory_kernelTime
+
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, 1)
+		self.workSpace [kernel.output] = buffer
+
+		#Add kernel total time to the result 
+		res.aggregationTime.append(total_time)
+		res.total_aggregationTime += total_time
+
+	# Estimate aggregation time (i.e. aggregation without groupby)
+	def _estimateAggKernelCost(self, kernel, res):
+
+		#Get input row size 
+		row_size = self._computeRowSize(self.schema, kernel.cols) 
+		
+		#Get total data (always from the workSpace as we materialize mem buffers!)
+		total_data = row_size * self.workSpace[kernel.table].size
+
+		#Compute number of iterations to be performed by the kernel
+		iterations = self.workSpace[kernel.table].size / self.config.aggregation_Threads
+		iterations = math.ceil(iterations)
+
+		#Compute total time
+		total_time = iterations * self.config.aggregationKernel_kernelTime
+
+		#Add output to workspace
+		buffer = tempTable(kernel.output, kernel.output_cols, 1)
+		self.workSpace [kernel.output] = buffer
+
+		#Add kernel total time to the result 
+		res.aggregationTime.append(total_time)
+		res.total_aggregationTime += total_time
+
 	# Estimate group by time (i.e. aggregation with groupby)
 	def _estimateGroupbyCost(self, kernel, res):
 
@@ -423,13 +519,21 @@ class planner:
 				self._estimateDiskCost(kernel,resUnnested)
 
 			elif kernel.op == "filter":
-				self._estimateFilterCost(kernel,resUnnested)
+				self._estimateFilterCost(kernel,resUnnested)			
+			elif  kernel.op == "filterM":
+				self._estimateFilterMemoryCost(kernel,resUnnested)
+			elif  kernel.op == "filterK":
+				self._estimateFilterKernelCost(kernel,resUnnested)
 
 			elif kernel.op == "join":
 				self._estimateJoinCost(kernel,resUnnested)
 
 			elif kernel.op == "aggregation":
 				self._estimateAggCost(kernel,resUnnested)
+			elif kernel.op == "aggregationM":
+				self._estimateAggMemoryCost(kernel,resUnnested)
+			elif kernel.op == "aggregationK":
+				self._estimateAggKernelCost(kernel,resUnnested)
 
 			elif kernel.op == "group_by":
 				self._estimateGroupbyCost(kernel,resUnnested)
@@ -455,12 +559,23 @@ class planner:
 
 			if  kernel.op == "filter":
 				self._estimateFilterCost(kernel,resNested)
+			
+			#Compute mempool and kernel cost seperatly for Table Scan
+			elif  kernel.op == "filterM":
+				self._estimateFilterMemoryCost(kernel,resNested)
+			elif  kernel.op == "filterK":
+				self._estimateFilterKernelCost(kernel,resNested)
 
 			elif kernel.op == "join":
 				self._estimateJoinCost(kernel,resNested)
 
 			elif kernel.op == "aggregation":
 				self._estimateAggCost(kernel,resNested)
+			elif kernel.op == "aggregationM":
+				self._estimateAggMemoryCost(kernel,resNested)
+			elif kernel.op == "aggregationK":
+				self._estimateAggKernelCost(kernel,resNested)
+
 
 			elif kernel.op == "group_by":
 				self._estimateGroupbyCost(kernel,resNested)
