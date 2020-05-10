@@ -890,6 +890,28 @@ __global__ static void genScanFilter_or_exists(int *outFilter, long tupleNum, in
         filter[i] |= outFilter[i];
 }
 
+__global__ static void genScanFilter_and_not_exists(int *outFilter, long tupleNum, int *filter) {
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for(long i = tid; i < tupleNum; i += stride)
+    {
+        filter[i] &= outFilter[i];
+        filter[i] = !filter[i];
+    }
+}
+
+__global__ static void genScanFilter_or_not_exists(int *outFilter, long tupleNum, int *filter) {
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for(long i = tid; i < tupleNum; i += stride)
+    {
+        filter[i] |= outFilter[i];
+        filter[i] = !filter[i];
+    }
+}
+
 __global__ static void genScanFilter_and_int_eq(char *col, long tupleNum, int where, int * filter){
     int stride = blockDim.x * gridDim.x;
     int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -2515,7 +2537,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
         int rel;
 
-        if( where->exp[0].relation == EXISTS ) {
+        if( where->exp[0].relation == EXISTS || where->exp[0].relation == NOT_EXISTS_VEC) {
             if( where->exp[0].dataPos == MEM || where->exp[0].dataPos == MMAP || where->exp[0].dataPos == PINNED ) {
                 CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(gpuFilter, *((int **) where->exp[0].content), totalTupleNum * sizeof(int), cudaMemcpyHostToDevice) );
                 free( *((int **) where->exp[0].content) );
@@ -2806,6 +2828,25 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                     genScanFilter_and_exists<<<grid,block>>>(outFilter, totalTupleNum, gpuFilter);
                 else if(where->andOr == OR)
                     genScanFilter_or_exists<<<grid,block>>>(outFilter, totalTupleNum, gpuFilter);
+
+                if( where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED )
+                    free( *((int **) where->exp[i].content) );
+                cudaFree(outFilter);
+                continue;
+            }
+
+            if( where->exp[i].relation == NOT_EXISTS_VEC ) {
+                int *outFilter;
+                if( where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED ){
+                    CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&outFilter, sizeof(int) * totalTupleNum) );
+                    CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(outFilter, *((int **) where->exp[i].content), sizeof(int) * totalTupleNum, cudaMemcpyHostToDevice) );
+                }else
+                    outFilter = *((int **) where->exp[i].content);
+
+                if(where->andOr == AND)
+                    genScanFilter_and_not_exists<<<grid,block>>>(outFilter, totalTupleNum, gpuFilter);
+                else if(where->andOr == OR)
+                    genScanFilter_or_not_exists<<<grid,block>>>(outFilter, totalTupleNum, gpuFilter);
 
                 if( where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED )
                     free( *((int **) where->exp[i].content) );
@@ -3278,7 +3319,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         }
 
         if(res_mp == NULL)
+        {
+            fprintf(stderr, "GPU requires %d bytes mem space\n", count * sn->tn->attrSize[index]);
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &result[i], count * sn->tn->attrSize[index]));
+        }
         else
             result[i] = (char *) res_mp->alloc(count * sn->tn->attrSize[index]);
     }

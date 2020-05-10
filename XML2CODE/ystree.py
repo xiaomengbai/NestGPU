@@ -135,9 +135,17 @@ class YExpTool:
                 continue
 
             if atn == "T_RESERVED" and atc.upper() in ["LIKE", "IS", "IN", "EXISTS"]:
-                partition_index = i
-                partition_type = atc.upper()
-                continue
+                a_last_token = input_token_list[i - 1]
+                altc = a_last_token["content"]
+                altn = a_last_token["name"]
+                if altn == "T_RESERVED" and altc.upper() == 'NOT' and atc.upper() == 'EXISTS':
+                    partition_index = i - 1
+                    partition_type = 'NOT_EXISTS'
+                    continue
+                else:
+                    partition_index = i
+                    partition_type = atc.upper()
+                    continue
             elif atn in ["EQ", "GTH", "LTH", "NOT_EQ", "GEQ", "LEQ"]:
                 partition_index = i
                 partition_type = atn
@@ -171,7 +179,10 @@ class YExpTool:
 
         elif partition_index == 0: # EXISTS
             func_name = partition_type
-            after_list = input_token_list[1:]
+            if func_name == 'NOT_EXISTS':
+                    after_list = input_token_list[2:]
+            else:
+                after_list = input_token_list[1:]
             end_exp = self.convert_token_list_to_exp_tree(after_list)
             return YFuncExp(func_name, [end_exp])
 
@@ -2099,7 +2110,7 @@ class FirstStepWhereCondition:
 
             c = c[0]
 
-            if c.tokenname != 'T_COND_OR' and c.tokenname != 'T_COND_AND':
+            if c.tokenname != 'T_COND_OR' and c.tokenname != 'T_COND_AND' and c.tokenname != 'T_COND_NOT':
 
                 exit(29)
 
@@ -2108,6 +2119,8 @@ class FirstStepWhereCondition:
                 func_name = "OR"
             elif c.tokenname == 'T_COND_AND':
                 func_name = 'AND'
+            elif c.tokenname == 'T_COND_NOT':
+                func_name = 'NOT'
 
 
             all_my_child_list = c.child_list
@@ -2745,6 +2758,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
             "LIST":[0,["TEXT", "DATE"],["TEXT", "DATE"]], \
             "LIKE":[2,["TEXT"],["BOOLEAN"]], \
             "EXISTS":[0, ["INTEGER", "DECIMAL", "TEXT", "DATE"], ["BOOLEAN"]], \
+            "NOT_EXISTS":[0, ["INTEGER", "DECIMAL", "TEXT", "DATE"], ["BOOLEAN"]], \
     }
 
     if isinstance(exp,YFuncExp):
