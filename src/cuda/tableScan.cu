@@ -2002,6 +2002,21 @@ __global__ static void countScanNum_idx(int *filter, int *index, int *st, int *e
 }
 
 /*
+ * countReverseScanNum: reverse the results that first relation is "not exist".
+ */
+__global__ static void countReverseScanNum(int *filter, long tupleNum){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for(long i = tid; i<tupleNum; i += stride){
+        if(filter[i])
+            filter[i] = 0;
+        else
+            filter[i] = 1;
+    }
+}
+
+/*
  * scan_dict_other: generate the result for dictionary-compressed column.
  */
 
@@ -3175,7 +3190,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
     //Stop timer for Count Step 4.1 - Count selected rows kernels
 
-
+    if(where->exp[0].relation == NOT_EXISTS_VEC)// && where->expNum == 1totalTupleNum)
+        countReverseScanNum<<<grid,block>>>(gpuFilter,totalTupleNum);
     if(idx == NULL)
         countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
     else{
