@@ -74,7 +74,7 @@ enum {
     IN_VEC,
     NOT_IN_VEC,
     EXISTS, //26
-    NOT_EXISTS_VEC, //27
+    NOT_EXISTS, //27
 
 /* for where condition */
     AND ,
