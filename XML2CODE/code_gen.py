@@ -1276,7 +1276,6 @@ def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
     colList   = []
     indexList = []
     generate_col_list(spn, indexList, colList)
-    print "indexList: ", indexList
 
     selectList = spn.select_list.tmp_exp_list
 
@@ -1441,8 +1440,6 @@ def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
                 indexDict = {}
                 for j in range(0, len(indexList)):
                     indexDict[ "CHILD." + str(indexList[j])] = j
-                print "indexList: ", indexList
-                print "indexDict: ", indexDict
                 generate_code_for_a_subquery(fo, lvl, whereList[i], relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, spn, "MEM")
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
@@ -1613,11 +1610,11 @@ def generate_code_for_a_group_by_node(fo, indent, lvl, gbn):
     resultNode = gbn.name
     print >>fo, indent + "struct tableNode * " + resultNode + ";"
 
-    if lvl > 0:
-        print >>fo, indent + "if(" + inputNode + "->tupleNum == 0)"
-        print >>fo, indent + baseIndent + resultNode + " = " + inputNode + ";"
-        print >>fo, indent + "else"
-        print >>fo, indent + "{\n"
+    #if lvl > 0:
+    print >>fo, indent + "if(" + inputNode + "->tupleNum == 0)"
+    print >>fo, indent + baseIndent + resultNode + " = " + inputNode + ";"
+    print >>fo, indent + "else"
+    print >>fo, indent + "{\n"
     indent += baseIndent
 
     if HostMempool == 1:
@@ -2400,9 +2397,17 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
             # Get subquery result here
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
+                alias = None
+                for al, t in tn.table_alias_dict.items():
+                    if t == tn.table_name:
+                        alias = al
+
                 indexDict = {}
                 for j in range(0, len(indexList)):
                     indexDict[ tn.table_name + "." + str(indexList[j])] = j
+                    if alias != None:
+                        indexDict[ alias + "." + str(indexList[j])] = j
+
                 generate_code_for_a_subquery(fo, lvl, whereList[i], relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, tn, "MEM")
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":

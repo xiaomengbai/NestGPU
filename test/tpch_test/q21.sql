@@ -1,11 +1,37 @@
+
 select
-  s_name
+  s_name,
+  count(*) as numwait
 from
   supplier,
   lineitem l1
 where
-  s_suppkey = l1.l_suppkey
+  exists (
+    select
+      l3.l_orderkey
+    from
+      lineitem l3
+    where
+      l3.l_orderkey = l1.l_orderkey
+      and l3.l_suppkey <> l1.l_suppkey
+      and l3.l_receiptdate > l3.l_commitdate
+  )
+  and s_nationkey = 12
+  and s_suppkey = l1.l_suppkey
+group by
+  s_name
 ;
+
+
+
+-- select
+--   s_name
+-- from
+--   supplier,
+--   lineitem l1
+-- where
+--   s_suppkey = l1.l_suppkey
+-- ;
 
 
 

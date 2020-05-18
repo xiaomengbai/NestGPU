@@ -2851,9 +2851,11 @@ def __check_func_para__(exp,table_list,table_alias_dict):
 
                     if len(return_type) >1:
                         if check_type not in ["INTEGER","DECIMAL"]:
+                            print "check_type: ", check_type, " not in [INTEGER, DECIMAL]"
                             return -1
                     else:
                         if check_type != return_type[0]:
+                            print check_type, " (check_type) != ", return_type[0], " (retrun_type[0])"
                             return -1
 
             else:
@@ -2877,6 +2879,8 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                         continue
 
                     if check_type != para.cons_type:
+                        print exp.evaluate()
+                        print check_type, " (check_type) != ", para.cons_type, " (para.cons_type)"
                         return -1
 
     else:
@@ -3764,14 +3768,32 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
                     exit(29)
 
                 new_para_list.append(tmp_exp)
+                if para.func_name == "SUBQ":
+                    for node in qpt_gen(subqueries[para.parameter_list[0].cons_value]):
+                        if isinstance(node, TableNode) and node.where_condition is not None:
+                            for e in exp_gen(node.where_condition.where_condition_exp):
+                                if isinstance(e, YConsExp) and e.ref_col is not None and e.ref_col.table_name in table_list:
+                                    new_col = __gen_column_index__(e.ref_col, table_list, table_alias_dict)
+                                    e.ref_col.column_name = new_col.column_name
+                        if isinstance(node, TwoJoinNode):
+                            join_exp = None
+                            if node.join_explicit is True:
+                                join_exp = node.join_condition.on_condition_exp
+                            elif node.join_condition is not None:
+                                join_exp = node.join_condition.where_condition_exp
+
+                            for e in exp_gen(join_exp):
+                                if isinstance(e, YConsExp) and e.ref_col is not None and e.ref_col.table_name in table_list:
+                                    new_col = __gen_column_index__(e.ref_col, table_list, table_alias_dict)
+                                    e.ref_col.column_name = new_col.column_name
 
             elif isinstance(para,YConsExp):
-                if para.ref_col is not None:
-                    new_col = __gen_column_index__(para.ref_col, [para.ref_col.table_name], {})
-                    para.ref_col.table_name = new_col.table_name
-                    para.ref_col.column_name = new_col.column_name
-                    para.ref_col.column_type = new_col.column_type
-                    para.ref_col.func_obj = new_col.func_obj
+                # if para.ref_col is not None:
+                #     new_col = __gen_column_index__(para.ref_col, [para.ref_col.table_name], {})
+                #     para.ref_col.table_name = new_col.table_name
+                #     para.ref_col.column_name = new_col.column_name
+                #     para.ref_col.column_type = new_col.column_type
+                #     para.ref_col.func_obj = new_col.func_obj
                 new_para_list.append(para)
 
         new_exp = YFuncExp(exp.func_name,list(new_para_list))
@@ -4214,7 +4236,7 @@ def gen_column_index(tree):
                                 x.table_name = "CHILD"
                                 x.column_name = child_select_list.index(tmp)
                                 if "CHILD" not in tree.table_list:
-                                    tree.table_list.append("RIGHT")
+                                    tree.table_list.append("CHILD")
                                 break
                             else:
                                 if x.column_name == child_select_dict[tmp]:
@@ -4819,6 +4841,7 @@ def __gen_col_table_name__(exp,table_list,table_alias_dict):
     if exp.column_name == "*":
         return
 
+    # UNKNOWNTABLE.*
     col_res = lookup_a_column(exp.column_name)
 
     for tmp in col_res:
@@ -5059,7 +5082,11 @@ def process_the_plan_tree(tree):
 
     gen_table_name(tree)
 
+    tree.debug(0)
     gen_column_index(tree)
+    tree.debug(0)
+
+    print "\n"
 
     return tree
 
@@ -5091,26 +5118,47 @@ def search_external_cols(tree, root):
             return
 
         exp = tree.where_condition.where_condition_exp
-        table_list = list(set().union(tree.table_list, tree.table_alias_dict.keys()))
+        table_list = list(set().union(tree.table_list, tree.table_alias_dict.values()))
         other_table_list = filter(lambda t : t not in table_list, global_table_dict.keys())
 
         all_column_exps = []
 
         __traverse_exp_filter__(exp, all_column_exps, lambda e : isinstance(e, YRawColExp))
 
+        # print "table_list: ", table_list
+        # print "tree.table_alaias_dict: ", tree.table_alias_dict
+        # print "all_column_exps: ", eval_exp_list( all_column_exps )
+        external_cols = []
         # external columns are columns not in the table list
         # external_cols = filter(lambda e : all( not column_in_table(e.column_name, t) for t in table_list), all_column_exps)
-        external_cols = filter(lambda e : all( not column_in_table(e.column_name, t) for t in table_list ) and all( not column_in_table(e.column_name, tree.table_alias_dict[t]) for t in table_list if t in tree.table_alias_dict.keys()), all_column_exps)
+        for col in all_column_exps:
+            # The column has the format of T1.Col1
+            if col.table_name != "":
+                if col.table_name not in table_list:
+                    external_cols.append(col)
+            else:  # The column has the format of Col1
+                found = False
+                for t in table_list:
+                    if column_in_table(col.column_name, t):
+                        found = True
+                        break
+                if not found:
+                    external_cols.append(col)
+
+        # print "external_cols: ", eval_exp_list( external_cols )
+        # print "\n"
 
         for col in external_cols:
             external_table_found = False
-            for t in other_table_list:
+            for t in global_table_dict.keys():
                 if column_in_table(col.column_name, t):
-                    col.table_name = t
+                    if col.table_name == "":
+                        col.table_name = t
                     col.column_type = global_table_dict[t].get_column_type_by_name(col.column_name)
                     external_table_found = True
+                    break
             if not external_table_found:
-                print "ERROR: Unknown column " + col.column_name
+                print "ERROR: Unknown column", col.column_name
                 exit(99)
 
         # setup in a dictionary at the root node
