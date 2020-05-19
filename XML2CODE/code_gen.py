@@ -930,7 +930,7 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
     if rel in ["EQ", "LTH", "GTH", "LEQ", "GEQ", "NOT_EQ"]:
         constant_len_res = True
         subq_res_size = "sizeof(float)"
-    elif rel in ["EXISTS"]:
+    elif rel in ["EXISTS", "NOT_EXISTS"]:
         constant_len_res = True
         subq_res_size = "sizeof(int)"
     else:
@@ -1082,7 +1082,7 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
     print >>fo, indent + baseIndent * 2 + ""
 
     if constant_len_res:
-        if rel in ["EXISTS"]:
+        if rel in ["EXISTS", "NOT_EXISTS"]:
             print >>fo, indent + baseIndent * 2 + "*(int *)(" + var_subqRes + " + tupleid * " + subq_res_size + ") = (" + resTable + "->tupleNum > 0);"
         elif rel in ["GTH", "GEQ", "LTH", "LEQ"]:
             # should consider if no qualified tuples in the subquery
@@ -1419,11 +1419,14 @@ def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
 
             print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
 
-            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ" and relList[i] not in ["EXISTS"]:
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ" and relList[i] not in ["EXISTS", "NOT_EXISTS"]:
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
             elif relList[i] == "EXISTS":
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EXISTS;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+            elif relList[i] == "NOT_EXISTS":
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = NOT_EXISTS;"
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
             elif isinstance(conList[i], ystree.YRawColExp):
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
@@ -2379,11 +2382,14 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
 
             print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].index    = " + str(colIndex) + ";"
 
-            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ" and relList[i] not in ["EXISTS"]:
+            if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ" and relList[i] not in ["EXISTS", "NOT_EXISTS"]:
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
             elif relList[i] == "EXISTS":
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = EXISTS;"
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
+            elif relList[i] == "NOT_EXISTS":
+                print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = NOT_EXISTS;"
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = MEM;"
             elif isinstance(conList[i], ystree.YRawColExp):
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + relList[i] + "_VEC;"

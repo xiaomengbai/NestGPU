@@ -2045,6 +2045,21 @@ __global__ static void countScanNum_idx(int *filter, int *index, int *st, int *e
 }
 
 /*
+ * countReverseScanNum: reverse the results that first relation is "not exist".
+ */
+__global__ static void countReverseScanNum(int *filter, long tupleNum){
+    int stride = blockDim.x * gridDim.x;
+    int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    for(long i = tid; i<tupleNum; i += stride){
+        if(filter[i])
+            filter[i] = 0;
+        else
+            filter[i] = 1;
+    }
+}
+
+/*
  * scan_dict_other: generate the result for dictionary-compressed column.
  */
 
@@ -2537,7 +2552,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
         int rel;
 
-        if( where->exp[0].relation == EXISTS || where->exp[0].relation == NOT_EXISTS_VEC) {
+        if( where->exp[0].relation == EXISTS || where->exp[0].relation == NOT_EXISTS) {
             if( where->exp[0].dataPos == MEM || where->exp[0].dataPos == MMAP || where->exp[0].dataPos == PINNED ) {
                 CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(gpuFilter, *((int **) where->exp[0].content), totalTupleNum * sizeof(int), cudaMemcpyHostToDevice) );
                 free( *((int **) where->exp[0].content) );
@@ -2835,7 +2850,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                 continue;
             }
 
-            if( where->exp[i].relation == NOT_EXISTS_VEC ) {
+            if( where->exp[i].relation == NOT_EXISTS) {
                 int *outFilter;
                 if( where->exp[i].dataPos == MEM || where->exp[i].dataPos == MMAP || where->exp[i].dataPos == PINNED ){
                     CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&outFilter, sizeof(int) * totalTupleNum) );
@@ -3220,7 +3235,8 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
     //Stop timer for Count Step 4.1 - Count selected rows kernels
 
-
+    if(where->exp[0].relation == NOT_EXISTS)// && where->expNum == 1totalTupleNum)
+        countReverseScanNum<<<grid,block>>>(gpuFilter,totalTupleNum);
     if(idx == NULL)
         countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
     else{
