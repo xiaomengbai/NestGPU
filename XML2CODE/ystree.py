@@ -1151,7 +1151,7 @@ class TwoJoinNode(QueryPlanTreeBase):
         if self.select_list is None:
             sscs = str(None)
         else:
-            sscs = self.select_list.converted_exp_str
+            sscs = ",".join( eval_exp_list( self.select_list.tmp_exp_list ) )
 
         if self.where_condition is None:
             swc = str(None)
@@ -3455,7 +3455,7 @@ def split_subquery(tree):
                         subq_exps.append(par)
 
                 # Split the TableNode into a SelectProjectNode and a TableNode
-                if len(subq_exps) == 1:
+                if len(subq_exps) > 0:
                     # remove the subquery from the where list
                     __remove_para__(subq_exps[0])
 
@@ -3465,46 +3465,39 @@ def split_subquery(tree):
                     # tn.i_am_the_tree = i_am_the_tree
 
                     #if i_am_the_tree:
-                    spn.select_list = tree.select_list
+                    spn.select_list = FirstStepSelectList(None)
+                    for exp in exp_gen(subq_exps[0]):
+                        if isinstance(exp, YRawColExp):
+                            new_exp = copy.deepcopy(exp)
+                            spn.select_list.tmp_exp_list.append(new_exp)
+                            spn.select_list.dict_exp_and_alias[new_exp] = None
+                            break
+                    # spn.select_list = tree.select_list
                     spn.where_condition = FirstStepWhereCondition(None)
                     spn.where_condition.where_condition_exp = subq_exps[0]
                     spn.table_list = tree.table_list
-                    spn.table_alias = tree.table_alias
+                    spn.table_alias = None
+                    spn.table_alias_dict = tree.table_alias_dict
 
-                    tn_select_list = filter(lambda exp: isinstance(exp, YRawColExp), spn.select_list.tmp_exp_list)
+                    ## tn_select_list = filter(lambda exp: isinstance(exp, YRawColExp), spn.select_list.tmp_exp_list)
                     # [ tn_select_list.append(exp) for exp in exp_gen(subq_exps[0]) if isinstance(exp, YRawColExp) and exp not in tn_select_list ]
-                    [ tn_select_list.append(exp) for exp in exp_gen(spn.where_condition.where_condition_exp) if isinstance(exp, YRawColExp) and exp not in tn_select_list ]
+                    ## [ tn_select_list.append(exp) for exp in exp_gen(spn.where_condition.where_condition_exp) if isinstance(exp, YRawColExp) and exp not in tn_select_list ]
 
-                    # initialize the TableNode
-                    tn = TableNode()
-                    # tn.source = a_input
-                    # tn.i_am_the_tree = i_am_the_tree
-
-                    #if i_am_the_tree:
-                    tn.select_list = copy.deepcopy(tree.select_list)
-                    tn.select_list.tmp_exp_list = copy.deepcopy(tn_select_list)
-                    [ tn.select_list.dict_exp_and_alias.update({exp: exp.column_name}) for exp in tn.select_list.tmp_exp_list if isinstance(exp, YRawColExp) ]
-                    # push down the subquery exp
-                    tn.where_condition = copy.deepcopy(tree.where_condition)
-                    tn.table_name = tree.table_name
-                    tn.table_list = copy.deepcopy(tree.table_list)
-                    tn.table_alias = tree.table_alias
-
-                    spn.child = tn
                     spn.parent = tree.parent
-                    tn.parent = spn
+                    tree.parent = spn
+                    spn.child = split_subquery(tree)
+
+                    if len(subq_exps) == 1 and spn.child.select_list is None:
+                        spn.child.select_list = FirstStepSelectList(None)
+                        for exp in exp_gen(spn.child.where_condition.where_condition_exp):
+                            if isinstance(exp, YRawColExp):
+                                new_exp = copy.deepcopy(exp)
+                                spn.child.select_list.tmp_exp_list.append(new_exp)
+                                spn.child.select_list.dict_exp_and_alias[new_exp] = None
+                                break
 
                     return spn
         return tree
-                    # if isinstance(tree.parent, TwoJoinNode):
-                    #     if tree.parent.left_child == tree:
-                    #         tree.parent.left_child = spn
-                    #     else:
-                    #         tree.parent.right_child = spn
-                    # elif tree.parent is not None:
-                    #     tree.parent.child = spn
-                    # else:
-                    #     tree = spn
 
 def predicate_pushdown(tree):
 
@@ -3712,7 +3705,7 @@ def __gen_column_index__(exp,table_list,table_alias_dict):
                 index = tmp_table.get_column_index_by_name(exp.column_name)
                 new_exp = YRawColExp(exp.table_name,index)
                 new_exp.column_name = int(new_exp.column_name)
-                new_exp.column_type = exp.column_type
+                new_exp.column_type = tmp_table.get_column_type_by_name(exp.column_name)
         else:
             tmp_column = lookup_a_column(exp.column_name)
             tmp_table = None
@@ -3775,6 +3768,7 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
                                 if isinstance(e, YConsExp) and e.ref_col is not None and e.ref_col.table_name in table_list:
                                     new_col = __gen_column_index__(e.ref_col, table_list, table_alias_dict)
                                     e.ref_col.column_name = new_col.column_name
+                                    e.ref_col.column_type = new_col.column_type
                         if isinstance(node, TwoJoinNode):
                             join_exp = None
                             if node.join_explicit is True:
@@ -3786,6 +3780,7 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
                                 if isinstance(e, YConsExp) and e.ref_col is not None and e.ref_col.table_name in table_list:
                                     new_col = __gen_column_index__(e.ref_col, table_list, table_alias_dict)
                                     e.ref_col.column_name = new_col.column_name
+                                    e.ref_col.column_type = new_col.column_type
 
             elif isinstance(para,YConsExp):
                 # if para.ref_col is not None:
@@ -4300,13 +4295,10 @@ def gen_column_index(tree):
         gen_column_index(tree.child)
 
 def update_subquery_column_name(subquery, table_name, column_name, new_table_name, new_column_name):
-    a_col = YRawColExp(table_name, column_name)
-    new_a_col = __gen_column_index__(a_col, [table_name], {})
     for node in qpt_gen(subquery):
         if node.where_condition is not None:
-            print node.where_condition.where_condition_exp.evaluate()
             for exp in exp_gen(node.where_condition.where_condition_exp):
-                if isinstance(exp, YConsExp) and exp.ref_col is not None and exp.ref_col.table_name == new_a_col.table_name and exp.ref_col.column_name == new_a_col.column_name:
+                if isinstance(exp, YConsExp) and exp.ref_col is not None and exp.ref_col.table_name == table_name and exp.ref_col.column_name == column_name:
                     exp.ref_col.table_name = new_table_name
                     exp.ref_col.column_name = new_column_name
 
@@ -4409,7 +4401,7 @@ def gen_project_list(tree):
 
         else:
             while tmp_name in global_table_dict.keys():
-                tmp_name = tmp_name + "_1"
+                tmp_name = str(tmp_name) + "_1"
             tmp_schema = TableSchema(tmp_name,project_list)
             global_table_dict[tmp_name] = tmp_schema
 
@@ -4698,7 +4690,7 @@ def column_filtering(tree):
         if tree.left_child.select_list is None:
             tree.left_child.select_list = FirstStepSelectList(None)
 
-        if isinstance(tree.left_child,SelectProjectNode):
+        if isinstance(tree.left_child,SelectProjectNode) and tree.left_child.table_alias != None and tree.left_child.table_alias not in tree.left_child.table_alias_dict.keys():
             new_list = []
             new_dict = {}
             table_schema = lookup_a_table(tree.left_child.table_alias)
@@ -4724,7 +4716,7 @@ def column_filtering(tree):
         if tree.right_child.select_list is None:
             tree.right_child.select_list = FirstStepSelectList(None)
 
-        if isinstance(tree.right_child,SelectProjectNode):
+        if isinstance(tree.right_child,SelectProjectNode) and tree.right_child.table_alias != None and tree.right_child.table_alias not in tree.right_child.table_alias_dict.keys():
             new_list = []
             new_dict = {}
             table_schema = lookup_a_table(tree.right_child.table_alias)
@@ -4742,7 +4734,6 @@ def column_filtering(tree):
                     new_dict[tmp] = None
             tree.right_child.select_list.dict_exp_and_alias = new_dict
             tree.right_child.select_list.tmp_exp_list = new_list
-
         else:
             tree.right_child.select_list.dict_exp_and_alias = right_select_dict
             tree.right_child.select_list.tmp_exp_list = right_exp_list
@@ -4755,70 +4746,20 @@ def column_filtering(tree):
         new_select_dict = {}
         new_exp_list = []
 
-        if tree.select_list is None or tree.child.select_list is None:
-            print >>sys.stderr,"Internal Error:column_filtering"
-            exit(29)
-########shouldn't change the select_list of the sp. it may be used when generating index
-
-        child_exp_list = tree.child.select_list.tmp_exp_list
-        child_exp_dict = tree.child.select_list.dict_exp_and_alias
-
+        __select_list_filter__(tree.select_list, tree.child.table_list, tree.child.table_alias_dict, new_select_dict, new_exp_list)
         if tree.where_condition is not None:
-            for exp in exp_gen(tree.where_condition.where_condition_exp):
-                if isinstance(exp, YRawColExp):
-                    for child_exp in child_exp_list:
-                        if isinstance(exp, YRawColExp):
-                            if child_exp_dict[child_exp] == exp.column_name:
-                                if child_exp not in new_exp_list:
-                                    new_exp_list.append(child_exp)
-                                    new_select_dict[child_exp] = exp.column_name
-                                break
+            __add_func_to_select__(tree.where_condition.where_condition_exp, tree.child.table_list, tree.child.table_alias_dict, new_select_dict, new_exp_list)
 
-                            if exp.column_name == child_exp.column_name:
-                                if child_exp not in new_exp_list:
-                                    new_exp_list.append(child_exp)
-                                    new_select_dict[child_exp] = None
-                                break
-
-        for exp in tree.select_list.tmp_exp_list:
-            if isinstance(exp,YRawColExp):
-                for x in child_exp_list:
-                    if isinstance(x,YRawColExp):
-                        if child_exp_dict[x] == exp.column_name:
-                            if x not in new_exp_list:
-                                new_exp_list.append(x)
-                                new_select_dict[x] = exp.column_name
-                            break
-
-                        if exp.column_name == x.column_name:
-                            if x not in new_exp_list:
-                                new_exp_list.append(x)
-                                new_select_dict[x] = None
-                            break
-                    elif isinstance(x,YFuncExp):
-                        if child_exp_dict[x] == exp.column_name:
-                            if x not in new_exp_list:
-                                new_exp_list.append(x)
-                                new_select_dict[x] = None
-                            break
-
-            elif isinstance(exp,YFuncExp):
-                col_list = []
-                __get_func_para__(exp,col_list)
-                for tmp in col_list:
-                    tmp.table_name = ""
-
-                new_exp_list.append(exp)
-                new_select_dict[exp] = None
-
-            else:
-                new_exp_list.append(exp)
-                new_select_dict[exp] = None
+        if tree.child.select_list is None:
+            tree.child.select_list = FirstStepSelectList(None)
 
         tree.child.select_list.tmp_exp_list = new_exp_list
         tree.child.select_list.dict_exp_and_alias = new_select_dict
 
         column_filtering(tree.child)
+        ### Old comments ###
+########shouldn't change the select_list of the sp. it may be used when generating index
+
 
 
 def __gen_col_table_name__(exp,table_list,table_alias_dict):
@@ -5082,11 +5023,7 @@ def process_the_plan_tree(tree):
 
     gen_table_name(tree)
 
-    tree.debug(0)
     gen_column_index(tree)
-    tree.debug(0)
-
-    print "\n"
 
     return tree
 
@@ -5125,9 +5062,6 @@ def search_external_cols(tree, root):
 
         __traverse_exp_filter__(exp, all_column_exps, lambda e : isinstance(e, YRawColExp))
 
-        # print "table_list: ", table_list
-        # print "tree.table_alaias_dict: ", tree.table_alias_dict
-        # print "all_column_exps: ", eval_exp_list( all_column_exps )
         external_cols = []
         # external columns are columns not in the table list
         # external_cols = filter(lambda e : all( not column_in_table(e.column_name, t) for t in table_list), all_column_exps)
@@ -5144,9 +5078,6 @@ def search_external_cols(tree, root):
                         break
                 if not found:
                     external_cols.append(col)
-
-        # print "external_cols: ", eval_exp_list( external_cols )
-        # print "\n"
 
         for col in external_cols:
             external_table_found = False

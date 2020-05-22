@@ -70,4 +70,5 @@ others/config_project_env.sh
 
 output*
 check.pl
+check2.pl
 test.cpp

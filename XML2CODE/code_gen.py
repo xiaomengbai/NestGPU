@@ -944,15 +944,14 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
     if isinstance(currentNode, ystree.TwoJoinNode):
         pass_in_cols = map(lambda c: ystree.__trace_to_leaf__(currentNode, c, False), pass_in_cols)
 
-    for col in pass_in_cols:
-        colLen = type_length(col.table_name, col.column_name, col.column_type)
-        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-	if HostMempool == 1:
-            print >>fo, indent + "char *" + pass_in_var + " = (char *)host_mempool.alloc(" + colLen + ");"
-            # print >>fo, indent + "MEMPOOL_CHECK();"
-	else:
-            print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
-            print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
+    # for col in pass_in_cols:
+    #     colLen = type_length(col.table_name, col.column_name, col.column_type)
+    #     pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+    #     if HostMempool == 1:
+    #         print >>fo, indent + "char *" + pass_in_var + " = (char *)host_mempool.alloc(" + colLen + ");"
+    #     else:
+    #         print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
+    #         print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
 
 
     # if HostMempool == 1:
@@ -1062,7 +1061,14 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
 
     for col in pass_in_cols:
         pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
-        colLen = type_length(col.table_name, col.column_name, col.column_type)
+        if col.table_name == "CHILD":
+            childCol = currentNode.child.select_list.tmp_exp_list[int(col.column_name)]
+            if childCol.table_name in currentNode.child.table_alias_dict.keys():
+                colLen = type_length( currentNode.child.table_alias_dict[childCol.table_name], childCol.column_name, childCol.column_type)
+            else:
+                colLen = type_length(childCol.table_name, childCol.column_name, col.column_type)
+        else:
+            colLen = type_length(col.table_name, col.column_name, col.column_type)
 
         print >>fo, indent + baseIndent + "if(" + tableName + "->dataPos["+ str(indexDict[col.table_name + "." + str(col.column_name)]) + "] == MEM)"
         print >>fo, indent + baseIndent * 2 + "memcpy(" + pass_in_var + ", (char *)(" + tableName + "->content[" +  str(indexDict[col.table_name + "." + str(col.column_name)]) + "]) + tupleid * " + colLen + ", " + colLen + ");"
@@ -1082,8 +1088,10 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
     print >>fo, indent + baseIndent * 2 + ""
 
     if constant_len_res:
-        if rel in ["EXISTS", "NOT_EXISTS"]:
+        if rel in ["EXISTS"]:
             print >>fo, indent + baseIndent * 2 + "*(int *)(" + var_subqRes + " + tupleid * " + subq_res_size + ") = (" + resTable + "->tupleNum > 0);"
+        elif rel in ["NOT_EXISTS"]:
+            print >>fo, indent + baseIndent * 2 + "*(int *)(" + var_subqRes + " + tupleid * " + subq_res_size + ") = (" + resTable + "->tupleNum == 0);"
         elif rel in ["GTH", "GEQ", "LTH", "LEQ"]:
             # should consider if no qualified tuples in the subquery
             bound = "INT" if where.column_type == "INTEGER" else "FLOAT"
@@ -1272,6 +1280,12 @@ def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
     print >>fo, indent + "struct tableNode *" + resName + ";"
     print >>fo, indent + "{"
     indent += baseIndent
+    print >>fo, indent + "char * " + var_subqRes + ";"
+    if HostMempool == 1:
+	print >>fo, indent + "char *free_pos;"
+
+    if SubResMempool == 1:
+	print >>fo, indent + "char *free_gpu_pos;"
 
     colList   = []
     indexList = []
@@ -1406,9 +1420,10 @@ def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
                     return i
             return -1
 
+        pass_in_col_dict = {}
         for i in range(0, len(whereList)):
-            if isinstance(whereList[i], ystree.YRawColExp):
-                print whereList[i].evaluate()
+            # if isinstance(whereList[i], ystree.YRawColExp):
+            #     print whereList[i].evaluate()
 
             colIndex = whereIdx(whereList[i]) if isinstance(whereList[i], ystree.YRawColExp) else -1
             # if colIndex < 0:
@@ -1443,6 +1458,8 @@ def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
                 indexDict = {}
                 for j in range(0, len(indexList)):
                     indexDict[ "CHILD." + str(indexList[j])] = j
+
+                define_pass_in_cols(fo, indent, conList[i], pass_in_col_dict, spn)
                 generate_code_for_a_subquery(fo, lvl, whereList[i], relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, spn, "MEM")
 
             if isinstance(conList[i], ystree.YFuncExp) and conList[i].func_name == "SUBQ":
@@ -2074,6 +2091,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
         else:
             print >>fo, indent + "(" + relName + ".filter)->andOr = EXP;"
 
+        pass_in_col_dict = {}
         for i in range(0, len(expList)):
             exp = expList[i]
             left_col = exp.parameter_list[0]
@@ -2102,6 +2120,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
                     col.column_name = rOutList[j]
                     indexDict[ystree.__trace_to_leaf__(jn, col, False).evaluate()] = rPosList[j]
 
+                define_pass_in_cols(fo, indent, conList[i], pass_in_col_dict, jn)
                 generate_code_for_a_subquery(fo, lvl, left_col, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU")
 
                 print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &" + var_subqRes + ", sizeof(void *));"
@@ -2191,7 +2210,6 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
     indexList = []
     colList   = []
     generate_col_list(tn, indexList, colList)
-    print "indexList: ", indexList
 
     tablePreloaded = False
     selectList = tn.select_list.tmp_exp_list
@@ -2297,7 +2315,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
         # for exp in whereList:
         #     print exp
         # print "relList: ", relList
-        # print "conList: ", conList
+        # print "conList: ", covnList
 
         newWhereList = []
         whereLen = count_whereList(whereList, newWhereList)
@@ -2369,9 +2387,8 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                     return i
             return -1
 
+        pass_in_col_dict = {}
         for i in range(0, len(whereList)):
-            if isinstance(whereList[i], ystree.YRawColExp):
-                print whereList[i].evaluate()
 
             colIndex = whereIdx(whereList[i]) if isinstance(whereList[i], ystree.YRawColExp) else -1
             # if colIndex < 0:
@@ -2413,6 +2430,7 @@ def generate_code_for_a_table_node(fo, indent, lvl, tn):
                     indexDict[ tn.table_name + "." + str(indexList[j])] = j
                     if alias != None:
                         indexDict[ alias + "." + str(indexList[j])] = j
+                define_pass_in_cols(fo, indent, conList[i], pass_in_col_dict, tn)
 
                 generate_code_for_a_subquery(fo, lvl, whereList[i], relList[i], conList[i], tnName + "->tupleNum", tnName, indexDict, tn, "MEM")
 
@@ -2858,3 +2876,24 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
     print >>fo, indent + "}\n"
 
     return resName
+
+
+def define_pass_in_cols(fo, indent, con, pass_in_col_dict, node):
+    pass_in_cols = con.parameter_list[1:]
+    for col in pass_in_cols:
+        if col.table_name == "CHILD":
+            childCol = node.child.select_list.tmp_exp_list[int(col.column_name)]
+            if childCol.table_name in node.child.table_alias_dict.keys():
+                colLen = type_length( node.child.table_alias_dict[childCol.table_name], childCol.column_name, childCol.column_type)
+            else:
+                colLen = type_length(childCol.table_name, childCol.column_name, col.column_type)
+        else:
+            colLen = type_length(col.table_name, col.column_name, col.column_type)
+        pass_in_var = "_" + col.table_name + "_" + str(col.column_name)
+        if pass_in_var not in pass_in_col_dict.keys():
+            pass_in_col_dict[pass_in_var] = True
+	    if HostMempool == 1:
+                print >>fo, indent + "char *" + pass_in_var + " = (char *)host_mempool.alloc(" + colLen + ");"
+	    else:
+                print >>fo, indent + "char *" + pass_in_var + " = (char *)malloc(" + colLen + ");"
+                print >>fo, indent + "CHECK_POINTER(" + pass_in_var + ");"
