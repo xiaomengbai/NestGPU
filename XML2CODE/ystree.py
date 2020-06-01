@@ -4073,12 +4073,21 @@ def gen_column_index(tree):
 
             if tree.where_condition is not None:
                 where_exp = tree.where_condition.where_condition_exp
+
+                correlated_cols = {}
+                for exp in exp_gen(where_exp):
+                    if isinstance(exp, YFuncExp) and exp.func_name == "SUBQ":
+                        for par in exp.parameter_list[1:]:
+                            correlated_cols[par] = exp.parameter_list[0].cons_value
+
                 col_list = []
                 __get_func_para__(where_exp,col_list)
                 for tmp in col_list:
                     for x in left_exp:
                         if isinstance(x,YRawColExp):
                             if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
+                                if tmp in correlated_cols.keys():
+                                    update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "LEFT", left_exp.index(x))
                                 tmp.table_name = "LEFT"
                                 tmp.column_name = left_exp.index(x)
                                 if "LEFT" not in tree.table_list:
@@ -4086,6 +4095,8 @@ def gen_column_index(tree):
                                 break
                         else:
                             if tmp.column_name == left_select[x]:
+                                if tmp in correlated_cols.keys():
+                                    update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "LEFT", left_exp.index(x))
                                 tmp.table_name = "LEFT"
                                 tmp.column_name = left_exp.index(x)
                                 if "LEFT" not in tree.table_list:
@@ -4186,6 +4197,13 @@ def gen_column_index(tree):
 
             if tree.where_condition is not None:
                 where_exp = tree.where_condition.where_condition_exp
+
+                correlated_cols = {}
+                for exp in exp_gen(where_exp):
+                    if isinstance(exp, YFuncExp) and exp.func_name == "SUBQ":
+                        for par in exp.parameter_list[1:]:
+                            correlated_cols[par] = exp.parameter_list[0].cons_value
+
                 col_list = []
                 __get_func_para__(where_exp,col_list)
 
@@ -4193,6 +4211,8 @@ def gen_column_index(tree):
                     for x in right_exp:
                         if isinstance(x,YRawColExp):
                             if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
+                                if tmp in correlated_cols.keys():
+                                    update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "RIGHT", left_exp.index(x))
                                 tmp.table_name = "RIGHT"
                                 tmp.column_name = right_exp.index(x)
                                 if "RIGHT" not in tree.table_list:
@@ -4200,6 +4220,8 @@ def gen_column_index(tree):
                                 break
                         else:
                             if tmp.column_name == right_select[x]:
+                                if tmp in correlated_cols.keys():
+                                    update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "RIGHT", left_exp.index(x))
                                 tmp.table_name = "RIGHT"
                                 tmp.column_name = right_exp.index(x)
                                 if "RIGHT" not in tree.table_list:

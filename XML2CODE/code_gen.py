@@ -941,8 +941,8 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
     print >>fo, ""
     print >>fo, indent + "// Process the subquery"
 
-    if isinstance(currentNode, ystree.TwoJoinNode):
-        pass_in_cols = map(lambda c: ystree.__trace_to_leaf__(currentNode, c, False), pass_in_cols)
+    # if isinstance(currentNode, ystree.TwoJoinNode):
+    #     pass_in_cols = map(lambda c: ystree.__trace_to_leaf__(currentNode, c, False), pass_in_cols)
 
     # for col in pass_in_cols:
     #     colLen = type_length(col.table_name, col.column_name, col.column_type)
@@ -1065,6 +1065,12 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
             childCol = currentNode.child.select_list.tmp_exp_list[int(col.column_name)]
             if childCol.table_name in currentNode.child.table_alias_dict.keys():
                 colLen = type_length( currentNode.child.table_alias_dict[childCol.table_name], childCol.column_name, childCol.column_type)
+            else:
+                colLen = type_length(childCol.table_name, childCol.column_name, col.column_type)
+        elif col.table_name == "LEFT":
+            childCol = currentNode.left_child.select_list.tmp_exp_list[int(col.column_name)]
+            if childCol.table_name in currentNode.left_child.table_alias_dict.keys():
+                colLen = type_length( currentNode.left_child.table_alias_dict[childCol.table_name], childCol.column_name, childCol.column_type)
             else:
                 colLen = type_length(childCol.table_name, childCol.column_name, col.column_type)
         else:
@@ -2114,11 +2120,11 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
                 for j in range(0, len(lOutList)):
                     col = ystree.YRawColExp("LEFT", "")
                     col.column_name = lOutList[j]
-                    indexDict[ystree.__trace_to_leaf__(jn, col, False).evaluate()] = lPosList[j]
+                    indexDict[col.evaluate()] = lPosList[j]
                 for j in range(0, len(rOutList)):
                     col = ystree.YRawColExp("RIGHT", "")
-                    col.column_name = rOutList[j]
-                    indexDict[ystree.__trace_to_leaf__(jn, col, False).evaluate()] = rPosList[j]
+                    col.column_name  = rOutList[j]
+                    indexDict[col.evaluate()] = rPosList[j]
 
                 define_pass_in_cols(fo, indent, conList[i], pass_in_col_dict, jn)
                 generate_code_for_a_subquery(fo, lvl, left_col, exp.func_name, right_col, "joinRes->tupleNum", "joinRes", indexDict, jn, "GPU")
