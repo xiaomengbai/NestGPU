@@ -1108,7 +1108,7 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
 
             print >>fo, indent + baseIndent * 2 + "if(mn.table->tupleNum)"
             if where.column_type in ["INTEGER", "DATE"]:
-                print >>fo, indent + baseIndent * 3 + "*((int *)(" + var_subqRes + " + tupleid * sizeof(int))) = (int)(*((float *)final));"
+                print >>fo, indent + baseIndent * 3 + "memcpy(" + var_subqRes +  " + tupleid * sizeof(float), final, sizeof(int));"
                 print >>fo, indent + baseIndent * 2 + "else"
                 print >>fo, indent + baseIndent * 3 + "*((int *)(" + var_subqRes + " + tupleid * sizeof(int))) = " + bound + ";"
             elif where.column_type in ["DECIMAL"]:

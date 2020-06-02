@@ -4212,7 +4212,7 @@ def gen_column_index(tree):
                         if isinstance(x,YRawColExp):
                             if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
                                 if tmp in correlated_cols.keys():
-                                    update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "RIGHT", left_exp.index(x))
+                                    update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "RIGHT", right_exp.index(x))
                                 tmp.table_name = "RIGHT"
                                 tmp.column_name = right_exp.index(x)
                                 if "RIGHT" not in tree.table_list:
@@ -4221,7 +4221,7 @@ def gen_column_index(tree):
                         else:
                             if tmp.column_name == right_select[x]:
                                 if tmp in correlated_cols.keys():
-                                    update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "RIGHT", left_exp.index(x))
+                                    update_subquery_column_name(subqueries[correlated_cols[tmp]], tmp.table_name, tmp.column_name, "RIGHT", right_exp.index(x))
                                 tmp.table_name = "RIGHT"
                                 tmp.column_name = right_exp.index(x)
                                 if "RIGHT" not in tree.table_list:
