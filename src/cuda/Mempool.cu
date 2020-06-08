@@ -1,5 +1,5 @@
 #include "../include/Mempool.h"
-
+#include <stdint.h>
 Mempool::Mempool(int _type) :
     type(_type)
 {
@@ -57,5 +57,17 @@ char *Mempool::alloc(size_t _size)
 
     char *tmp = free;
     free = free + _size;
+    return tmp;
+}
+
+char *Mempool::alloc_memalign(size_t _size)
+{
+    char *tmp;
+    if ( ((uintptr_t)free & 0x7) == 0 )
+        tmp = free;
+    else
+        tmp = (char *)(((uintptr_t)free & (~0x7)) + 0x8);
+    //char *tmp = (free & 0x7 == 0) ? free : (free + ((free >> 3) + 1) << 3 );
+    free = tmp + _size;
     return tmp;
 }

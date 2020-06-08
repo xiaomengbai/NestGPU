@@ -23,7 +23,7 @@ TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
 
-SQL_FILE := $(TPCH_TEST_DIR)/q17.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q20.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 

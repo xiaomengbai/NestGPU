@@ -25,6 +25,7 @@ public:
     void resize(size_t newsize);
 
     char *alloc(size_t _size);
+    char *alloc_memalign(size_t _size);
 private:
 
     char * base;

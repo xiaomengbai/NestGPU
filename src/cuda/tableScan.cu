@@ -715,7 +715,8 @@ __global__ static void genScanFilter_init_int_gth_vec(char *col, long tupleNum, 
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con = ((int*)col)[i] > where[i];
+        con = __int2float_rd( ((int *)col)[i] ) > __int_as_float( where[i] );
+        //con = ((int*)col)[i] > where[i];
         filter[i] = con;
     }
 }
@@ -2522,7 +2523,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         if(dev_mp == NULL)
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuExp, sizeof(struct whereExp)));
         else
-            gpuExp = (struct whereExp *) dev_mp->alloc(sizeof(struct whereExp));
+            gpuExp = (struct whereExp *) dev_mp->alloc_memalign(sizeof(struct whereExp));
         //CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
         /*
@@ -2599,7 +2600,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
             for(int i = 0; i < sn->tn->tupleNum; i++) {
                 // [int: vec_len][char *: string1][char *: string2] ...
                 size_t vec2_size = *((*(int ***)(where->exp[0].content))[i]) * sn->tn->attrSize[index] + sizeof(int);
-                CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) &vec1_addrs[i], vec2_size) );
+                if(dev_mp == NULL)
+                    CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **) &vec1_addrs[i], vec2_size) );
+                else
+                    vec1_addrs[i] = (void *) dev_mp->alloc_memalign(vec2_size);
                 CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy( vec1_addrs[i], (*(char ***)where->exp[0].content)[i], vec2_size, cudaMemcpyHostToDevice) );
                 free( (*(char ***)where->exp[0].content)[i] );
             }
@@ -3335,10 +3339,10 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         }
 
         if(res_mp == NULL)
-        {
-            fprintf(stderr, "GPU requires %d bytes mem space\n", count * sn->tn->attrSize[index]);
+        // {
+        //     fprintf(stderr, "GPU requires %d bytes mem space (%d * %d)\n", count * sn->tn->attrSize[index], count, sn->tn->attrSize[index]);
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &result[i], count * sn->tn->attrSize[index]));
-        }
+        // }
         else
             result[i] = (char *) res_mp->alloc(count * sn->tn->attrSize[index]);
     }

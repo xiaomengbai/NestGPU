@@ -956,7 +956,7 @@ class SelectProjectNode(QueryPlanTreeBase):
 
         name = "None" if self.name is None else self.name
         star = "*" if self.correlated else ""
-        print pb, star + "SelectProjectNode", "(" + str(name) + ")", str(self.table_alias), "[" + str(sscs) + "]", "[" + str(swc) + "]"
+        print pb, star + "SelectProjectNode", "(" + str(name) + ")", str(self.table_alias), str(sscs), "[" + str(swc) + "]"
         self.child.debug(level + 1)
 
     def __str__(self):
@@ -1011,7 +1011,7 @@ class TableNode(QueryPlanTreeBase):
             swc = self.where_condition.where_condition_exp.evaluate()
 
 
-        tmp_str_select_list = "[" + sscs + "]"
+        tmp_str_select_list = sscs
         tmp_str_where_condition = "[" + str(swc) + "]"
 
         name = "None" if self.name is None else self.name
@@ -3447,6 +3447,12 @@ def split_subquery(tree):
             scan_exp = tree.where_condition.where_condition_exp
             # We can only splitting the table node with the AND condition
             if isinstance(scan_exp, YFuncExp) and scan_exp.func_name == "AND":
+                # If nothing left in the where clause, clear it
+                if len(scan_exp.parameter_list) == 0:
+                    tree.where_condition = None
+                    return tree
+
+                # Search for subqueries
                 subq_exps = []
                 for par in scan_exp.parameter_list:
                     subq_funcs = []
@@ -3464,14 +3470,15 @@ def split_subquery(tree):
                     # spn.source = a_input
                     # tn.i_am_the_tree = i_am_the_tree
 
-                    #if i_am_the_tree:
-                    spn.select_list = FirstStepSelectList(None)
-                    for exp in exp_gen(subq_exps[0]):
-                        if isinstance(exp, YRawColExp):
-                            new_exp = copy.deepcopy(exp)
-                            spn.select_list.tmp_exp_list.append(new_exp)
-                            spn.select_list.dict_exp_and_alias[new_exp] = None
-                            break
+                    # spn.select_list = FirstStepSelectList(None)
+                    spn.select_list = copy.deepcopy(tree.select_list)
+                    tree.select_list = FirstStepSelectList(None)
+                    # for exp in exp_gen(subq_exps[0]):
+                    #     if isinstance(exp, YRawColExp):
+                    #         new_exp = copy.deepcopy(exp)
+                    #         spn.select_list.tmp_exp_list.append(new_exp)
+                    #         spn.select_list.dict_exp_and_alias[new_exp] = None
+                    #         break
                     # spn.select_list = tree.select_list
                     spn.where_condition = FirstStepWhereCondition(None)
                     spn.where_condition.where_condition_exp = subq_exps[0]
@@ -3487,14 +3494,14 @@ def split_subquery(tree):
                     tree.parent = spn
                     spn.child = split_subquery(tree)
 
-                    if len(subq_exps) == 1 and spn.child.select_list is None:
-                        spn.child.select_list = FirstStepSelectList(None)
-                        for exp in exp_gen(spn.child.where_condition.where_condition_exp):
-                            if isinstance(exp, YRawColExp):
-                                new_exp = copy.deepcopy(exp)
-                                spn.child.select_list.tmp_exp_list.append(new_exp)
-                                spn.child.select_list.dict_exp_and_alias[new_exp] = None
-                                break
+                    # if len(subq_exps) == 1 and spn.child.select_list is None:
+                    #     spn.child.select_list = FirstStepSelectList(None)
+                    #     for exp in exp_gen(spn.child.where_condition.where_condition_exp):
+                    #         if isinstance(exp, YRawColExp):
+                    #             new_exp = copy.deepcopy(exp)
+                    #             spn.child.select_list.tmp_exp_list.append(new_exp)
+                    #             spn.child.select_list.dict_exp_and_alias[new_exp] = None
+                    #             break
 
                     return spn
         return tree
@@ -4765,8 +4772,8 @@ def column_filtering(tree):
 
     elif isinstance(tree,SelectProjectNode):
 
-        new_select_dict = {}
-        new_exp_list = []
+        new_select_dict = tree.child.select_list.dict_exp_and_alias
+        new_exp_list = tree.child.select_list.tmp_exp_list
 
         __select_list_filter__(tree.select_list, tree.child.table_list, tree.child.table_alias_dict, new_select_dict, new_exp_list)
         if tree.where_condition is not None:

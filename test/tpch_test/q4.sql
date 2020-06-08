@@ -42,7 +42,6 @@ where
     where
       l_orderkey > o_orderkey
       and l_commitdate < l_receiptdate
-      and l_partkey > 20000
   )
 group by
   o_orderpriority
