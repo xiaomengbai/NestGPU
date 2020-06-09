@@ -7,6 +7,10 @@ help:
 	@echo "tables        generate tables ($(TABLES)) to $(DATA_DIR)"
 	@echo "loader        generate the loader ($(LOADER))"
 	@echo "load-columns  generate column files to $(DATA_DIR)"
+	@echo ""
+	@echo 'reload-tables SCALE=$${SCALE}'
+	@echo '              reload all tables with a specific $${SCALE} (default as 0.1).'
+	@echo ""
 	@echo "run           run the gpudb"
 	@echo "pgsql-q%      run q% with pgsql"
 	@echo ""
@@ -23,7 +27,7 @@ TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
 
-SQL_FILE := $(TPCH_TEST_DIR)/q20.sql
+SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
 
 
@@ -142,20 +146,20 @@ TABLES := supplier part customer partsupp orders lineitem nation region # All ta
 #TABLES := supplier part customer partsupp nation region  # Table only for Q2 related queries!
 
 DEFAULT_SCALE := 0.1
+SCALE ?= $(DEFAULT_SCALE)
 
 # SUPPLIER_SCALE := 2
 # PART_SCALE     := 3
 # CUSTOMER_SCALE := 4
 
-SUPPLIER_SCALE ?= $(DEFAULT_SCALE)
-PART_SCALE     ?= $(DEFAULT_SCALE)
-CUSTOMER_SCALE ?= $(DEFAULT_SCALE)
-PARTSUPP_SCALE ?= $(DEFAULT_SCALE)
-ORDERS_SCALE   ?= $(DEFAULT_SCALE)
-LINEITEM_SCALE ?= $(DEFAULT_SCALE)
-NATION_SCALE   ?= $(DEFAULT_SCALE)
-REGION_SCALE   ?= $(DEFAULT_SCALE)
-
+SUPPLIER_SCALE ?= $(SCALE)
+PART_SCALE     ?= $(SCALE)
+CUSTOMER_SCALE ?= $(SCALE)
+PARTSUPP_SCALE ?= $(SCALE)
+ORDERS_SCALE   ?= $(SCALE)
+LINEITEM_SCALE ?= $(SCALE)
+NATION_SCALE   ?= $(SCALE)
+REGION_SCALE   ?= $(SCALE)
 
 DATA_DIR := test/tables
 TABLE_FILES := $(foreach table,$(TABLES),$(DATA_DIR)/$(table).tbl)
@@ -214,6 +218,12 @@ $(SCHEMA_H): $(SCHEMA_GEN_PY) $(SCHEMA) $(SCHEMA_PY) $(CONFIG_PY)
 LOAD_OPTS := --datadir $(DATA_DIR) $(foreach table,$(TABLES), --$(table) $(DATA_DIR)/$(table).tbl)
 load-columns: $(TABLE_FILES) $(LOADER)
 	$(LOADER) $(LOAD_OPTS)
+
+# target: reload-tables
+#   reload all tables with a specific scale. If no specific scale given, 0.1 will be used
+# usage: make reload-tables SCALE=0.2
+reload-tables: clean-all load-columns
+	make -C test/tpch_psql load-tables
 
 
 # target: gpudb
