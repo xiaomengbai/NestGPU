@@ -19,7 +19,7 @@
 
 #define BILLION     1000000000
 #define BLOCKNUM    (100*1024*1024)
-#define HSIZE 2891072
+#define HSIZE 112891072
 #define FLOAT_MAX 0x7f800000
 #define FLOAT_MIN 0xff800000
 

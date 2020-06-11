@@ -315,6 +315,8 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
         CHECK_POINTER(res->attrType);
         res->attrSize = (int *) malloc(sizeof(int) * res->totalAttr);
         CHECK_POINTER(res->attrSize);
+        res->attrIndex = (int *) malloc(sizeof(int) * res->totalAttr);
+        CHECK_POINTER(res->attrIndex);
         res->attrTotalSize = (int *) malloc(sizeof(int) * res->totalAttr);
         CHECK_POINTER(res->attrTotalSize);
         res->dataPos = (int *) malloc(sizeof(int) * res->totalAttr);
@@ -326,6 +328,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
     } else {
         res->attrType = (int *) host_mp->alloc((sizeof(int) * res->totalAttr));
         res->attrSize = (int *) host_mp->alloc((sizeof(int) * res->totalAttr));
+        res->attrIndex = (int *) host_mp->alloc((sizeof(int) * res->totalAttr));
         res->attrTotalSize = (int *) host_mp->alloc((sizeof(int) * res->totalAttr));
         res->dataPos = (int *) host_mp->alloc((sizeof(int) * res->totalAttr));
         res->dataFormat = (int *) host_mp->alloc(sizeof(int) * res->totalAttr);
@@ -391,7 +394,7 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
     CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
     clock_gettime(CLOCK_REALTIME, &endS2);
     pp->groupby_step2_copyToDevice += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
-            
+
     if(gbConstant != 1){
 
         //Start timer for Step 3 - build_groupby_key kernel
@@ -466,8 +469,11 @@ struct tableNode * groupBy(struct groupByNode * gb, struct statistic * pp,
 
         if (dev_mp == NULL)
             CUDA_SAFE_CALL(cudaMalloc((void**)&gpu_psum,HSIZE*sizeof(int)));
-        else
+        else{
+            printf("HSIZE * sizeof(int) is %d\n", HSIZE * sizeof(int));
+            printf("free size is %lu\n", dev_mp->freesize());
             gpu_psum = (int *) dev_mp->alloc(HSIZE * sizeof(int));
+        }
         scanImpl(gpu_hashNum,HSIZE,gpu_psum,pp);
 
         if (dev_mp == NULL) {

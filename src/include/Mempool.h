@@ -10,7 +10,7 @@
 class Mempool {
 public:
     static const size_t CPU_INIT_SIZE = 128 * 1024 * 1024;
-    static const size_t GPU_INIT_SIZE = 128 * 1024 * 1024 * 10;
+    static const size_t GPU_INIT_SIZE = 512 * 1024 * 1024;
 
     Mempool(int _type);
     virtual ~Mempool();

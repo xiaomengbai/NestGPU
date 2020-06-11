@@ -1296,6 +1296,8 @@ def generate_code_for_a_select_project_node(fo, indent, lvl, spn):
     colList   = []
     indexList = []
     generate_col_list(spn, indexList, colList)
+    print "indexList: ", indexList
+    print "colList: ", colList
 
     selectList = spn.select_list.tmp_exp_list
 

@@ -58,6 +58,7 @@ static void mergeIntoTable(struct tableNode *dst, struct tableNode * src, struct
     if (dst->attrType == NULL){
         dst->attrType = (int *) malloc(sizeof(int) * dst->totalAttr);
         dst->attrSize = (int *) malloc(sizeof(int) * dst->totalAttr);
+        dst->attrIndex = (int *) malloc(sizeof(int) * dst->totalAttr);
         dst->attrTotalSize = (int *) malloc(sizeof(int) * dst->totalAttr);
         dst->dataPos = (int *) malloc(sizeof(int) * dst->totalAttr);
         dst->dataFormat = (int *) malloc(sizeof(int) * dst->totalAttr);
@@ -65,6 +66,7 @@ static void mergeIntoTable(struct tableNode *dst, struct tableNode * src, struct
         for(int i=0;i<dst->totalAttr;i++){
             dst->attrType[i] = src->attrType[i];
             dst->attrSize[i] = src->attrSize[i];
+            dst->attrIndex[i] = src->attrIndex[i];
             dst->attrTotalSize[i] = src->attrTotalSize[i];
             dst->dataPos[i] = MEM;
             dst->dataFormat[i] = src->dataFormat[i];
@@ -102,7 +104,7 @@ static void mergeIntoTable(struct tableNode *dst, struct tableNode * src, struct
     pp->total += timeE/(1000*1000) ;
 }
 
-static void freeTable(struct tableNode * tn){
+static void freeTable(struct tableNode * tn, const bool free_flag = true){
     int i;
 
     for(i=0;i<tn->totalAttr;i++){
@@ -118,30 +120,36 @@ static void freeTable(struct tableNode * tn){
             cudaFreeHost(tn->content[i]);
     }
 
-    free(tn->attrType);
+    if(free_flag)
+        free(tn->attrType);
     tn->attrType = NULL;
-    free(tn->attrSize);
+    if(free_flag)
+        free(tn->attrSize);
     tn->attrSize = NULL;
-    free(tn->attrTotalSize);
+    if(free_flag)
+        free(tn->attrTotalSize);
     tn->attrTotalSize = NULL;
-    free(tn->dataFormat);
+    if(free_flag)
+        free(tn->dataFormat);
     tn->dataFormat = NULL;
-    free(tn->dataPos);
+    if(free_flag)
+        free(tn->dataPos);
     tn->dataPos = NULL;
-    free(tn->content);
+    if(free_flag)
+        free(tn->content);
     tn->content = NULL;
 
-    //Free indexed data 
+    //Free indexed data
     if (tn->colIdxNum > 0){
         free(tn->colIdx);
         tn->colIdx = NULL;
         if(tn->indexPos == MEM){
-            for(i=0;i<tn->colIdxNum;i++){ 
+            for(i=0;i<tn->colIdxNum;i++){
                 free(tn->contentIdx[i]);
                 free(tn->posIdx[i]);
             }
         }else if(tn->indexPos == GPU){
-            for(i=0;i<tn->colIdxNum;i++){ 
+            for(i=0;i<tn->colIdxNum;i++){
                 cudaFree(tn->contentIdx[i]);
                 cudaFree(tn->posIdx[i]);
             }
@@ -365,9 +373,9 @@ static int hashJoinGPUMemSize(joinNode *jn, bool prehash)
     return memsize;
 }
 
-static int groupByGPUMemSize(struct groupByNode *gb)
+static size_t groupByGPUMemSize(struct groupByNode *gb)
 {
-    int memsize = 0;
+    size_t memsize = 0;
 
     int gpuGbColNum;
     int gbConstant = 0;
@@ -379,10 +387,13 @@ static int groupByGPUMemSize(struct groupByNode *gb)
     }
 
     memsize += gb->table->totalAttr * sizeof(char *); //gpuContent
+    size_t alignedGpuTupleNum = gb->table->tupleNum;
+    NP2(alignedGpuTupleNum);
+
     if(gbConstant != 1){
-        memsize += sizeof(int) * gb->groupByColNum * 3; // gpuGbType + gpuGbSize + gpuGbIndex
-        memsize += sizeof(int) * gb->table->tupleNum; // gpuGbKey
-        memsize += sizeof(int) * HSIZE * 3; // gpu_hashNum + gpu_groupNum + gpu_psum
+        memsize += sizeof(int) * (size_t) gb->groupByColNum * 3; // gpuGbType + gpuGbSize + gpuGbIndex
+        memsize += sizeof(int) * (size_t) alignedGpuTupleNum; // gpuGbKey
+        memsize += sizeof(int) * (size_t) HSIZE * 3; // gpu_hashNum + gpu_groupNum + gpu_psum
         memsize += sizeof(int); // gpuGbCount
     }
     memsize += sizeof(char *) * gb->outputAttrNum; // gpuResult

@@ -67,6 +67,7 @@ test/tpch_psql/*.output
 others/config_project_env.sh
 *.bak
 
+test/tables-*
 
 output*
 check.pl

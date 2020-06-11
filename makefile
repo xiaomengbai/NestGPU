@@ -1,4 +1,4 @@
-.PHONY: help tables loader load-columns driver gpudb run clean clean-gpudb clean-loader clean-all
+.PHONY: help tables loader load-columns driver gpudb run clean clean-gpudb clean-loader clean-all clean-tables
 
 help:
 	@echo "help          print this message"
@@ -8,8 +8,10 @@ help:
 	@echo "loader        generate the loader ($(LOADER))"
 	@echo "load-columns  generate column files to $(DATA_DIR)"
 	@echo ""
-	@echo 'reload-tables SCALE=$${SCALE}'
-	@echo '              reload all tables with a specific $${SCALE} (default as 0.1).'
+	@echo 'switch-tables SCALE={1, 5, 10, 15, 20}'
+	@echo '              link tables at differnt scales at different scales'
+	@echo "              need reload-tables after this"
+	@echo 'reload-tables load columns for gpudb and load tables for pgsql'
 	@echo ""
 	@echo "run           run the gpudb"
 	@echo "pgsql-q%      run q% with pgsql"
@@ -27,10 +29,8 @@ TPCH_SCHEMA := $(TPCH_TEST_DIR)/tpch.schema
 
 SCHEMA := $(TPCH_SCHEMA)
 
-SQL_FILE := $(TPCH_TEST_DIR)/q2.sql
+SQL_FILE ?= $(TPCH_TEST_DIR)/q2.sql
 #SQL_FILE := $(TPCH_TEST_DIR)/q2_unnested.sql
-
-
 
 # --- Synthetic Queries ---
 #SQL_FILE := $(TPCH_TEST_DIR)/tpch_like/typeJ.sql
@@ -128,7 +128,7 @@ GPU_OPT := --base
 
 pgsql-%:
 	make -C test/tpch_psql run-$*
-	tail test/tpch_psql/$*.output
+	tail -n 30 test/tpch_psql/$*.output
 
 
 # build test/dbgen/dbgen for generating tables
@@ -220,10 +220,18 @@ load-columns: $(TABLE_FILES) $(LOADER)
 	$(LOADER) $(LOAD_OPTS)
 
 # target: reload-tables
-#   reload all tables with a specific scale. If no specific scale given, 0.1 will be used
-# usage: make reload-tables SCALE=0.2
-reload-tables: clean-all load-columns
+#   reload all tables in the $(DATA_DIR)
+# usage: make reload-tables
+reload-tables: load-columns
 	make -C test/tpch_psql load-tables
+
+
+switch-tables:
+	if [ ! -d $(DATA_DIR) ]; then \
+	  mkdir $(DATA_DIR); \
+	fi
+	rm -f $(DATA_DIR)/*.tbl
+	ln -t $(DATA_DIR) $(DATA_DIR)-$(SCALE)/*
 
 
 # target: gpudb
@@ -252,6 +260,12 @@ run: gpudb
 
 # clean
 clean: clean-gpudb
+clean-tables:
+	if [ -d $(DATA_DIR) ]; then \
+	  rm -f $(DATA_DIR)/*; \
+	  rm -r $(DATA_DIR); \
+	fi
+
 clean-gpudb:
 	$(MAKE) -C $(CUDA_DIR) clean
 	rm -f $(CUDA_DRIVER)
@@ -262,9 +276,9 @@ clean-loader:
 	rm -f $(SCHEMA_H)
 
 clean-all: clean-gpudb clean-loader
-	$(MAKE) -C $(DBGEN_DIR) clean
 	if [ -d $(DATA_DIR) ]; then \
 	  rm -f $(DATA_DIR)/*; \
 	  rm -r $(DATA_DIR); \
 	fi
 	$(MAKE) -C test/tpch_psql clean-tables
+

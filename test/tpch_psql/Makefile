@@ -25,11 +25,8 @@ init-db:
 	fi
 
 load-tables:
-	for t in $(TABLES); do \
-	  if [ ! -e load_data/$$t ]; then \
-	    cp ../tables/$$t load_data/$$t; \
-	  fi; \
-	done
+	rm -f load_data/*.tbl
+	ln -t load_data/ ../tables/*.tbl
 	$(PSQL_DIR)/bin/pg_ctl -D $(PSQL_DIR)/data -l $(PSQL_DIR)/data/logfile start
 	$(PSQL_DIR)/bin/psql testdb -f load_data/load_schema.sql
 	for t in $(TABLES); do \
