@@ -760,8 +760,8 @@ __global__ static void genScanFilter_init_int_lth_vec(char *col, long tupleNum, 
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        //con = __int2float_rd( ((int *)col)[i] ) < __int_as_float( where[i] );
-        con = ((int *)col)[i] < where[i];
+        con = __int2float_rd( ((int *)col)[i] ) < __int_as_float( where[i] );
+        //con = ((int *)col)[i] < where[i];
         filter[i] = con;
     }
 }

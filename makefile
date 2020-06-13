@@ -231,6 +231,13 @@ switch-tables:
 	  mkdir $(DATA_DIR); \
 	fi
 	rm -f $(DATA_DIR)/*.tbl
+	rm -f $(DATA_DIR)/PART*
+	rm -f $(DATA_DIR)/SUPPLIER*
+	rm -f $(DATA_DIR)/LINEITEM*
+	rm -f $(DATA_DIR)/CUSTOMER*
+	rm -f $(DATA_DIR)/ORDERS*
+	rm -f $(DATA_DIR)/REGION*
+	rm -f $(DATA_DIR)/NATION*
 	ln -t $(DATA_DIR) $(DATA_DIR)-$(SCALE)/*
 
 

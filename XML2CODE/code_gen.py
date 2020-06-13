@@ -1006,10 +1006,14 @@ def generate_code_for_a_subquery(fo, lvl, where, rel, con, tupleNum, tableName, 
         print >>fo, indent + "char *correlated_col_sort;\n"
 
     for pair in correlated_pairs:
+        print pair[0].evaluate()
+        print pair[1].evaluate()
         if isinstance(pair[1], ystree.YRawColExp):
             # check if a column has been pre-loaded
             is_col_preloaded = lambda col: loaded_table_list[col.table_name] is not None and any(map(lambda c: col.compare(c[1]), loaded_table_list[col.table_name]))
             col_idx_preloaded = lambda col: map(lambda c: col.compare(c[1]), loaded_table_list[col.table_name]).index(True)
+            is_col_preloaded = lambda col: True
+
             if is_col_preloaded(pair[0].ref_col) and is_col_preloaded(pair[1]):
                 passed_in_idx = indexDict[pair[0].ref_col.table_name + "." + str(pair[0].ref_col.column_name)]
                 correlated_table_node = pair[1].table_name.lower() + "Table"
@@ -2844,7 +2848,7 @@ def generate_code_for_loading_a_table(fo, indent, t_name, c_list):
         print >>fo, indent + baseIndent + "mergeIntoTable(" + resName + "," + tnName +", &context, &pp);"
 
     print >>fo, indent + baseIndent + "clock_gettime(CLOCK_REALTIME, &diskStart);"
-    print >>fo, indent + baseIndent + "freeTable(" + tnName + ");"
+    print >>fo, indent + baseIndent + "freeTable(" + tnName + ", false);"
     if CODETYPE == 1:
         print >>fo, indent + baseIndent + "clFinish(context.queue);"
 
