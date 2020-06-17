@@ -5,11 +5,11 @@ from
   part,
   (
     select
-      0.2 * avg(l_quantity) as avg_quantity, l_partkey as li0_partkey
+      avg(l_quantity * 0.2) as avg_quantity, l_partkey as li0_partkey
     from
       lineitem
     group by
-      li0_partkey
+      l_partkey
   ) li0
 where
   p_partkey = l_partkey
