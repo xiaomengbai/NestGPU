@@ -35,7 +35,7 @@ Several configurable variables:
 """
 
 joinType = 0
-POS = 0
+POS = 1
 CODETYPE = 0
 SOA = 0
 HostMempool = 1

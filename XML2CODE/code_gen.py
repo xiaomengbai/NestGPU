@@ -1940,9 +1940,9 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
                             index = index + 1
 
     leftIndex, rightIndex = get_join_indices(jn)
-    print "leftIndex: ", leftIndex
-    print "rightIndex: ", rightIndex
-    jn.debug(0)
+    # print "leftIndex: ", leftIndex
+    # print "rightIndex: ", rightIndex
+    # jn.debug(0)
 
     if leftIndex is None or rightIndex is None:
         print "ERROR: Failed to find join indices for two tables"
@@ -2056,8 +2056,8 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
             print >>fo, indent + relName + ".outputIndex[" + str(i) + "] = " + str(i) + ";"
 
 
-        print "lOutList: ", lOutList
-        print "rOutList: ", rOutList
+        # print "lOutList: ", lOutList
+        # print "rOutList: ", rOutList
         def col2index_in_joinRes(col):
             if col.table_name == "LEFT":
                 return lPosList[lOutList.index(col.column_name)]
@@ -2122,7 +2122,7 @@ def generate_code_for_a_two_join_node(fo, indent, lvl, jn):
 
             print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].relation = " + exp.func_name + "_VEC;"
 
-            print "right_col: ", right_col
+            # print "right_col: ", right_col
             if isinstance(right_col, ystree.YRawColExp):
                 print >>fo, indent + "(" + relName + ".filter)->exp[" + str(i) + "].dataPos  = GPU;"
                 #print >>fo, indent + "memcpy((" + relName + ".filter)->exp[" + str(i) + "].content, &joinRes->content[" + str(col2index_in_joinRes(right_col)) + "], sizeof(void *));"
