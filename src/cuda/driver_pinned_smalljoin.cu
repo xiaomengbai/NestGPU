@@ -834,13 +834,17 @@ int main(int argc, char ** argv){
 
     transferTableColumnToGPU(supplierTable, 5);
     transferTableColumnToGPU(supplierTable, 6);
+    printf("transfer table SUPPLIER columns to GPU done!\n");
     transferTableColumnToGPU(regionTable, 0);
     transferTableColumnToGPU(regionTable, 1);
+    printf("transfer table REGION columns to GPU done!\n");
     transferTableColumnToGPU(partsuppTable, 1);
     transferTableColumnToGPU(partsuppTable, 2);
     transferTableColumnToGPU(partsuppTable, 0);
+    printf("transfer table PARTSUPP columns to GPU done!\n");
     transferTableColumnToGPU(nationTable, 1);
     transferTableColumnToGPU(nationTable, 2);
+    printf("transfer table NATION columns to GPU done!\n");
     // Process the TableNode for REGION
     struct tableNode *re1;
     re1 = (struct tableNode *)host_mempool.alloc(sizeof(struct tableNode));
