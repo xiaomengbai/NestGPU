@@ -1596,7 +1596,8 @@ int main(int argc, char ** argv){
         ps0->colIdxNum = 0;
     }
     printf("Process the TableNode for PARTSUPP\n");
-    if(true)
+    printf("tuple number: %d\n", ps0->tupleNum);
+    if(false)
     {
         result = ps0;
         struct materializeNode mn;
@@ -1674,7 +1675,8 @@ int main(int argc, char ** argv){
         re0_na0_su0_ps0 = joinRes;
     }
     printf("Join two tables: re0_na0_su0, ps0\n");
-    if(true)
+    printf("tuple number: %d\n", re0_na0_su0_ps0->tupleNum);
+    if(false)
     {
         result = re0_na0_su0_ps0;
         struct materializeNode mn;
@@ -2017,6 +2019,16 @@ int main(int argc, char ** argv){
                     clock_gettime(CLOCK_REALTIME, &diskEnd);
                     ps1->colIdxNum = 0;
                 }
+                printf(" %d: Process the TableNode for PARTSUPP\n", tupleid);
+                printf("     tuple number: %d\n", ps1->tupleNum);
+                if(false)
+                {
+                    result = ps1;
+                    struct materializeNode mn;
+                    mn.table = result;
+                    char *final = materializeCol(&mn, &pp);
+                    printMaterializedTable(mn, final);
+                }
 
                 // Join two tables: re1_na1_su1, ps1
                 struct tableNode *re1_na1_su1_ps1;
@@ -2076,6 +2088,17 @@ int main(int argc, char ** argv){
 
                     re1_na1_su1_ps1 = joinRes;
                 }
+                printf(" %d: join re1_na1_su1 and ps1\n", tupleid);
+                printf("     tuple number: %d\n", re1_na1_su1_ps1->tupleNum);
+                if(false)
+                {
+                    result = re1_na1_su1_ps1;
+                    struct materializeNode mn;
+                    mn.table = result;
+                    char *final = materializeCol(&mn, &pp);
+                    printMaterializedTable(mn, final);
+                }
+
 
                 struct tableNode * gb_re1_na1_su1_ps1;
                 if(re1_na1_su1_ps1->tupleNum == 0)
@@ -2115,6 +2138,15 @@ int main(int argc, char ** argv){
 
                     freeGroupByNode(gbNode, false);
 
+                }
+                printf(" %d: group by re1_na1_su1_ps1\n", tupleid);
+                if(true)
+                {
+                    result = gb_re1_na1_su1_ps1;
+                    struct materializeNode mn;
+                    mn.table = result;
+                    char *final = materializeCol(&mn, &pp);
+                    printMaterializedTable(mn, final);
                 }
 
                 result = gb_re1_na1_su1_ps1;
