@@ -832,19 +832,19 @@ int main(int argc, char ** argv){
     printf("Load columns from NATION\n");
 
 
-    transferTableColumnToGPU(supplierTable, 5);
-    transferTableColumnToGPU(supplierTable, 6);
-    printf("transfer table SUPPLIER columns to GPU done!\n");
-    transferTableColumnToGPU(regionTable, 0);
-    transferTableColumnToGPU(regionTable, 1);
-    printf("transfer table REGION columns to GPU done!\n");
-    transferTableColumnToGPU(partsuppTable, 1);
-    transferTableColumnToGPU(partsuppTable, 2);
-    transferTableColumnToGPU(partsuppTable, 0);
-    printf("transfer table PARTSUPP columns to GPU done!\n");
-    transferTableColumnToGPU(nationTable, 1);
-    transferTableColumnToGPU(nationTable, 2);
-    printf("transfer table NATION columns to GPU done!\n");
+    // transferTableColumnToGPU(supplierTable, 5);
+    // transferTableColumnToGPU(supplierTable, 6);
+    // printf("transfer table SUPPLIER columns to GPU done!\n");
+    // transferTableColumnToGPU(regionTable, 0);
+    // transferTableColumnToGPU(regionTable, 1);
+    // printf("transfer table REGION columns to GPU done!\n");
+    // transferTableColumnToGPU(partsuppTable, 1);
+    // transferTableColumnToGPU(partsuppTable, 2);
+    // transferTableColumnToGPU(partsuppTable, 0);
+    // printf("transfer table PARTSUPP columns to GPU done!\n");
+    // transferTableColumnToGPU(nationTable, 1);
+    // transferTableColumnToGPU(nationTable, 2);
+    // printf("transfer table NATION columns to GPU done!\n");
     // Process the TableNode for REGION
     struct tableNode *re1;
     re1 = (struct tableNode *)host_mempool.alloc(sizeof(struct tableNode));
@@ -1792,15 +1792,15 @@ int main(int argc, char ** argv){
         subqRes0 = (char *)malloc(sizeof(float) * joinRes->tupleNum);
         CHECK_POINTER(subqRes0);
 
-        transferTableColumnToGPU(supplierTable, 5);
-        transferTableColumnToGPU(supplierTable, 6);
-        transferTableColumnToGPU(regionTable, 0);
-        transferTableColumnToGPU(regionTable, 1);
-        transferTableColumnToGPU(partsuppTable, 1);
-        transferTableColumnToGPU(partsuppTable, 2);
-        transferTableColumnToGPU(partsuppTable, 0);
-        transferTableColumnToGPU(nationTable, 1);
-        transferTableColumnToGPU(nationTable, 2);
+        // transferTableColumnToGPU(supplierTable, 5);
+        // transferTableColumnToGPU(supplierTable, 6);
+        // transferTableColumnToGPU(regionTable, 0);
+        // transferTableColumnToGPU(regionTable, 1);
+        // transferTableColumnToGPU(partsuppTable, 1);
+        // transferTableColumnToGPU(partsuppTable, 2);
+        // transferTableColumnToGPU(partsuppTable, 0);
+        // transferTableColumnToGPU(nationTable, 1);
+        // transferTableColumnToGPU(nationTable, 2);
         free_pos = host_mempool.freepos();
         free_gpu_pos = gpu_inter_mp.freepos();
         for(int tupleid = 0; tupleid < joinRes->tupleNum; tupleid++){
