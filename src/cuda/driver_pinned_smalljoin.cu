@@ -923,6 +923,7 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         re1->colIdxNum = 0;
     }
+    struct tableNode *result;
     printf("Process the tableNode REGION\n");
     if(true)
     {
@@ -1156,7 +1157,6 @@ int main(int argc, char ** argv){
     printf("build column hash for re1_na1_su1\n");
 
 
-    struct tableNode *result;
 
     // Process the TableNode for REGION
     struct tableNode *re0;
