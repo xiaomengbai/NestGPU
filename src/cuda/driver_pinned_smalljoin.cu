@@ -341,6 +341,8 @@ int main(int argc, char ** argv){
         supplierTable->colIdxNum = 0;
         _supplier_table->keepInGpuIdx = 1;
     }
+    printf("Load columns from SUPPLIER\n");
+
 
     // Load columns from the table REGION
     struct tableNode *regionTable;
@@ -438,6 +440,8 @@ int main(int argc, char ** argv){
         regionTable->colIdxNum = 0;
         _region_table->keepInGpuIdx = 1;
     }
+    printf("Load columns from REGION\n");
+
 
     // Load columns from the table PARTSUPP
     struct tableNode *partsuppTable;
@@ -558,6 +562,8 @@ int main(int argc, char ** argv){
         partsuppTable->colIdxNum = 0;
         _partsupp_table->keepInGpuIdx = 1;
     }
+    printf("Load columns from PARTSUPP\n");
+
 
     // Load columns from the table PART
     struct tableNode *partTable;
@@ -701,6 +707,8 @@ int main(int argc, char ** argv){
         partTable->colIdxNum = 0;
         _part_table->keepInGpuIdx = 1;
     }
+    printf("Load columns from PART\n");
+
 
     // Load columns from the table NATION
     struct tableNode *nationTable;
@@ -821,6 +829,8 @@ int main(int argc, char ** argv){
         nationTable->colIdxNum = 0;
         _nation_table->keepInGpuIdx = 1;
     }
+    printf("Load columns from NATION\n");
+
 
     transferTableColumnToGPU(supplierTable, 5);
     transferTableColumnToGPU(supplierTable, 6);
@@ -909,6 +919,7 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         re1->colIdxNum = 0;
     }
+    printf("Process the tableNode REGION\n");
 
     // Process the TableNode for NATION
     struct tableNode *na1;
@@ -955,6 +966,7 @@ int main(int argc, char ** argv){
         na1 = nationTablePartial;
         na1->colIdxNum = 0;
     }
+    printf("Process the tableNode NATION\n");
 
     // Join two tables: re1, na1
     struct tableNode *re1_na1;
@@ -996,6 +1008,7 @@ int main(int argc, char ** argv){
 
         re1_na1 = joinRes;
     }
+    printf("join REGION and NATION\n");
 
     // Process the TableNode for SUPPLIER
     struct tableNode *su1;
@@ -1042,6 +1055,7 @@ int main(int argc, char ** argv){
         su1 = supplierTablePartial;
         su1->colIdxNum = 0;
     }
+    printf("Process the tableNode SUPPLIER\n");
 
     // Join two tables: re1_na1, su1
     struct tableNode *re1_na1_su1;
@@ -1083,8 +1097,11 @@ int main(int argc, char ** argv){
 
         re1_na1_su1 = joinRes;
     }
+    printf("Join two tables: re1_na1, su1\n");
+
 
     int *re1_na1_su1_hash = buildColumnHash(re1_na1_su1, 0, &pp);
+    printf("build column hash for re1_na1_su1\n");
 
 
     struct tableNode *result;
@@ -1167,6 +1184,7 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         re0->colIdxNum = 0;
     }
+    printf("Process the TableNode for REGION\n");
 
     // Process the TableNode for NATION
     struct tableNode *na0;
@@ -1222,6 +1240,7 @@ int main(int argc, char ** argv){
         na0 = nationTablePartial;
         na0->colIdxNum = 0;
     }
+    printf("Process the TableNode for NATION\n");
 
     // Join two tables: re0, na0
     struct tableNode *re0_na0;
@@ -1267,6 +1286,7 @@ int main(int argc, char ** argv){
 
         re0_na0 = joinRes;
     }
+    printf("Join two tables: re0, na0\n");
 
     // Process the TableNode for SUPPLIER
     struct tableNode *su0;
@@ -1358,6 +1378,7 @@ int main(int argc, char ** argv){
         su0 = supplierTablePartial;
         su0->colIdxNum = 0;
     }
+    printf("Process the TableNode for SUPPLIER\n");
 
     // Join two tables: re0_na0, su0
     struct tableNode *re0_na0_su0;
@@ -1423,6 +1444,7 @@ int main(int argc, char ** argv){
 
         re0_na0_su0 = joinRes;
     }
+    printf("Join two tables: re0_na0, su0\n");
 
     // Process the TableNode for PARTSUPP
     struct tableNode *ps0;
@@ -1478,6 +1500,7 @@ int main(int argc, char ** argv){
         ps0 = partsuppTablePartial;
         ps0->colIdxNum = 0;
     }
+    printf("Process the TableNode for PARTSUPP\n");
 
     // Join two tables: re0_na0_su0, ps0
     struct tableNode *re0_na0_su0_ps0;
@@ -1547,6 +1570,7 @@ int main(int argc, char ** argv){
 
         re0_na0_su0_ps0 = joinRes;
     }
+    printf("Join two tables: re0_na0_su0, ps0\n");
 
     // Process the TableNode for PART
     struct tableNode *pa0;
@@ -1660,6 +1684,7 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         pa0->colIdxNum = 0;
     }
+    printf("Process the TableNode for PART\n");
 
     // Join two tables: re0_na0_su0_ps0, pa0
     struct tableNode *re0_na0_su0_ps0_pa0;
@@ -1997,6 +2022,7 @@ int main(int argc, char ** argv){
         freeScan(&joinRel, false);
 
     }
+    printf("Join two tables: re0_na0_su0_ps0, pa0\n");
 
     struct tableNode * ob_re0_na0_su0_ps0_pa0;
     {
@@ -2018,6 +2044,7 @@ int main(int argc, char ** argv){
         freeOrderByNode(odNode, false);
 
     }
+    printf("order by node\n");
 
     result = ob_re0_na0_su0_ps0_pa0;
     struct materializeNode mn;
