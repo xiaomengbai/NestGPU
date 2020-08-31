@@ -924,6 +924,16 @@ int main(int argc, char ** argv){
         re1->colIdxNum = 0;
     }
     printf("Process the tableNode REGION\n");
+    if(true)
+    {
+        result = re1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+
+    }
+
 
     // Process the TableNode for NATION
     struct tableNode *na1;
@@ -971,6 +981,16 @@ int main(int argc, char ** argv){
         na1->colIdxNum = 0;
     }
     printf("Process the tableNode NATION\n");
+    if(true)
+    {
+        result = na1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+
+    }
+
 
     // Join two tables: re1, na1
     struct tableNode *re1_na1;
@@ -1013,6 +1033,16 @@ int main(int argc, char ** argv){
         re1_na1 = joinRes;
     }
     printf("join REGION and NATION\n");
+    if(true)
+    {
+        result = re1_na1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+
+    }
+
 
     // Process the TableNode for SUPPLIER
     struct tableNode *su1;
@@ -1060,6 +1090,15 @@ int main(int argc, char ** argv){
         su1->colIdxNum = 0;
     }
     printf("Process the tableNode SUPPLIER\n");
+    if(true)
+    {
+        result = su1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+
+    }
 
     // Join two tables: re1_na1, su1
     struct tableNode *re1_na1_su1;
@@ -1102,6 +1141,15 @@ int main(int argc, char ** argv){
         re1_na1_su1 = joinRes;
     }
     printf("Join two tables: re1_na1, su1\n");
+    if(true)
+    {
+        result = re1_na1_su1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+
+    }
 
 
     int *re1_na1_su1_hash = buildColumnHash(re1_na1_su1, 0, &pp);
@@ -1189,6 +1237,16 @@ int main(int argc, char ** argv){
         re0->colIdxNum = 0;
     }
     printf("Process the TableNode for REGION\n");
+    if(true)
+    {
+        result = re0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+
+    }
+
 
     // Process the TableNode for NATION
     struct tableNode *na0;
@@ -1245,6 +1303,15 @@ int main(int argc, char ** argv){
         na0->colIdxNum = 0;
     }
     printf("Process the TableNode for NATION\n");
+    if(true)
+    {
+        result = na0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+
+    }
 
     // Join two tables: re0, na0
     struct tableNode *re0_na0;
@@ -1291,6 +1358,14 @@ int main(int argc, char ** argv){
         re0_na0 = joinRes;
     }
     printf("Join two tables: re0, na0\n");
+    if(true)
+    {
+        result = re0_na0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
 
     // Process the TableNode for SUPPLIER
     struct tableNode *su0;
@@ -1383,6 +1458,14 @@ int main(int argc, char ** argv){
         su0->colIdxNum = 0;
     }
     printf("Process the TableNode for SUPPLIER\n");
+    if(true)
+    {
+        result = su0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
 
     // Join two tables: re0_na0, su0
     struct tableNode *re0_na0_su0;
@@ -1449,6 +1532,14 @@ int main(int argc, char ** argv){
         re0_na0_su0 = joinRes;
     }
     printf("Join two tables: re0_na0, su0\n");
+    if(true)
+    {
+        result = re0_na0_su0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
 
     // Process the TableNode for PARTSUPP
     struct tableNode *ps0;
@@ -1505,6 +1596,14 @@ int main(int argc, char ** argv){
         ps0->colIdxNum = 0;
     }
     printf("Process the TableNode for PARTSUPP\n");
+    if(true)
+    {
+        result = ps0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
 
     // Join two tables: re0_na0_su0, ps0
     struct tableNode *re0_na0_su0_ps0;
@@ -1575,6 +1674,14 @@ int main(int argc, char ** argv){
         re0_na0_su0_ps0 = joinRes;
     }
     printf("Join two tables: re0_na0_su0, ps0\n");
+    if(true)
+    {
+        result = re0_na0_su0_ps0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
 
     // Process the TableNode for PART
     struct tableNode *pa0;
@@ -1689,6 +1796,14 @@ int main(int argc, char ** argv){
         pa0->colIdxNum = 0;
     }
     printf("Process the TableNode for PART\n");
+    if(true)
+    {
+        result = pa0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
 
     // Join two tables: re0_na0_su0_ps0, pa0
     struct tableNode *re0_na0_su0_ps0_pa0;
@@ -2027,6 +2142,14 @@ int main(int argc, char ** argv){
 
     }
     printf("Join two tables: re0_na0_su0_ps0, pa0\n");
+    {
+        result = re0_na0_su0_ps0_pa0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+
+    }
 
     struct tableNode * ob_re0_na0_su0_ps0_pa0;
     {
