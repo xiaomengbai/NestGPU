@@ -66,7 +66,7 @@ char * materializeCol(struct materializeNode * mn, struct statistic * pp){
     CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&gpuAttrSize,sizeof(int) * tn->totalAttr));
 
     for(int i=0;i<tn->totalAttr;i++){
-        if(tn->dataPos[i] == MEM){
+        if(tn->dataPos[i] == MEM || tn->dataPos[i] == PINNED){
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void**)&column[i], tn->tupleNum*tn->attrSize[i]));
             CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(column[i], tn->content[i], tn->tupleNum *tn->attrSize[i], cudaMemcpyHostToDevice));
             CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&gpuContent[i], &column[i], sizeof(char *), cudaMemcpyHostToDevice));

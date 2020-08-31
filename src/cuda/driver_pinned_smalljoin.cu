@@ -924,9 +924,9 @@ int main(int argc, char ** argv){
         re1->colIdxNum = 0;
     }
     struct tableNode *result;
-    printf("Process the tableNode REGION\n");
-    if(true)
+    if(false)
     {
+        printf("Process the tableNode REGION\n");
         result = re1;
         struct materializeNode mn;
         mn.table = result;
@@ -981,9 +981,9 @@ int main(int argc, char ** argv){
         na1 = nationTablePartial;
         na1->colIdxNum = 0;
     }
-    printf("Process the tableNode NATION\n");
-    if(true)
+    if(false)
     {
+        printf("Process the tableNode NATION\n");
         result = na1;
         struct materializeNode mn;
         mn.table = result;
@@ -1033,9 +1033,9 @@ int main(int argc, char ** argv){
 
         re1_na1 = joinRes;
     }
-    printf("join REGION and NATION\n");
-    if(true)
+    if(false)
     {
+        printf("join REGION and NATION\n");
         result = re1_na1;
         struct materializeNode mn;
         mn.table = result;
@@ -1090,9 +1090,9 @@ int main(int argc, char ** argv){
         su1 = supplierTablePartial;
         su1->colIdxNum = 0;
     }
-    printf("Process the tableNode SUPPLIER\n");
-    if(true)
+    if(false)
     {
+        printf("Process the tableNode SUPPLIER\n");
         result = su1;
         struct materializeNode mn;
         mn.table = result;
@@ -1141,9 +1141,9 @@ int main(int argc, char ** argv){
 
         re1_na1_su1 = joinRes;
     }
-    printf("Join two tables: re1_na1, su1\n");
-    if(true)
+    if(false)
     {
+        printf("Join two tables: re1_na1, su1\n");
         result = re1_na1_su1;
         struct materializeNode mn;
         mn.table = result;
@@ -1236,9 +1236,9 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         re0->colIdxNum = 0;
     }
-    printf("Process the TableNode for REGION\n");
-    if(true)
+    if(false)
     {
+        printf("Process the TableNode for REGION\n");
         result = re0;
         struct materializeNode mn;
         mn.table = result;
@@ -1302,9 +1302,9 @@ int main(int argc, char ** argv){
         na0 = nationTablePartial;
         na0->colIdxNum = 0;
     }
-    printf("Process the TableNode for NATION\n");
-    if(true)
+    if(false)
     {
+        printf("Process the TableNode for NATION\n");
         result = na0;
         struct materializeNode mn;
         mn.table = result;
@@ -1357,9 +1357,9 @@ int main(int argc, char ** argv){
 
         re0_na0 = joinRes;
     }
-    printf("Join two tables: re0, na0\n");
-    if(true)
+    if(false)
     {
+        printf("Join two tables: re0, na0\n");
         result = re0_na0;
         struct materializeNode mn;
         mn.table = result;
@@ -1457,9 +1457,9 @@ int main(int argc, char ** argv){
         su0 = supplierTablePartial;
         su0->colIdxNum = 0;
     }
-    printf("Process the TableNode for SUPPLIER\n");
-    if(true)
+    if(false)
     {
+        printf("Process the TableNode for SUPPLIER\n");
         result = su0;
         struct materializeNode mn;
         mn.table = result;
@@ -1531,9 +1531,9 @@ int main(int argc, char ** argv){
 
         re0_na0_su0 = joinRes;
     }
-    printf("Join two tables: re0_na0, su0\n");
-    if(true)
+    if(false)
     {
+        printf("Join two tables: re0_na0, su0\n");
         result = re0_na0_su0;
         struct materializeNode mn;
         mn.table = result;
@@ -1595,10 +1595,10 @@ int main(int argc, char ** argv){
         ps0 = partsuppTablePartial;
         ps0->colIdxNum = 0;
     }
-    printf("Process the TableNode for PARTSUPP\n");
-    printf("tuple number: %d\n", ps0->tupleNum);
     if(false)
     {
+        printf("Process the TableNode for PARTSUPP\n");
+        printf("tuple number: %d\n", ps0->tupleNum);
         result = ps0;
         struct materializeNode mn;
         mn.table = result;
@@ -1674,10 +1674,10 @@ int main(int argc, char ** argv){
 
         re0_na0_su0_ps0 = joinRes;
     }
-    printf("Join two tables: re0_na0_su0, ps0\n");
-    printf("tuple number: %d\n", re0_na0_su0_ps0->tupleNum);
     if(false)
     {
+        printf("Join two tables: re0_na0_su0, ps0\n");
+        printf("tuple number: %d\n", re0_na0_su0_ps0->tupleNum);
         result = re0_na0_su0_ps0;
         struct materializeNode mn;
         mn.table = result;
@@ -1797,9 +1797,9 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         pa0->colIdxNum = 0;
     }
-    printf("Process the TableNode for PART\n");
-    if(true)
+    if(false)
     {
+        printf("Process the TableNode for PART\n");
         result = pa0;
         struct materializeNode mn;
         mn.table = result;
@@ -1893,7 +1893,7 @@ int main(int argc, char ** argv){
         joinRel.outputIndex[5] = 5;
         joinRel.outputIndex[6] = 6;
         joinRel.outputIndex[7] = 7;
-        joinRel.whereIndex[0] = 1;
+        joinRel.whereIndex[0] = 8;
         joinRel.keepInGpu = 1;
         joinRel.filter = (struct whereCondition *)host_mempool.alloc(sizeof(struct whereCondition));
         (joinRel.filter)->nested = 0;
@@ -2019,10 +2019,10 @@ int main(int argc, char ** argv){
                     clock_gettime(CLOCK_REALTIME, &diskEnd);
                     ps1->colIdxNum = 0;
                 }
-                printf(" %d: Process the TableNode for PARTSUPP\n", tupleid);
-                printf("     tuple number: %d\n", ps1->tupleNum);
                 if(false)
                 {
+                    printf(" %d: Process the TableNode for PARTSUPP\n", tupleid);
+                    printf("     tuple number: %d\n", ps1->tupleNum);
                     result = ps1;
                     struct materializeNode mn;
                     mn.table = result;
@@ -2088,10 +2088,10 @@ int main(int argc, char ** argv){
 
                     re1_na1_su1_ps1 = joinRes;
                 }
-                printf(" %d: join re1_na1_su1 and ps1\n", tupleid);
-                printf("     tuple number: %d\n", re1_na1_su1_ps1->tupleNum);
                 if(false)
                 {
+                    printf(" %d: join re1_na1_su1 and ps1\n", tupleid);
+                    printf("     tuple number: %d\n", re1_na1_su1_ps1->tupleNum);
                     result = re1_na1_su1_ps1;
                     struct materializeNode mn;
                     mn.table = result;
@@ -2139,9 +2139,9 @@ int main(int argc, char ** argv){
                     freeGroupByNode(gbNode, false);
 
                 }
-                printf(" %d: group by re1_na1_su1_ps1\n", tupleid);
-                if(true)
+                if(false)
                 {
+                    printf(" %d: group by re1_na1_su1_ps1\n", tupleid);
                     result = gb_re1_na1_su1_ps1;
                     struct materializeNode mn;
                     mn.table = result;
