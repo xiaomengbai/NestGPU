@@ -300,7 +300,10 @@ static void transferTableColumnToGPU(struct tableNode *tn, int i)
         char *tmp;
         CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **)&tmp, tn->attrTotalSize[i]));
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(tmp, tn->content[i], tn->attrTotalSize[i], cudaMemcpyHostToDevice));
-        free(tn->content[i]);
+        if (tn->dataPos[i] == PINNED)
+            cudaFree(tn->content[i]);
+        else
+            free(tn->content[i]);
         tn->content[i] = tmp;
         tn->dataPos[i] = GPU;
     }
