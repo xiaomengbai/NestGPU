@@ -830,16 +830,17 @@ int main(int argc, char ** argv){
         nationTable->colIdxNum = 0;
         _nation_table->keepInGpuIdx = 1;
     }
+    printf("load columns for NATION\n");
 
-    // transferTableColumnToGPU(supplierTable, 5);
-    // transferTableColumnToGPU(supplierTable, 6);
-    // transferTableColumnToGPU(regionTable, 0);
-    // transferTableColumnToGPU(regionTable, 1);
-    // transferTableColumnToGPU(partsuppTable, 1);
-    // transferTableColumnToGPU(partsuppTable, 2);
-    // transferTableColumnToGPU(partsuppTable, 0);
-    // transferTableColumnToGPU(nationTable, 1);
-    // transferTableColumnToGPU(nationTable, 2);
+    transferTableColumnToGPU(supplierTable, 5);
+    transferTableColumnToGPU(supplierTable, 6);
+    transferTableColumnToGPU(regionTable, 0);
+    transferTableColumnToGPU(regionTable, 1);
+    transferTableColumnToGPU(partsuppTable, 1);
+    transferTableColumnToGPU(partsuppTable, 2);
+    transferTableColumnToGPU(partsuppTable, 0);
+    transferTableColumnToGPU(nationTable, 1);
+    transferTableColumnToGPU(nationTable, 2);
     // Process the TableNode for REGION
     struct tableNode *re1;
     re1 = (struct tableNode *)host_mempool.alloc(sizeof(struct tableNode));
@@ -918,6 +919,7 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         re1->colIdxNum = 0;
     }
+    printf("Process table node re1\n");
 
     // Process the TableNode for NATION
     struct tableNode *na1;
@@ -964,6 +966,14 @@ int main(int argc, char ** argv){
         na1 = nationTablePartial;
         na1->colIdxNum = 0;
     }
+    printf("Process table node na1\n");
+    if(false){
+        tableNode *result = na1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
 
     // Join two tables: re1, na1
     struct tableNode *re1_na1;
@@ -1005,6 +1015,7 @@ int main(int argc, char ** argv){
 
         re1_na1 = joinRes;
     }
+    printf("Process join node re1_na1\n");
 
     // Process the TableNode for SUPPLIER
     struct tableNode *su1;
@@ -1051,6 +1062,7 @@ int main(int argc, char ** argv){
         su1 = supplierTablePartial;
         su1->colIdxNum = 0;
     }
+    printf("Process table node su1\n");
 
     // Join two tables: re1_na1, su1
     struct tableNode *re1_na1_su1;
@@ -1092,8 +1104,10 @@ int main(int argc, char ** argv){
 
         re1_na1_su1 = joinRes;
     }
+    printf("Process join node re1_na1_su1\n");
 
     int *re1_na1_su1_hash = buildColumnHash(re1_na1_su1, 0, &pp);
+    printf("Build column hash re1_na1_su1:0\n");
 
 
     struct tableNode *result;
@@ -1176,6 +1190,7 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         re0->colIdxNum = 0;
     }
+    printf("Process table node re0\n");
 
     // Process the TableNode for NATION
     struct tableNode *na0;
@@ -1231,6 +1246,7 @@ int main(int argc, char ** argv){
         na0 = nationTablePartial;
         na0->colIdxNum = 0;
     }
+    printf("Process table node na0\n");
 
     // Join two tables: re0, na0
     struct tableNode *re0_na0;
@@ -1276,6 +1292,7 @@ int main(int argc, char ** argv){
 
         re0_na0 = joinRes;
     }
+    printf("Process join node re0_na0\n");
 
     // Process the TableNode for SUPPLIER
     struct tableNode *su0;
@@ -1367,6 +1384,7 @@ int main(int argc, char ** argv){
         su0 = supplierTablePartial;
         su0->colIdxNum = 0;
     }
+    printf("Process table node su0\n");
 
     // Join two tables: re0_na0, su0
     struct tableNode *re0_na0_su0;
@@ -1432,6 +1450,7 @@ int main(int argc, char ** argv){
 
         re0_na0_su0 = joinRes;
     }
+    printf("Process join node re0_na0_su0\n");
 
     // Process the TableNode for PARTSUPP
     struct tableNode *ps0;
@@ -1494,6 +1513,7 @@ int main(int argc, char ** argv){
         ps0 = partsuppTablePartial;
         ps0->colIdxNum = 0;
     }
+    printf("Process table node ps0\n");
 
     // Join two tables: re0_na0_su0, ps0
     struct tableNode *re0_na0_su0_ps0;
@@ -1563,6 +1583,7 @@ int main(int argc, char ** argv){
 
         re0_na0_su0_ps0 = joinRes;
     }
+    printf("Process join node re0_na0_su0_ps0\n");
 
     // Process the TableNode for PART
     struct tableNode *pa0;
@@ -1676,6 +1697,8 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         pa0->colIdxNum = 0;
     }
+    printf("Process table node pa0\n");
+
 
     // Join two tables: re0_na0_su0_ps0, pa0
     struct tableNode *re0_na0_su0_ps0_pa0;
@@ -1763,14 +1786,14 @@ int main(int argc, char ** argv){
         joinRel.outputIndex[5] = 5;
         joinRel.outputIndex[6] = 6;
         joinRel.outputIndex[7] = 7;
-        joinRel.whereIndex[0] = 1;
+        joinRel.whereIndex[0] = 8;
         joinRel.keepInGpu = 1;
         joinRel.filter = (struct whereCondition *)host_mempool.alloc(sizeof(struct whereCondition));
         (joinRel.filter)->nested = 0;
         (joinRel.filter)->expNum = 1;
         (joinRel.filter)->exp = (struct whereExp*)host_mempool.alloc(sizeof(struct whereExp) *1);
         (joinRel.filter)->andOr = AND;
-        (joinRel.filter)->exp[0].index    = 8;
+        (joinRel.filter)->exp[0].index    = 0;
         (joinRel.filter)->exp[0].relation = EQ_VEC;
         (joinRel.filter)->exp[0].dataPos  = MEM;
         char *_RIGHT_0 = (char *)host_mempool.alloc(sizeof(int));
@@ -1779,21 +1802,24 @@ int main(int argc, char ** argv){
         subqRes0 = (char *)malloc(sizeof(float) * joinRes->tupleNum);
         CHECK_POINTER(subqRes0);
 
-        // transferTableColumnToGPU(supplierTable, 5);
-        // transferTableColumnToGPU(supplierTable, 6);
-        // transferTableColumnToGPU(regionTable, 0);
-        // transferTableColumnToGPU(regionTable, 1);
-        // transferTableColumnToGPU(partsuppTable, 1);
-        // transferTableColumnToGPU(partsuppTable, 2);
-        // transferTableColumnToGPU(partsuppTable, 0);
-        // transferTableColumnToGPU(nationTable, 1);
-        // transferTableColumnToGPU(nationTable, 2);
+
+        transferTableColumnToGPU(supplierTable, 5);
+        transferTableColumnToGPU(supplierTable, 6);
+        transferTableColumnToGPU(regionTable, 0);
+        transferTableColumnToGPU(regionTable, 1);
+        transferTableColumnToGPU(partsuppTable, 1);
+        transferTableColumnToGPU(partsuppTable, 2);
+        transferTableColumnToGPU(partsuppTable, 0);
+        transferTableColumnToGPU(nationTable, 1);
+        transferTableColumnToGPU(nationTable, 2);
 
         char *passed_in_col, *correlated_col;
         char *correlated_col_sort;
 
+
         // Semi-join  RIGHT.0  and  PARTSUPP.0
-        if(joinRes->dataPos[3] == MEM)
+        CUDA_SAFE_CALL_NO_SYNC( cudaDeviceSynchronize() );
+        if(joinRes->dataPos[3] == MEM || joinRes->dataPos[3] == PINNED)
             transferTableColumnToGPU(joinRes, 3);
         passed_in_col = (char *)(joinRes->content[3]);
         correlated_col = partsuppTable->content[0];
@@ -1804,11 +1830,13 @@ int main(int argc, char ** argv){
             CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(correlated_col_sort, correlated_col, partsuppTable->attrTotalSize[0], cudaMemcpyHostToDevice) );
         else if(partsuppTable->dataPos[0] == GPU)
             CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(correlated_col_sort, correlated_col, partsuppTable->attrTotalSize[0], cudaMemcpyDeviceToDevice) );
+        CUDA_SAFE_CALL_NO_SYNC( cudaDeviceSynchronize() );
 
         int *partsupp0_idx;
         CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&partsupp0_idx, partsuppTable->tupleNum * sizeof(int)) );
         assign_index<<<2048, 256>>>(partsupp0_idx, partsuppTable->tupleNum);
         thrust::sort_by_key(thrust::device, (int *)correlated_col_sort, (int *)correlated_col_sort + partsuppTable->tupleNum, partsupp0_idx);
+        CUDA_SAFE_CALL_NO_SYNC( cudaDeviceSynchronize() );
 
         int *right0_lo, *right0_hi;
         CUDA_SAFE_CALL_NO_SYNC( cudaMalloc((void **)&right0_lo, joinRes->tupleNum * sizeof(int)) );
@@ -2038,7 +2066,8 @@ int main(int argc, char ** argv){
                 struct materializeNode mn;
                 mn.table = result;
                 char *final = materializeCol(&mn, &pp);
-                
+
+
                 memcpy(subqRes0 + tupleid * sizeof(float), final, sizeof(float));
                 cache[*(int *)_RIGHT_0] = *(float *)final;
                 host_mempool.freeto(free_pos);
@@ -2065,36 +2094,37 @@ int main(int argc, char ** argv){
         freeScan(&joinRel, false);
 
     }
+    printf("Process join node re0_na0_su0_ps0_pa0 (with subquery)\n");
 
-    struct tableNode * ob_re0_na0_su0_ps0_pa0;
-    {
+    // struct tableNode * ob_re0_na0_su0_ps0_pa0;
+    // {
 
-        struct orderByNode * odNode = (struct orderByNode *)host_mempool.alloc(sizeof(struct orderByNode));
-        odNode->table = re0_na0_su0_ps0_pa0;
-        odNode->orderByNum = 4;
-        odNode->orderBySeq = (int *)host_mempool.alloc(sizeof(int) * odNode->orderByNum);
-        odNode->orderByIndex = (int *)host_mempool.alloc(sizeof(int) * odNode->orderByNum);
-        odNode->orderBySeq[0] = ASC;
-        odNode->orderByIndex[0] = 0;
-        odNode->orderBySeq[1] = ASC;
-        odNode->orderByIndex[1] = 2;
-        odNode->orderBySeq[2] = ASC;
-        odNode->orderByIndex[2] = 1;
-        odNode->orderBySeq[3] = ASC;
-        odNode->orderByIndex[3] = 3;
-        ob_re0_na0_su0_ps0_pa0 = orderBy(odNode, &pp);
-        freeOrderByNode(odNode, false);
+    //     struct orderByNode * odNode = (struct orderByNode *)host_mempool.alloc(sizeof(struct orderByNode));
+    //     odNode->table = re0_na0_su0_ps0_pa0;
+    //     odNode->orderByNum = 4;
+    //     odNode->orderBySeq = (int *)host_mempool.alloc(sizeof(int) * odNode->orderByNum);
+    //     odNode->orderByIndex = (int *)host_mempool.alloc(sizeof(int) * odNode->orderByNum);
+    //     odNode->orderBySeq[0] = ASC;
+    //     odNode->orderByIndex[0] = 0;
+    //     odNode->orderBySeq[1] = ASC;
+    //     odNode->orderByIndex[1] = 2;
+    //     odNode->orderBySeq[2] = ASC;
+    //     odNode->orderByIndex[2] = 1;
+    //     odNode->orderBySeq[3] = ASC;
+    //     odNode->orderByIndex[3] = 3;
+    //     ob_re0_na0_su0_ps0_pa0 = orderBy(odNode, &pp);
+    //     freeOrderByNode(odNode, false);
 
-    }
+    // }
 
-    result = ob_re0_na0_su0_ps0_pa0;
+    result = re0_na0_su0_ps0_pa0;
     struct materializeNode mn;
     mn.table = result;
     char *final = materializeCol(&mn, &pp);
-    printMaterializedTable(mn, final);
 
 
     clock_gettime(CLOCK_REALTIME, &end);
+    printMaterializedTable(mn, final);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
     printf("<--Disk Load Time-->           : %lf\n", diskTotal/(1000*1000));
     printf("\n");
