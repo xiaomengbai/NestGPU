@@ -904,6 +904,15 @@ int main(int argc, char ** argv){
         clock_gettime(CLOCK_REALTIME, &diskEnd);
         re0->colIdxNum = 0;
     }
+    if(false){
+
+        printf("process table node re0\n");
+        tableNode *result = re0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
 
     // Process the TableNode for NATION
     struct tableNode *na0;
@@ -1004,6 +1013,16 @@ int main(int argc, char ** argv){
 
         re0_na0 = joinRes;
     }
+    if(false){
+
+        printf("join node re0_na0\n");
+        tableNode *result = re0_na0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
+
 
     // Process the TableNode for SUPPLIER
     struct tableNode *su0;
@@ -1160,6 +1179,16 @@ int main(int argc, char ** argv){
 
         re0_na0_su0 = joinRes;
     }
+    if(false){
+
+        printf("join node re0_na0_su0\n");
+        tableNode *result = re0_na0_su0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
+
 
     // Process the TableNode for PARTSUPP
     struct tableNode *ps0;
@@ -1284,6 +1313,16 @@ int main(int argc, char ** argv){
 
         re0_na0_su0_ps0 = joinRes;
     }
+    if(false){
+
+        printf("join node re0_na0_su0_ps0\n");
+        tableNode *result = re0_na0_su0_ps0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
+
 
     // Process the TableNode for PART
     struct tableNode *pa0;
@@ -1469,6 +1508,15 @@ int main(int argc, char ** argv){
         gpu_inner_mp.freeto(origin_pos_join);
 
         re0_na0_su0_ps0_pa0 = joinRes;
+    }
+    if(false){
+        printf("re0_na0_su0_ps0_pa0->totalAttr = %d\n", re0_na0_su0_ps0_pa0->totalAttr);
+        printf("join node re0_na0_su0_ps0_pa0\n");
+        tableNode *result = re0_na0_su0_ps0_pa0;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
     }
 
     // Process the TableNode for REGION
@@ -1723,6 +1771,16 @@ int main(int argc, char ** argv){
 
         re1_na1_su1 = joinRes;
     }
+    if(false){
+
+        printf("join node re1_na1_su1\n");
+        tableNode *result = re1_na1_su1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
+
 
     // Process the TableNode for PARTSUPP
     struct tableNode *ps1;
@@ -1823,6 +1881,16 @@ int main(int argc, char ** argv){
 
         re1_na1_su1_ps1 = joinRes;
     }
+    if(false){
+
+        printf("join node re1_na1_su1_ps1\n");
+        tableNode *result = re1_na1_su1_ps1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
+
 
     struct tableNode * gb_re1_na1_su1_ps1;
     if(re1_na1_su1_ps1->tupleNum == 0)
@@ -1872,6 +1940,16 @@ int main(int argc, char ** argv){
         freeGroupByNode(gbNode, false);
 
     }
+    if(false){
+
+        printf("groupby node gb_re1_na1_su1_ps1\n");
+        tableNode *result = gb_re1_na1_su1_ps1;
+        struct materializeNode mn;
+        mn.table = result;
+        char *final = materializeCol(&mn, &pp);
+        printMaterializedTable(mn, final);
+    }
+
 
     // Process the SelectProjectNode for gb_re1_na1_su1_ps1
     struct tableNode *sp_gb_re1_na1_su1_ps1;
@@ -1926,15 +2004,15 @@ int main(int argc, char ** argv){
         struct joinNode jNode;
         jNode.leftTable = re0_na0_su0_ps0_pa0;
         jNode.rightTable = sp_gb_re1_na1_su1_ps1;
-        jNode.totalAttr = 8;
-        jNode.keepInGpu = (int *)host_mempool.alloc(sizeof(int) * 8);
-        for(int k=0; k<8; k++)
+        jNode.totalAttr = 10;
+        jNode.keepInGpu = (int *)host_mempool.alloc(sizeof(int) * 10);
+        for(int k=0; k<10; k++)
             jNode.keepInGpu[k] = 1;
-        jNode.leftOutputAttrNum = 8;
-        jNode.rightOutputAttrNum = 0;
-        jNode.leftOutputAttrType = (int *)host_mempool.alloc(sizeof(int)*8);
-        jNode.leftOutputIndex = (int *)host_mempool.alloc(sizeof(int)*8);
-        jNode.leftPos = (int *)host_mempool.alloc(sizeof(int)*8);
+        jNode.leftOutputAttrNum = 9;
+        jNode.rightOutputAttrNum = 1;
+        jNode.leftOutputAttrType = (int *)host_mempool.alloc(sizeof(int)*9);
+        jNode.leftOutputIndex = (int *)host_mempool.alloc(sizeof(int)*9);
+        jNode.leftPos = (int *)host_mempool.alloc(sizeof(int)*9);
         jNode.tupleSize = 0;
         jNode.leftOutputIndex[0] = 0;
         jNode.leftOutputAttrType[0] = FLOAT;
@@ -1968,11 +2046,21 @@ int main(int argc, char ** argv){
         jNode.leftOutputAttrType[7] = STRING;
         jNode.leftPos[7] = 7;
         jNode.tupleSize += re0_na0_su0_ps0_pa0->attrSize[7];
-        jNode.rightOutputAttrType = (int *)host_mempool.alloc(sizeof(int)*0);
-        jNode.rightOutputIndex = (int *)host_mempool.alloc(sizeof(int)*0);
-        jNode.rightPos = (int *)host_mempool.alloc(sizeof(int)*0);
-        jNode.leftKeyIndex = 8;
-        jNode.rightKeyIndex = 0;
+        jNode.leftOutputIndex[8] = 8;
+        jNode.leftOutputAttrType[8] = FLOAT;
+        jNode.leftPos[8] = 8;
+        jNode.tupleSize += re0_na0_su0_ps0_pa0->attrSize[8];
+
+        jNode.rightOutputAttrType = (int *)host_mempool.alloc(sizeof(int)*1);
+        jNode.rightOutputIndex = (int *)host_mempool.alloc(sizeof(int)*1);
+        jNode.rightPos = (int *)host_mempool.alloc(sizeof(int)*1);
+        jNode.rightOutputIndex[0] = 0;
+        jNode.rightOutputAttrType[0] = FLOAT;
+        jNode.rightPos[0] = 9;
+        jNode.tupleSize += ps1->attrSize[0];
+
+        jNode.leftKeyIndex = 3;
+        jNode.rightKeyIndex = 1;
         struct tableNode *joinRes;
         int dev_memsize = hashJoinGPUMemSize(&jNode, false);
         if(gpu_inner_mp.freesize() < dev_memsize)
@@ -1997,7 +2085,7 @@ int main(int argc, char ** argv){
         joinRel.outputIndex[5] = 5;
         joinRel.outputIndex[6] = 6;
         joinRel.outputIndex[7] = 7;
-        joinRel.whereIndex[0] = 1;
+        joinRel.whereIndex[0] = 8;
         joinRel.keepInGpu = 1;
         joinRel.filter = (struct whereCondition *)host_mempool.alloc(sizeof(struct whereCondition));
         (joinRel.filter)->nested = 0;
@@ -2007,7 +2095,7 @@ int main(int argc, char ** argv){
         (joinRel.filter)->exp[0].index    = 0;
         (joinRel.filter)->exp[0].relation = EQ_VEC;
         (joinRel.filter)->exp[0].dataPos  = GPU;
-        memcpy((joinRel.filter)->exp[0].content, &joinRes->content[1], sizeof(void *));
+        memcpy((joinRel.filter)->exp[0].content, &joinRes->content[9], sizeof(void *));
         dev_memsize = tableScanGPUMemSize(&joinRel);
         if(gpu_inner_mp.freesize() < dev_memsize)
             gpu_inner_mp.resize(gpu_inner_mp.usedsize() + dev_memsize);
@@ -2023,10 +2111,10 @@ int main(int argc, char ** argv){
     struct materializeNode mn;
     mn.table = result;
     char *final = materializeCol(&mn, &pp);
-    // printMaterializedTable(mn, final);
 
 
     clock_gettime(CLOCK_REALTIME, &end);
+    printMaterializedTable(mn, final);
     double timeE = (end.tv_sec -  start.tv_sec)* BILLION + end.tv_nsec - start.tv_nsec;
     printf("<--Disk Load Time-->           : %lf\n", diskTotal/(1000*1000));
     printf("\n");
