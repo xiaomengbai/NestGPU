@@ -760,8 +760,8 @@ __global__ static void genScanFilter_init_int_lth_vec(char *col, long tupleNum, 
     int con;
 
     for(long i = tid; i<tupleNum;i+=stride){
-        con = __int2float_rd( ((int *)col)[i] ) < __int_as_float( where[i] );
-        //con = ((int *)col)[i] < where[i];
+        con = __int2float_rd( ((int *)col)[i] ) < __int_as_float( where[i] ); // for Q17
+        //con = ((int *)col)[i] < where[i]; // for Q4
         filter[i] = con;
     }
 }
@@ -2379,17 +2379,17 @@ __global__ static void set_zero(int *filter, long  inNum){
     }
 }
 
-
+int tsDebug = 0;
 struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                              Mempool *host_mp = NULL, Mempool *dev_mp = NULL, Mempool *res_mp = NULL, int *idx = NULL, int *st = NULL, int *ed = NULL){
 
     //Start timer (total tableScan())
     struct timespec startTableScanTotal,endTableScanTotal;
-    clock_gettime(CLOCK_REALTIME,&startTableScanTotal);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startTableScanTotal);
 
     //Start timer for Other - 01 (tableScan)
     struct timespec startS01,endS01;
-    clock_gettime(CLOCK_REALTIME,&startS01);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS01);
 
     struct tableNode *res = NULL;
     int tupleSize = 0;
@@ -2503,10 +2503,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
     struct whereCondition *where = sn->filter;
 
-    //Stop timer for Other - 01 (tableScan)
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endS01);
-    pp->create_tableNode_S01 += (endS01.tv_sec - startS01.tv_sec)* BILLION + endS01.tv_nsec - startS01.tv_nsec;
+    if(tsDebug){
+        //Stop timer for Other - 01 (tableScan)
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS01);
+        pp->create_tableNode_S01 += (endS01.tv_sec - startS01.tv_sec)* BILLION + endS01.tv_nsec - startS01.tv_nsec;
+    }
 
     //Keeps index col pos
     int idxPos = -1;
@@ -2619,10 +2621,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
         CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(gpuExp, &where->exp[0], sizeof(struct whereExp), cudaMemcpyHostToDevice));
 
-        //Stop for Step 1 - Copy where clause 
-        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-        clock_gettime(CLOCK_REALTIME, &endS1);
-        pp->whereMemCopy_s1 += (endS1.tv_sec - startS1.tv_sec)* BILLION + endS1.tv_nsec - startS1.tv_nsec;
+        if(tsDebug){
+            //Stop for Step 1 - Copy where clause
+            CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+            clock_gettime(CLOCK_REALTIME, &endS1);
+            pp->whereMemCopy_s1 += (endS1.tv_sec - startS1.tv_sec)* BILLION + endS1.tv_nsec - startS1.tv_nsec;
+        }
 
         /*
          * We will allocate GPU device memory for a column if it is stored in the host pageable or pinned memory.
@@ -2633,21 +2637,23 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
             CUDA_SAFE_CALL_NO_SYNC(cudaMalloc((void **) &column[whereIndex], sn->tn->attrTotalSize[index]));
 
         if(format == UNCOMPRESSED){
-            
+
             //Start timer for Step 2 - Copy data
             struct timespec startS2, endS2;
-            clock_gettime(CLOCK_REALTIME,&startS2);
+            if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS2);
 
             if(sn->tn->dataPos[index] == MEM || sn->tn->dataPos[index] == MMAP || sn->tn->dataPos[index] == PINNED)
                 CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(column[whereIndex], sn->tn->content[index], sn->tn->attrTotalSize[index], cudaMemcpyHostToDevice));
             else if (sn->tn->dataPos[index] == UVA || sn->tn->dataPos[index] == GPU)
                 column[whereIndex] = sn->tn->content[index];
 
-            //Stop timer for Step 2 - Copy data
-            CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-            clock_gettime(CLOCK_REALTIME, &endS2);
-            pp->dataMemCopy_s2 += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
-                
+            if(tsDebug) {
+                //Stop timer for Step 2 - Copy data
+                CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+                clock_gettime(CLOCK_REALTIME, &endS2);
+                pp->dataMemCopy_s2 += (endS2.tv_sec - startS2.tv_sec)* BILLION + endS2.tv_nsec - startS2.tv_nsec;
+            }
+
             rel = where->exp[0].relation;
             if(sn->tn->attrType[index] == INT || sn->tn->attrType[index] == DATE){
                 int whereValue;
@@ -2669,7 +2675,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
                     //Start timer for Step 3 - Scan
                     struct timespec startS3, endS3;
-                    clock_gettime(CLOCK_REALTIME,&startS3);
+                    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS3);
                     
                     // if (idxPos >= 0){
 
@@ -2696,10 +2702,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
                         genScanFilter_init_int_eq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
                     }
 
-                    //Stop timer for Step 3 - Scan
-                    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-                    clock_gettime(CLOCK_REALTIME, &endS3);
-                    pp->scanTotal_s3 += (endS3.tv_sec - startS3.tv_sec)* BILLION + endS3.tv_nsec - startS3.tv_nsec;
+                    if(tsDebug){
+                        //Stop timer for Step 3 - Scan
+                        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+                        clock_gettime(CLOCK_REALTIME, &endS3);
+                        pp->scanTotal_s3 += (endS3.tv_sec - startS3.tv_sec)* BILLION + endS3.tv_nsec - startS3.tv_nsec;
+                    }
 
                 }else if(rel == NOT_EQ)
                     genScanFilter_init_int_neq<<<grid,block>>>(column[whereIndex],totalTupleNum, whereValue, gpuFilter);
@@ -2829,7 +2837,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         int dictInit = 1;
         //Start timer for Step 1 - Copy where clause (Part2)
         struct timespec startS12, endS12;
-        clock_gettime(CLOCK_REALTIME,&startS12);
+        if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS12);
 
         for(int i=1;i<where->expNum;i++){
             whereIndex = where->exp[i].index;
@@ -3193,10 +3201,12 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
             }
         }
 
-        //Stop timer for Step 1 - Copy where clause (Part2)
-        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-        clock_gettime(CLOCK_REALTIME, &endS12);
-        pp->whereMemCopy_s1 += (endS12.tv_sec - startS12.tv_sec)* BILLION + endS12.tv_nsec - startS12.tv_nsec;            
+        if(tsDebug){
+            //Stop timer for Step 1 - Copy where clause (Part2)
+            CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+            clock_gettime(CLOCK_REALTIME, &endS12);
+            pp->whereMemCopy_s1 += (endS12.tv_sec - startS12.tv_sec)* BILLION + endS12.tv_nsec - startS12.tv_nsec;
+        }
 
         if(prevFormat == DICT){
             if (dictInit == 1){
@@ -3219,7 +3229,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
     //Start timer for Step 4 - Count result (PreScan)
     struct timespec startS4, endS4;
-    clock_gettime(CLOCK_REALTIME,&startS4);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS4);
  
 
     /* --Optimization Note--
@@ -3234,7 +3244,7 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
 
     //Start timer for Count Step 4.1 - Count selected rows kernels
     struct timespec startCountS1, endCountS1;
-    clock_gettime(CLOCK_REALTIME,&startCountS1);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startCountS1);
 
     // countScanNum<<<grid,block>>>(gpuFilter,totalTupleNum,gpuCount);
 
@@ -3247,45 +3257,51 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
     else{
         countScanNum_idx<<<grid, block>>>(gpuFilter, idx, st, ed, gpuCount);
     }
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endCountS1);
-    pp->countScanKernel_countS1 += (endCountS1.tv_sec - startCountS1.tv_sec)* BILLION + endCountS1.tv_nsec - startCountS1.tv_nsec;
+    if(tsDebug){
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endCountS1);
+        pp->countScanKernel_countS1 += (endCountS1.tv_sec - startCountS1.tv_sec)* BILLION + endCountS1.tv_nsec - startCountS1.tv_nsec;
+    }
 
     //Start timer for Count Step 4.2 - scanImpl time
     struct timespec startCountS2, endCountS2;
-    clock_gettime(CLOCK_REALTIME,&startCountS2);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startCountS2);
     scanImpl(gpuCount,threadNum, gpuPsum, pp);
 
-    //Stop timer for Count Step 4.2 - scanImpl time
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endCountS2);
-    pp->scanImpl_countS2 += (endCountS2.tv_sec - startCountS2.tv_sec)* BILLION + endCountS2.tv_nsec - startCountS2.tv_nsec;
+    if(tsDebug){
+        //Stop timer for Count Step 4.2 - scanImpl time
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endCountS2);
+        pp->scanImpl_countS2 += (endCountS2.tv_sec - startCountS2.tv_sec)* BILLION + endCountS2.tv_nsec - startCountS2.tv_nsec;
 
-    //Stop timer for Step 4 - Count result (PreScan)
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endS4);
-    pp->preScanTotal_s4 += (endS4.tv_sec -  startS4.tv_sec)* BILLION + endS4.tv_nsec - startS4.tv_nsec;
-    pp->preScanCount_s4++;
+        //Stop timer for Step 4 - Count result (PreScan)
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS4);
+        pp->preScanTotal_s4 += (endS4.tv_sec -  startS4.tv_sec)* BILLION + endS4.tv_nsec - startS4.tv_nsec;
+        pp->preScanCount_s4++;
+    }
 
     int tmp1, tmp2;
 
     //Start timer for Step 5 - Count result (PreScan)
     struct timespec startS5, endS5;
-    clock_gettime(CLOCK_REALTIME,&startS5);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS5);
 
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp1, &gpuCount[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));
     CUDA_SAFE_CALL_NO_SYNC(cudaMemcpy(&tmp2, &gpuPsum[threadNum-1], sizeof(int), cudaMemcpyDeviceToHost));    
     count = tmp1+tmp2;
     res->tupleNum = count;
 
-    //End timer for Step 5 - Count result (PreScan)
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endS5);
-    pp->preScanResultMemCopy_s5 += (endS5.tv_sec -  startS5.tv_sec)* BILLION + endS5.tv_nsec - startS5.tv_nsec;
-    
+    if(tsDebug){
+        //End timer for Step 5 - Count result (PreScan)
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS5);
+        pp->preScanResultMemCopy_s5 += (endS5.tv_sec -  startS5.tv_sec)* BILLION + endS5.tv_nsec - startS5.tv_nsec;
+    }
+
     //Start timer for Other - 02 (mallocRes)
     struct timespec startS02,endS02;
-    clock_gettime(CLOCK_REALTIME,&startS02);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS02);
 
     if(dev_mp == NULL)
         CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuCount));
@@ -3304,14 +3320,16 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         result = (char **)host_mp->alloc(attrNum * sizeof(char *));
     }
 
-    //Stop timer for Other - 02 (mallocRes)
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endS02);
-    pp->mallocRes_S02 += (endS02.tv_sec - startS02.tv_sec)* BILLION + endS02.tv_nsec - startS02.tv_nsec;
+    if(tsDebug){
+        //Stop timer for Other - 02 (mallocRes)
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS02);
+        pp->mallocRes_S02 += (endS02.tv_sec - startS02.tv_sec)* BILLION + endS02.tv_nsec - startS02.tv_nsec;
+    }
 
     //Start timer for Step 6 - Copy to device all other columns
     struct timespec startS6, endS6;
-    clock_gettime(CLOCK_REALTIME,&startS6);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS6);
 
     for(int i=0;i<attrNum;i++){
 
@@ -3348,14 +3366,16 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
             result[i] = (char *) res_mp->alloc(count * sn->tn->attrSize[index]);
     }
 
-    //End timer for Step 6 - Copy to device all other columns
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endS6);
-    pp->dataMemCopyOther_s6 += (endS6.tv_sec -  startS6.tv_sec)* BILLION + endS6.tv_nsec - startS6.tv_nsec;
+    if(tsDebug){
+        //End timer for Step 6 - Copy to device all other columns
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS6);
+        pp->dataMemCopyOther_s6 += (endS6.tv_sec -  startS6.tv_sec)* BILLION + endS6.tv_nsec - startS6.tv_nsec;
+    }
 
     //Start timer for Step 7 - Materialize result
     struct timespec startS7, endS7;
-    clock_gettime(CLOCK_REALTIME,&startS7);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS7);
 
     if(1){
 
@@ -3407,15 +3427,16 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         }
     }
 
-    //End timer for Step 7 - Materialize result
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endS7);
-    pp->materializeResult_s7 += (endS7.tv_sec -  startS7.tv_sec)* BILLION + endS7.tv_nsec - startS7.tv_nsec;
-   
+    if(tsDebug){
+        //End timer for Step 7 - Materialize result
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS7);
+        pp->materializeResult_s7 += (endS7.tv_sec -  startS7.tv_sec)* BILLION + endS7.tv_nsec - startS7.tv_nsec;
+    }
         
     //Start timer for Step 8 - Copy final result
     struct timespec startS8, endS8;
-    clock_gettime(CLOCK_REALTIME,&startS8);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS8);
 
     res->tupleSize = tupleSize;
 
@@ -3444,14 +3465,16 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         }
     }
 
-    //End timer for Step 8 - Copy final result
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endS8);
-    pp->finalResultMemCopy_s8 += (endS8.tv_sec -  startS8.tv_sec)* BILLION + endS8.tv_nsec - startS8.tv_nsec;
-   
+    if(tsDebug){
+        //End timer for Step 8 - Copy final result
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS8);
+        pp->finalResultMemCopy_s8 += (endS8.tv_sec -  startS8.tv_sec)* BILLION + endS8.tv_nsec - startS8.tv_nsec;
+    }
+
     //Start timer for Other - 03 (deallocate buffers)
     struct timespec startS03,endS03;
-    clock_gettime(CLOCK_REALTIME,&startS03);
+    if(tsDebug) clock_gettime(CLOCK_REALTIME,&startS03);
 
     if(dev_mp == NULL){
         CUDA_SAFE_CALL_NO_SYNC(cudaFree(gpuPsum));
@@ -3466,17 +3489,20 @@ struct tableNode * tableScan(struct scanNode *sn, struct statistic *pp,
         free(result);
     }
 
-    //Stop timer for Other - 01 (tableScan)
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME, &endS03);
-    pp->deallocateBuffs_S03 += (endS03.tv_sec - startS03.tv_sec)* BILLION + endS03.tv_nsec - startS03.tv_nsec;
+    if(tsDebug){
+        //Stop timer for Other - 01 (tableScan)
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME, &endS03);
+        pp->deallocateBuffs_S03 += (endS03.tv_sec - startS03.tv_sec)* BILLION + endS03.tv_nsec - startS03.tv_nsec;
+    }
 
-    //Stop timer (Global tableScan())
-    CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
-    clock_gettime(CLOCK_REALTIME,&endTableScanTotal);
-    pp->tableScanTotal += (endTableScanTotal.tv_sec -  startTableScanTotal.tv_sec)* BILLION + endTableScanTotal.tv_nsec - startTableScanTotal.tv_nsec;
-    pp->tableScanCount ++;
-
+    if(tsDebug){
+        //Stop timer (Global tableScan())
+        CUDA_SAFE_CALL(cudaDeviceSynchronize()); //need to wait to ensure correct timing
+        clock_gettime(CLOCK_REALTIME,&endTableScanTotal);
+        pp->tableScanTotal += (endTableScanTotal.tv_sec -  startTableScanTotal.tv_sec)* BILLION + endTableScanTotal.tv_nsec - startTableScanTotal.tv_nsec;
+        pp->tableScanCount ++;
+    }
     return res;
 }
 
