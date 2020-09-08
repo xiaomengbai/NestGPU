@@ -66,7 +66,6 @@ int main(int argc, char ** argv){
     struct timespec start, end;
     struct timespec diskStart, diskEnd;
     double diskTotal = 0;
-    clock_gettime(CLOCK_REALTIME,&start);
     struct statistic pp;
     pp.total = pp.kernel = pp.pcie = 0;
 
@@ -831,6 +830,8 @@ int main(int argc, char ** argv){
         _nation_table->keepInGpuIdx = 1;
     }
     printf("load columns for NATION\n");
+
+    clock_gettime(CLOCK_REALTIME,&start);
 
     transferTableColumnToGPU(supplierTable, 5);
     transferTableColumnToGPU(supplierTable, 6);

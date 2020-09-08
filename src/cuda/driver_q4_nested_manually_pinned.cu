@@ -125,7 +125,6 @@ int main(int argc, char ** argv){
     struct timespec start, end;
     struct timespec diskStart, diskEnd;
     double diskTotal = 0;
-    clock_gettime(CLOCK_REALTIME,&start);
     struct statistic pp;
     pp.total = pp.kernel = pp.pcie = 0;
 
@@ -433,6 +432,7 @@ int main(int argc, char ** argv){
         ordersTable->colIdxNum = 0;
         _orders_table->keepInGpuIdx = 1;
     }
+    clock_gettime(CLOCK_REALTIME,&start);
 
     transferTableColumnToGPU(lineitemTable, 0);
     transferTableColumnToGPU(lineitemTable, 1);
