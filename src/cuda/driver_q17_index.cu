@@ -241,7 +241,7 @@ int main(int argc, char ** argv){
             if(blockTotal != 1){
                 mergeIntoTable(partTable,_part_table, &pp);
                 clock_gettime(CLOCK_REALTIME, &diskStart);
-                freeTable(_part_table);
+                freeTable(_part_table, false);
                 clock_gettime(CLOCK_REALTIME, &diskEnd);
                 diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;
             }else{
@@ -361,7 +361,7 @@ int main(int argc, char ** argv){
             if(blockTotal != 1){
                 mergeIntoTable(lineitemTable,_lineitem_table, &pp);
                 clock_gettime(CLOCK_REALTIME, &diskStart);
-                freeTable(_lineitem_table);
+                freeTable(_lineitem_table, false);
                 clock_gettime(CLOCK_REALTIME, &diskEnd);
                 diskTotal += (diskEnd.tv_sec -  diskStart.tv_sec)* BILLION + diskEnd.tv_nsec - diskStart.tv_nsec;
             }else{

@@ -77,12 +77,19 @@ static void mergeIntoTable(struct tableNode *dst, struct tableNode * src, struct
         dst->content = (char **) malloc(sizeof(char *) * dst->totalAttr);
         for(int i=0; i<dst->totalAttr; i++){
             int size = dst->attrTotalSize[i];
-            dst->content[i] = (char *) malloc(size);
-            memset(dst->content[i], 0 ,size);
-            if(src->dataPos[i] == MEM)
-                memcpy(dst->content[i],src->content[i],size);
-            else if (src->dataPos[i] == GPU)
-                cudaMemcpy(dst->content[i], src->content[i],size, cudaMemcpyDeviceToHost);
+            if(src->dataPos[i] == PINNED){
+                CUDA_SAFE_CALL_NO_SYNC( cudaMallocHost((void **)&(dst->content[i]), size) );
+                memset(dst->content[i], 0, size);
+                memcpy(dst->content[i], src->content[i], size);
+                dst->dataPos[i] = PINNED;
+            }else{
+                dst->content[i] = (char *) malloc(size);
+                memset(dst->content[i], 0 ,size);
+                if(src->dataPos[i] == MEM)
+                    memcpy(dst->content[i],src->content[i],size);
+                else if (src->dataPos[i] == GPU)
+                    cudaMemcpy(dst->content[i], src->content[i],size, cudaMemcpyDeviceToHost);
+            }
         }
     }else{
         for(int i=0; i<dst->totalAttr; i++){
@@ -90,12 +97,24 @@ static void mergeIntoTable(struct tableNode *dst, struct tableNode * src, struct
             int size = dst->attrTotalSize[i];
             int offset = dst->attrTotalSize[i] - src->attrTotalSize[i];
             int newSize = src->attrTotalSize[i];
-            dst->content[i] = (char *) realloc(dst->content[i], size);
+            if(dst->dataPos[i] == PINNED){
+                char *old = dst->content[i];
+                CUDA_SAFE_CALL_NO_SYNC( cudaMallocHost((void **)&(dst->content[i]), size) );
+                memset(dst->content[i], 0, size);
+                memcpy(dst->content[i], old, offset);
+                if(src->dataPos[i] == MEM || src->dataPos[i] == PINNED)
+                    memcpy(dst->content[i] + offset, src->content[i], newSize);
+                else if (src->dataPos[i] == GPU)
+                    CUDA_SAFE_CALL_NO_SYNC( cudaMemcpy(dst->content[i] + offset, src->content[i], newSize, cudaMemcpyDeviceToHost) );
+                CUDA_SAFE_CALL_NO_SYNC( cudaFreeHost(old) );
+            }else{
+                dst->content[i] = (char *) realloc(dst->content[i], size);
 
-            if(src->dataPos[i] == MEM)
-                memcpy(dst->content[i] + offset,src->content[i],newSize);
-            else if (src->dataPos[i] == GPU)
-                cudaMemcpy(dst->content[i] + offset, src->content[i],newSize, cudaMemcpyDeviceToHost);
+                if(src->dataPos[i] == MEM)
+                    memcpy(dst->content[i] + offset,src->content[i],newSize);
+                else if (src->dataPos[i] == GPU)
+                    cudaMemcpy(dst->content[i] + offset, src->content[i],newSize, cudaMemcpyDeviceToHost);
+            }
         }
     }
 
